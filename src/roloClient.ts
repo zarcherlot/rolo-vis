@@ -7,6 +7,9 @@ import type {
   EvidenceCollection,
   EvidenceRecord,
   HealthResponse,
+  LifecycleRunCollection,
+  LifecycleRunDetail,
+  LifecycleRunSummary,
   PipelineAssessment,
   RobotCapability,
   RobotOverview,
@@ -266,7 +269,7 @@ function parseEvidenceRecord(
   requireContract(typeof value.robot_id === "string" && (!expectedRobotId || value.robot_id === expectedRobotId), "evidence robot identity does not match request", path);
   requireContract(typeof value.title === "string" && typeof value.summary === "string", "invalid evidence title or summary", path);
   requireContract(["DECLARED", "OBSERVED", "GATED"].includes(String(value.authority)), "invalid evidence authority", path);
-  requireContract(["robot_manifest", "gated_artifact", "pipeline_artifact"].includes(String(value.source_kind)), "invalid evidence source", path);
+  requireContract(["robot_manifest", "gated_artifact", "pipeline_artifact", "lifecycle_run", "lifecycle_gate", "lifecycle_handoff"].includes(String(value.source_kind)), "invalid evidence source", path);
   requireContract(["validated", "verified"].includes(String(value.integrity_status)) && value.classification === "INTERNAL", "invalid evidence integrity or classification", path);
   requireContract(isTimestamp(value.observed_at) && ["fresh", "unknown"].includes(String(value.freshness)) && isConfidence(value.confidence), "invalid evidence observation metadata", path);
   requireContract(typeof value.reference_hint === "string" && /^[0-9a-f]{64}$/.test(String(value.reference_digest)), "invalid evidence reference metadata", path);
@@ -352,6 +355,64 @@ function parseCapabilityDetail(value: unknown, path: string, robotId: string, op
   }
   requireContract(isTimestamp(value.observed_at) && ["fresh", "unknown"].includes(String(value.freshness)), "invalid capability detail observation metadata", path);
   return { ...value, capability } as unknown as CapabilityDetail;
+}
+
+function parseLifecycleRunSummary(value: unknown, path: string, robotId: string): LifecycleRunSummary {
+  requireContract(isRecord(value), "lifecycle run summary must be an object", path);
+  requireContract(value.schema_version === "rolo-lifecycle-run-summary/v1", "unsupported lifecycle run schema", path);
+  requireContract(value.robot_id === robotId && typeof value.run_id === "string", "invalid lifecycle run identity", path);
+  requireContract(["adapt", "diagnose", "verify"].includes(String(value.stage)), "invalid lifecycle run stage", path);
+  requireContract(["RUNNING", "SUCCEEDED", "FAILED", "GATED", "UNKNOWN"].includes(String(value.status)), "invalid lifecycle run status", path);
+  requireContract(["PASSED", "FAILED", "NOT_AVAILABLE"].includes(String(value.gate_status)), "invalid lifecycle gate status", path);
+  requireContract(["VERIFIED", "INVALID", "MISSING"].includes(String(value.handoff_status)), "invalid lifecycle handoff status", path);
+  requireContract(value.started_at === null || isTimestamp(value.started_at), "invalid lifecycle start time", path);
+  requireContract(value.completed_at === null || isTimestamp(value.completed_at), "invalid lifecycle completion time", path);
+  requireContract(value.duration_s === null || (typeof value.duration_s === "number" && value.duration_s >= 0), "invalid lifecycle duration", path);
+  requireContract(Number.isInteger(value.gate_check_count) && Number(value.gate_check_count) >= 0, "invalid lifecycle gate count", path);
+  requireContract(isStringArray(value.evidence_ids) && isConfidence(value.confidence), "invalid lifecycle evidence or confidence", path);
+  requireContract(["validated", "verified", "unresolved"].includes(String(value.integrity_status)) && isStringArray(value.limitations), "invalid lifecycle integrity or limitations", path);
+  return value as unknown as LifecycleRunSummary;
+}
+
+function parseLifecycleRunCollection(value: unknown, path: string, robotId: string): LifecycleRunCollection {
+  requireContract(isRecord(value), "lifecycle run collection must be an object", path);
+  requireContract(value.schema_version === "rolo-lifecycle-run-collection/v1", "unsupported lifecycle collection schema", path);
+  requireContract(value.robot_id === robotId && Array.isArray(value.items), "invalid lifecycle collection identity or items", path);
+  const items = value.items.map((item, index) => parseLifecycleRunSummary(item, `${path}/items/${index}`, robotId));
+  requireContract(new Set(items.map((item) => `${item.stage}:${item.run_id}`)).size === items.length, "duplicate lifecycle run identity", path);
+  requireContract(Number.isInteger(value.total) && Number(value.total) >= items.length, "invalid lifecycle collection total", path);
+  requireContract(Number.isInteger(value.limit) && Number(value.limit) >= 1 && Number(value.limit) <= 100 && items.length <= Number(value.limit), "invalid lifecycle page limit", path);
+  requireContract(Number.isInteger(value.offset) && Number(value.offset) >= 0, "invalid lifecycle page offset", path);
+  requireContract(value.next_offset === null || (Number.isInteger(value.next_offset) && Number(value.next_offset) > Number(value.offset)), "invalid lifecycle next offset", path);
+  requireContract(isTimestamp(value.observed_at) && ["fresh", "unknown"].includes(String(value.freshness)), "invalid lifecycle observation metadata", path);
+  requireContract(value.source_kind === "lifecycle_artifacts" && isStringArray(value.limitations), "invalid lifecycle source metadata", path);
+  return { ...value, items } as unknown as LifecycleRunCollection;
+}
+
+function parseLifecycleRunDetail(value: unknown, path: string, robotId: string, runId: string): LifecycleRunDetail {
+  requireContract(isRecord(value) && value.schema_version === "rolo-lifecycle-run-detail/v1", "unsupported lifecycle detail schema", path);
+  const run = parseLifecycleRunSummary(value.run, `${path}/run`, robotId);
+  requireContract(run.run_id === runId, "lifecycle detail does not match requested run", path);
+  requireContract(Array.isArray(value.gate_checks) && Array.isArray(value.artifacts), "invalid lifecycle detail collections", path);
+  for (const [index, check] of value.gate_checks.entries()) {
+    const checkPath = `${path}/gate_checks/${index}`;
+    requireContract(isRecord(check) && check.schema_version === "rolo-lifecycle-gate-check/v1", "invalid lifecycle gate check", checkPath);
+    requireContract(typeof check.check_id === "string" && typeof check.label === "string", "invalid lifecycle gate check identity", checkPath);
+    requireContract(["PASSED", "FAILED", "UNKNOWN"].includes(String(check.status)) && ["OBSERVED", "GATED"].includes(String(check.authority)), "invalid lifecycle gate check state", checkPath);
+  }
+  requireContract(isRecord(value.handoff) && value.handoff.schema_version === "rolo-lifecycle-handoff-summary/v1", "invalid lifecycle handoff", path);
+  requireContract(["VERIFIED", "INVALID", "MISSING"].includes(String(value.handoff.status)) && ["GATED", "OBSERVED", "NONE"].includes(String(value.handoff.authority)), "invalid lifecycle handoff state", path);
+  requireContract(value.handoff.digest === null || /^[0-9a-f]{64}$/.test(String(value.handoff.digest)), "invalid lifecycle handoff digest", path);
+  requireContract(isStringArray(value.handoff.limitations), "invalid lifecycle handoff limitations", path);
+  for (const [index, artifact] of value.artifacts.entries()) {
+    const artifactPath = `${path}/artifacts/${index}`;
+    requireContract(isRecord(artifact) && artifact.schema_version === "rolo-lifecycle-artifact-summary/v1", "invalid lifecycle artifact", artifactPath);
+    requireContract(typeof artifact.name === "string" && ["agent_run", "gate", "handoff", "summary"].includes(String(artifact.kind)), "invalid lifecycle artifact identity", artifactPath);
+    requireContract(["validated", "verified", "unresolved"].includes(String(artifact.integrity_status)), "invalid lifecycle artifact integrity", artifactPath);
+    requireContract(/^[0-9a-f]{64}$/.test(String(artifact.reference_digest)), "invalid lifecycle artifact digest", artifactPath);
+  }
+  requireContract(isTimestamp(value.observed_at) && ["fresh", "unknown"].includes(String(value.freshness)), "invalid lifecycle detail observation metadata", path);
+  return { ...value, run } as unknown as LifecycleRunDetail;
 }
 
 export class RoloClient {
@@ -472,6 +533,16 @@ export class RoloClient {
     return parseCapabilityDetail(await this.request<unknown>(path, options), path, robotId, operation);
   }
 
+  async runs(robotId: string, options?: RequestInit) {
+    const path = `/v1/robots/${encodeURIComponent(robotId)}/runs?limit=50&offset=0`;
+    return parseLifecycleRunCollection(await this.request<unknown>(path, options), path, robotId);
+  }
+
+  async run(robotId: string, runId: string, options?: RequestInit) {
+    const path = `/v1/robots/${encodeURIComponent(robotId)}/runs/${encodeURIComponent(runId)}`;
+    return parseLifecycleRunDetail(await this.request<unknown>(path, options), path, robotId, runId);
+  }
+
   async bootstrap(options: RequestInit = {}, requestedRobotId?: string): Promise<BootstrapResult> {
     const health = await this.health(options);
     if (health.status === "UNHEALTHY") {
@@ -494,6 +565,7 @@ export class RoloClient {
         evidence: null,
         capabilities: null,
         capabilityLimitations: [],
+        runs: null,
         issues: [...healthIssues, "The control plane is reachable but no robots are registered."],
       };
     }
@@ -510,10 +582,11 @@ export class RoloClient {
       issues.push("The overview read model is unavailable; showing the compatible pipeline view.");
     }
 
-    const [topologyResult, evidenceResult, capabilitiesResult] = await Promise.allSettled([
+    const [topologyResult, evidenceResult, capabilitiesResult, runsResult] = await Promise.allSettled([
       this.topology(robot.robot_id, options),
       this.evidenceCollection(robot.robot_id, options),
       this.capabilities(robot.robot_id, options),
+      this.runs(robot.robot_id, options),
     ]);
     const optionalReadModel = <T>(
       result: PromiseSettledResult<T>,
@@ -531,8 +604,9 @@ export class RoloClient {
     const evidence = optionalReadModel(evidenceResult, "evidence");
     const capabilityResult = optionalReadModel(capabilitiesResult, "capability");
     const capabilities = capabilityResult?.items || null;
+    const runs = optionalReadModel(runsResult, "lifecycle run");
     const complete = Boolean(
-      health.status === "HEALTHY" && overview && topology && evidence && capabilities,
+      health.status === "HEALTHY" && overview && topology && evidence && capabilities && runs,
     );
     return {
       mode: complete ? "live" : "partial",
@@ -545,6 +619,7 @@ export class RoloClient {
       evidence,
       capabilities,
       capabilityLimitations: capabilityResult?.limitations || [],
+      runs,
       issues,
     };
   }

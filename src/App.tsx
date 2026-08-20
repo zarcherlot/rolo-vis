@@ -56,6 +56,8 @@ import type {
   EvidenceAuthority,
   EvidenceCollection,
   EvidenceRecord,
+  LifecycleRunCollection,
+  LifecycleRunDetail,
   RobotCapability,
   RobotOverview,
   RobotTopology,
@@ -819,15 +821,56 @@ function DemoLifecycleView({ pipeline, onOpenEvidence }: { pipeline: PipelineRow
   );
 }
 
-function LiveLifecycleView({ pipeline }: { pipeline: PipelineRow[] }) {
+function LiveLifecycleView({
+  pipeline,
+  runs,
+  robotId,
+  onOpenEvidence,
+}: {
+  pipeline: PipelineRow[];
+  runs: LifecycleRunCollection;
+  robotId: string;
+  onOpenEvidence: OpenEvidence;
+}) {
   const [active, setActive] = useState("adapt");
+  const [selectedRunId, setSelectedRunId] = useState("");
+  const [runDetail, setRunDetail] = useState<LifecycleRunDetail | null>(null);
+  const [runMessage, setRunMessage] = useState("");
   const selected = pipeline.find((item) => item.stage === active) || pipeline[0];
+  const stageRuns = runs.items.filter((item) => item.stage === active);
 
   useEffect(() => {
     if (pipeline.length && !pipeline.some((item) => item.stage === active)) {
       setActive(pipeline[0].stage);
     }
   }, [active, pipeline]);
+
+  useEffect(() => {
+    if (!stageRuns.some((item) => item.run_id === selectedRunId)) {
+      setSelectedRunId(stageRuns[0]?.run_id || "");
+    }
+  }, [selectedRunId, stageRuns]);
+
+  useEffect(() => {
+    if (!selectedRunId) {
+      setRunDetail(null);
+      setRunMessage("");
+      return;
+    }
+    const controller = new AbortController();
+    setRunDetail(null);
+    setRunMessage("Loading bounded run metadata…");
+    void roloClient.run(robotId, selectedRunId, { signal: controller.signal })
+      .then((result) => {
+        setRunDetail(result);
+        setRunMessage("");
+      })
+      .catch((error) => {
+        if (controller.signal.aborted) return;
+        setRunMessage(error instanceof Error ? error.message : "Lifecycle run detail is unavailable.");
+      });
+    return () => controller.abort();
+  }, [robotId, selectedRunId]);
 
   if (!selected) {
     return <ReadModelUnavailableView title="Lifecycle" description="The live pipeline contains no stage assessments." />;
@@ -863,6 +906,28 @@ function LiveLifecycleView({ pipeline }: { pipeline: PipelineRow[] }) {
             {artifacts.map((artifact) => <div key={artifact.name}><strong>{artifact.name}</strong><code>{artifact.reference}</code></div>)}
             {!artifacts.length && <small>No artifact reference is asserted for this stage.</small>}
           </div>
+        </div>
+      </div>
+      <div className="lifecycle-run-heading"><div><span>Immutable run history</span><h3>{stageRuns.length} supported {active} runs</h3></div><small>Agent acknowledgement, gate result, and physical outcome remain separate.</small></div>
+      <div className="lifecycle-run-grid">
+        <div className="panel lifecycle-run-list">
+          {stageRuns.map((run) => <button key={run.run_id} className={selectedRunId === run.run_id ? "is-selected" : ""} onClick={() => setSelectedRunId(run.run_id)}>
+            <span className={`run-status run-status-${run.status.toLowerCase()}`}><StatusDot status={run.status === "GATED" ? "observed" : run.status === "FAILED" ? "failed" : "partial"} />{run.status}</span>
+            <code>{run.run_id}</code>
+            <small>{run.completed_at ? new Date(run.completed_at).toLocaleString() : "Completion time unavailable"}</small>
+            <span>{run.gate_check_count} checks · {run.handoff_status.toLowerCase()}</span>
+          </button>)}
+          {!stageRuns.length && <div className="empty-state"><Clock size={27} /><strong>No supported immutable run</strong><span>{runs.limitations[0] || `No ${active} run artifact is available.`}</span></div>}
+        </div>
+        <div className="panel lifecycle-run-detail" aria-live="polite">
+          {runMessage && !runDetail && <div className="capability-detail-message"><Info size={18} /><span>{runMessage}</span></div>}
+          {runDetail ? <>
+            <div className="run-detail-header"><div><span>{runDetail.run.stage} run</span><code>{runDetail.run.run_id}</code></div><strong className={`run-status run-status-${runDetail.run.status.toLowerCase()}`}>{runDetail.run.status}</strong></div>
+            <div className="run-facts"><div><span>Provider</span><strong>{runDetail.run.provider || "Unknown"}</strong></div><div><span>Duration</span><strong>{runDetail.run.duration_s === null ? "Unknown" : `${runDetail.run.duration_s.toFixed(1)} s`}</strong></div><div><span>Integrity</span><strong>{runDetail.run.integrity_status}</strong></div></div>
+            <div className="run-gate-section"><h4>Independent gate</h4>{runDetail.gate_checks.length ? runDetail.gate_checks.map((check) => <button key={check.check_id} disabled={!check.evidence_id} onClick={() => check.evidence_id && onOpenEvidence(check.evidence_id)} className={check.status === "PASSED" ? "is-passed" : "is-pending"}>{check.status === "PASSED" ? <CheckCircle size={18} weight="fill" /> : <Warning size={18} weight="fill" />}<span><strong>{check.label}</strong><small>{check.authority} evidence</small></span>{check.evidence_id && <ArrowRight size={14} />}</button>) : <p>No independent gate check is available.</p>}</div>
+            <div className="run-handoff-section"><div><span>Handoff</span><strong className={`handoff-status handoff-${runDetail.handoff.status.toLowerCase()}`}>{runDetail.handoff.status}</strong></div><code>{runDetail.handoff.digest ? `sha256:${runDetail.handoff.digest.slice(0, 16)}…` : "No verified digest"}</code>{runDetail.handoff.evidence_id && <button className="secondary-button" onClick={() => onOpenEvidence(runDetail.handoff.evidence_id!)}>Inspect handoff evidence</button>}</div>
+            <div className="run-artifact-list"><h4>Bounded artifacts</h4>{runDetail.artifacts.map((artifact) => <button key={artifact.name} disabled={!artifact.evidence_id} onClick={() => artifact.evidence_id && onOpenEvidence(artifact.evidence_id)}><FileText size={17} /><span><strong>{artifact.name}</strong><small>{artifact.kind} · {artifact.integrity_status}</small></span>{artifact.evidence_id && <ArrowRight size={14} />}</button>)}</div>
+          </> : !runMessage && <div className="empty-state"><GitBranch size={27} /><strong>Select a lifecycle run</strong><span>Gate and handoff evidence will appear here.</span></div>}
         </div>
       </div>
     </section>
@@ -1011,6 +1076,7 @@ function AppContent() {
   const [evidenceList, setEvidenceList] = useState<EvidenceCollection | null>(null);
   const [capabilityList, setCapabilityList] = useState<CapabilitySummary[] | null>(null);
   const [capabilityLimitations, setCapabilityLimitations] = useState<string[]>([]);
+  const [lifecycleRuns, setLifecycleRuns] = useState<LifecycleRunCollection | null>(null);
   const [connectionMessage, setConnectionMessage] = useState("");
   const [evidence, setEvidence] = useState<EvidenceItem | null>(null);
 
@@ -1028,6 +1094,7 @@ function AppContent() {
       setEvidenceList(result.evidence);
       setCapabilityList(result.capabilities);
       setCapabilityLimitations(result.capabilityLimitations);
+      setLifecycleRuns(result.runs);
       if (result.pipeline?.stages?.length) {
         setPipeline(result.pipeline.stages.map((stage) => ({
           stage: stage.stage,
@@ -1054,6 +1121,7 @@ function AppContent() {
       setEvidenceList(null);
       setCapabilityList(null);
       setCapabilityLimitations([]);
+      setLifecycleRuns(null);
       setConnectionMessage(error instanceof RoloApiError ? `${error.message}${error.path ? ` (${error.path})` : ""}` : "The rolo control plane could not be read.");
       setMode("unavailable");
     } finally {
@@ -1070,6 +1138,7 @@ function AppContent() {
     setEvidenceList(null);
     setCapabilityList(null);
     setCapabilityLimitations([]);
+    setLifecycleRuns(null);
     setConnectionMessage("Explicit fixture mode; no values on this screen are live robot observations.");
     setMode("demo");
   }, []);
@@ -1110,7 +1179,7 @@ function AppContent() {
   );
   const stackSource = getSurfaceSource(mode, "stack", { stack: Boolean(topology) });
   const evidenceSource = getSurfaceSource(mode, "evidence", { evidence: Boolean(evidenceList) });
-  const lifecycleSource = getSurfaceSource(mode, "lifecycle", { lifecycle: Boolean(pipeline.length) });
+  const lifecycleSource = getSurfaceSource(mode, "lifecycle", { lifecycle: Boolean(pipeline.length && lifecycleRuns) });
   const capabilitySource = getSurfaceSource(mode, "capabilities", { capabilities: Boolean(capabilityList) });
   return (
     <div className="app-shell">
@@ -1121,7 +1190,7 @@ function AppContent() {
           {active === "stack" && (stackSource === "demo" ? <StackMapView onOpenEvidence={openEvidence} /> : stackSource === "live" ? <StackMapView topology={topology} onOpenEvidence={openEvidence} /> : <ReadModelUnavailableView title="Stack Map" description="Live topology needs a versioned rolo topology read model." />)}
           {active === "overview" && <OverviewView robot={robot} pipeline={pipeline} overview={overview} mode={mode} evidenceItems={evidenceItems} onOpenEvidence={openEvidence} onNavigate={setActive} />}
           {active === "capabilities" && (capabilitySource === "demo" ? <DemoCapabilityView onOpenEvidence={setEvidence} /> : capabilitySource === "live" && capabilityList ? <LiveCapabilityView robotId={robot.robot_id} items={capabilityList} limitations={capabilityLimitations} onOpenEvidence={openEvidence} /> : <ReadModelUnavailableView title="Capabilities" description="Live capability coverage needs a versioned rolo capability read model." />)}
-          {active === "lifecycle" && (lifecycleSource === "demo" ? <DemoLifecycleView pipeline={pipeline} onOpenEvidence={setEvidence} /> : lifecycleSource === "live" ? <LiveLifecycleView pipeline={pipeline} /> : <ReadModelUnavailableView title="Lifecycle" description="Live lifecycle requires a trusted pipeline assessment." />)}
+          {active === "lifecycle" && (lifecycleSource === "demo" ? <DemoLifecycleView pipeline={pipeline} onOpenEvidence={setEvidence} /> : lifecycleSource === "live" && lifecycleRuns ? <LiveLifecycleView pipeline={pipeline} runs={lifecycleRuns} robotId={robot.robot_id} onOpenEvidence={openEvidence} /> : <ReadModelUnavailableView title="Lifecycle" description="Live lifecycle requires trusted stage and run read models." />)}
           {active === "evidence" && (evidenceSource === "demo" ? <EvidenceView onOpenEvidence={openEvidence} /> : evidenceSource === "live" ? <EvidenceView live collection={evidenceList} robotId={robot.robot_id} onOpenEvidence={openEvidence} /> : <ReadModelUnavailableView title="Evidence" description="Live evidence resolution needs a versioned rolo evidence read model." />)}
         </>}
       </main>

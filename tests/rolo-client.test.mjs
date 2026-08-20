@@ -185,6 +185,73 @@ const CAPABILITY_DETAIL = {
   freshness: "fresh",
 };
 
+const RUN_SUMMARY = {
+  schema_version: "rolo-lifecycle-run-summary/v1",
+  robot_id: "AMR-07",
+  run_id: "run-1",
+  stage: "adapt",
+  status: "FAILED",
+  gate_status: "FAILED",
+  handoff_status: "MISSING",
+  provider: "codex",
+  model: "test-model",
+  started_at: "2026-08-20T00:00:00Z",
+  completed_at: "2026-08-20T00:00:02Z",
+  duration_s: 2,
+  gate_check_count: 1,
+  evidence_ids: ["ev_run123456789012345"],
+  confidence: 0.8,
+  integrity_status: "validated",
+  limitations: ["No handoff was published."],
+};
+
+const RUN_COLLECTION = {
+  schema_version: "rolo-lifecycle-run-collection/v1",
+  robot_id: "AMR-07",
+  items: [RUN_SUMMARY],
+  total: 1,
+  limit: 50,
+  offset: 0,
+  next_offset: null,
+  observed_at: "2026-08-20T00:00:03Z",
+  freshness: "unknown",
+  source_kind: "lifecycle_artifacts",
+  limitations: [],
+};
+
+const RUN_DETAIL = {
+  schema_version: "rolo-lifecycle-run-detail/v1",
+  run: RUN_SUMMARY,
+  gate_checks: [{
+    schema_version: "rolo-lifecycle-gate-check/v1",
+    check_id: "check-1",
+    label: "Independent gate result",
+    status: "FAILED",
+    authority: "OBSERVED",
+    evidence_id: "ev_run123456789012345",
+  }],
+  handoff: {
+    schema_version: "rolo-lifecycle-handoff-summary/v1",
+    status: "MISSING",
+    authority: "NONE",
+    promoted_at: null,
+    artifact_count: 2,
+    digest: null,
+    evidence_id: null,
+    limitations: ["No handoff was published."],
+  },
+  artifacts: [{
+    schema_version: "rolo-lifecycle-artifact-summary/v1",
+    name: "Independent gate report",
+    kind: "gate",
+    integrity_status: "validated",
+    evidence_id: "ev_run123456789012345",
+    reference_digest: "c".repeat(64),
+  }],
+  observed_at: "2026-08-20T00:00:03Z",
+  freshness: "unknown",
+};
+
 test("RoloClient bootstraps the read-only control-plane surface", async () => {
   const originalFetch = globalThis.fetch;
   const requests = [];
@@ -198,6 +265,8 @@ test("RoloClient bootstraps the read-only control-plane surface", async () => {
           ? OVERVIEW
           : url.endsWith("/topology")
             ? TOPOLOGY
+            : url.includes("/runs?limit=")
+              ? RUN_COLLECTION
             : url.includes("/capabilities?limit=")
               ? CAPABILITY_COLLECTION
             : url.includes("/evidence?limit=")
@@ -216,6 +285,7 @@ test("RoloClient bootstraps the read-only control-plane surface", async () => {
     assert.equal(result.topology.schema_version, "rolo-robot-topology/v1");
     assert.equal(result.evidence.items[0].evidence_id, EVIDENCE_RECORD.evidence_id);
     assert.equal(result.capabilities[0].operation, "tool.catalog");
+    assert.equal(result.runs.items[0].run_id, "run-1");
     assert.deepEqual(requests, [
       "http://rolo.test/health",
       "http://rolo.test/v1/robots",
@@ -223,6 +293,7 @@ test("RoloClient bootstraps the read-only control-plane surface", async () => {
       "http://rolo.test/v1/robots/AMR-07/topology",
       "http://rolo.test/v1/robots/AMR-07/evidence?limit=25&offset=0",
       "http://rolo.test/v1/robots/AMR-07/capabilities?limit=100&offset=0",
+      "http://rolo.test/v1/robots/AMR-07/runs?limit=50&offset=0",
     ]);
   } finally {
     globalThis.fetch = originalFetch;
@@ -237,6 +308,7 @@ test("RoloClient reports a partial connection when overview is not available", a
     if (url.endsWith("/overview")) return { ok: false, status: 404 };
     if (url.endsWith("/topology") || url.includes("/evidence?limit=")) return { ok: false, status: 404 };
     if (url.includes("/capabilities?limit=")) return { ok: true, json: async () => CAPABILITY_COLLECTION };
+    if (url.includes("/runs?limit=")) return { ok: true, json: async () => RUN_COLLECTION };
     return {
       ok: true,
       json: async () => ({ ...PIPELINE, stages: [{ ...PIPELINE.stages[0], status: "BLOCKED", blockers: ["Blocked"] }] }),
@@ -264,6 +336,8 @@ test("RoloClient downgrades a degraded control plane to partial", async () => {
           ? OVERVIEW
           : url.endsWith("/topology")
             ? TOPOLOGY
+            : url.includes("/runs?limit=")
+              ? RUN_COLLECTION
             : url.includes("/capabilities?limit=")
               ? CAPABILITY_COLLECTION
               : EVIDENCE_COLLECTION;
@@ -286,6 +360,7 @@ test("RoloClient keeps trusted overview data partial when topology fails", async
     if (url.endsWith("/overview")) return { ok: true, json: async () => OVERVIEW };
     if (url.endsWith("/topology")) return { ok: false, status: 503 };
     if (url.includes("/capabilities?limit=")) return { ok: true, json: async () => CAPABILITY_COLLECTION };
+    if (url.includes("/runs?limit=")) return { ok: true, json: async () => RUN_COLLECTION };
     return { ok: true, json: async () => EVIDENCE_COLLECTION };
   };
   try {
@@ -371,6 +446,29 @@ test("RoloClient reads capability coverage and a contract-bound detail", async (
     assert.deepEqual(requests, [
       "http://rolo.test/v1/robots/AMR-07/capabilities?limit=100&offset=0",
       "http://rolo.test/v1/robots/AMR-07/capabilities/tool.catalog",
+    ]);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("RoloClient reads lifecycle runs without raw artifact payloads", async () => {
+  const originalFetch = globalThis.fetch;
+  const requests = [];
+  globalThis.fetch = async (url) => {
+    requests.push(url);
+    return { ok: true, json: async () => url.endsWith("/runs/run-1") ? RUN_DETAIL : RUN_COLLECTION };
+  };
+  try {
+    const client = new RoloClient("http://rolo.test");
+    const collection = await client.runs("AMR-07");
+    const detail = await client.run("AMR-07", "run-1");
+    assert.equal(collection.items[0].gate_status, "FAILED");
+    assert.equal(detail.handoff.status, "MISSING");
+    assert.equal(detail.artifacts[0].kind, "gate");
+    assert.deepEqual(requests, [
+      "http://rolo.test/v1/robots/AMR-07/runs?limit=50&offset=0",
+      "http://rolo.test/v1/robots/AMR-07/runs/run-1",
     ]);
   } finally {
     globalThis.fetch = originalFetch;
@@ -561,11 +659,12 @@ test("live lifecycle component has no fixture evidence or fabricated handoff", a
 
   assert.doesNotMatch(liveLifecycle, /\bEVIDENCE\b|\bDEMO_|sha256:82f3|adapt-20260820/);
   assert.match(liveLifecycle, /selected\.blockerMessages|selected\.artifactRefs|selected\.observedAt/);
+  assert.match(liveLifecycle, /runDetail\.gate_checks|runDetail\.handoff|runDetail\.artifacts/);
 });
 
 test("plugin manifest declares every trusted read-model endpoint", async () => {
   const manifest = JSON.parse(await readFile(new URL("../rolo.plugin.json", import.meta.url), "utf8"));
-  assert.equal(manifest.version, "0.3.0");
+  assert.equal(manifest.version, "0.4.0");
   assert.deepEqual(
     new Set(manifest.api.required_endpoints),
     new Set([
@@ -576,6 +675,8 @@ test("plugin manifest declares every trusted read-model endpoint", async () => {
       "/v1/robots/{robot_id}/topology",
       "/v1/robots/{robot_id}/capabilities",
       "/v1/robots/{robot_id}/capabilities/{operation}",
+      "/v1/robots/{robot_id}/runs",
+      "/v1/robots/{robot_id}/runs/{run_id}",
       "/v1/robots/{robot_id}/evidence",
       "/v1/evidence/{evidence_id}",
     ]),

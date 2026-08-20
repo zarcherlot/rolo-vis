@@ -8,6 +8,7 @@
 - Robot Overview focused on trust, blockers, and next action.
 - Capability Explorer for canonical operations, risk, lifecycle, and bindings.
 - Lifecycle gate view for Adapt → Diagnose → Verify.
+- Immutable lifecycle run details with independent gate checks and verified handoffs.
 - Evidence ledger with provenance and integrity status.
 - Live rolo API probing with an explicit demo fallback when no robot runtime is reachable.
 

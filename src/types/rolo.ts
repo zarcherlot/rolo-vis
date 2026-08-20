@@ -126,7 +126,7 @@ export interface EvidenceRecord {
   title: string;
   summary: string;
   authority: EvidenceAuthority;
-  source_kind: "robot_manifest" | "gated_artifact" | "pipeline_artifact";
+  source_kind: "robot_manifest" | "gated_artifact" | "pipeline_artifact" | "lifecycle_run" | "lifecycle_gate" | "lifecycle_handoff";
   integrity_status: "validated" | "verified";
   classification: "INTERNAL";
   observed_at: string;
@@ -239,6 +239,83 @@ export interface CapabilityDetail {
   freshness: "fresh" | "unknown";
 }
 
+export type LifecycleRunStatus = "RUNNING" | "SUCCEEDED" | "FAILED" | "GATED" | "UNKNOWN";
+export type LifecycleGateStatus = "PASSED" | "FAILED" | "NOT_AVAILABLE";
+export type LifecycleHandoffStatus = "VERIFIED" | "INVALID" | "MISSING";
+
+export interface LifecycleRunSummary {
+  schema_version: "rolo-lifecycle-run-summary/v1";
+  robot_id: string;
+  run_id: string;
+  stage: "adapt" | "diagnose" | "verify";
+  status: LifecycleRunStatus;
+  gate_status: LifecycleGateStatus;
+  handoff_status: LifecycleHandoffStatus;
+  provider: string | null;
+  model: string | null;
+  started_at: string | null;
+  completed_at: string | null;
+  duration_s: number | null;
+  gate_check_count: number;
+  evidence_ids: string[];
+  confidence: number;
+  integrity_status: "validated" | "verified" | "unresolved";
+  limitations: string[];
+}
+
+export interface LifecycleRunCollection {
+  schema_version: "rolo-lifecycle-run-collection/v1";
+  robot_id: string;
+  items: LifecycleRunSummary[];
+  total: number;
+  limit: number;
+  offset: number;
+  next_offset: number | null;
+  observed_at: string;
+  freshness: "fresh" | "unknown";
+  source_kind: "lifecycle_artifacts";
+  limitations: string[];
+}
+
+export interface LifecycleGateCheck {
+  schema_version: "rolo-lifecycle-gate-check/v1";
+  check_id: string;
+  label: string;
+  status: "PASSED" | "FAILED" | "UNKNOWN";
+  authority: "OBSERVED" | "GATED";
+  evidence_id: string | null;
+}
+
+export interface LifecycleHandoffSummary {
+  schema_version: "rolo-lifecycle-handoff-summary/v1";
+  status: LifecycleHandoffStatus;
+  authority: "GATED" | "OBSERVED" | "NONE";
+  promoted_at: string | null;
+  artifact_count: number;
+  digest: string | null;
+  evidence_id: string | null;
+  limitations: string[];
+}
+
+export interface LifecycleArtifactSummary {
+  schema_version: "rolo-lifecycle-artifact-summary/v1";
+  name: string;
+  kind: "agent_run" | "gate" | "handoff" | "summary";
+  integrity_status: "validated" | "verified" | "unresolved";
+  evidence_id: string | null;
+  reference_digest: string;
+}
+
+export interface LifecycleRunDetail {
+  schema_version: "rolo-lifecycle-run-detail/v1";
+  run: LifecycleRunSummary;
+  gate_checks: LifecycleGateCheck[];
+  handoff: LifecycleHandoffSummary;
+  artifacts: LifecycleArtifactSummary[];
+  observed_at: string;
+  freshness: "fresh" | "unknown";
+}
+
 export interface BootstrapResult {
   mode: ConnectionMode;
   health: HealthResponse;
@@ -250,5 +327,6 @@ export interface BootstrapResult {
   evidence: EvidenceCollection | null;
   capabilities: CapabilitySummary[] | null;
   capabilityLimitations: string[];
+  runs: LifecycleRunCollection | null;
   issues: string[];
 }
