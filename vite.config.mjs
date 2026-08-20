@@ -19,7 +19,7 @@ export default defineConfig({
       },
     },
     warmup: {
-      clientFiles: ["./src/main.jsx"],
+      clientFiles: ["./src/main.tsx"],
     },
   },
   plugins: [react()],

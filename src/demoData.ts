@@ -1,4 +1,61 @@
-export const DEMO_ROBOT = {
+import type { Edge, Node } from "@xyflow/react";
+
+export type TopologyStatus = "observed" | "partial" | "failed" | "unobserved";
+export type TopologyIcon = "sensor" | "pulse" | "target" | "camera" | "cpu" | "network" | "clock" | "storage" | "cube" | "radio" | "crosshair" | "tree" | "route" | "nodes" | "shield";
+
+export interface DemoRobot {
+  robot_id: string;
+  model: string;
+  adapter: string;
+  environment: string;
+  status: "online";
+  observed_at: string;
+  discovery_id: string;
+}
+
+export interface PipelineRow {
+  stage: string;
+  status: string;
+  summary: string;
+  artifacts: number;
+  blockers: number;
+}
+
+export interface TopologyNodeData extends Record<string, unknown> {
+  label: string;
+  subtitle: string;
+  layer: string;
+  status: TopologyStatus;
+  icon: TopologyIcon;
+  evidence: number;
+  confidence?: number;
+}
+
+export interface CapabilityItem {
+  id: string;
+  layer: string;
+  title: string;
+  lifecycle: string;
+  availability: string;
+  access: string;
+  risk: string;
+  classification: string;
+  binding: string;
+  version: string;
+  evidence: number;
+}
+
+export interface EvidenceItem {
+  id: string;
+  title: string;
+  source: string;
+  kind: string;
+  integrity: "verified" | "unresolved";
+  time: string;
+  ref: string;
+}
+
+export const DEMO_ROBOT: DemoRobot = {
   robot_id: "AMR-07",
   model: "T7 Autonomous Mobile Robot",
   adapter: "ros2-nav2-adapter",
@@ -8,13 +65,13 @@ export const DEMO_ROBOT = {
   discovery_id: "discovery-2026-08-20-100000",
 };
 
-export const DEMO_PIPELINE = [
+export const DEMO_PIPELINE: PipelineRow[] = [
   { stage: "adapt", status: "BLOCKED", summary: "Dependency mismatch", artifacts: 12, blockers: 1 },
   { stage: "diagnose", status: "READY", summary: "Waiting for Adapt handoff", artifacts: 0, blockers: 0 },
   { stage: "verify", status: "NOT_STARTED", summary: "Optional formal acceptance", artifacts: 0, blockers: 0 },
 ];
 
-export const TOPOLOGY_NODES = [
+export const TOPOLOGY_NODES: Node<TopologyNodeData>[] = [
   { id: "lidar", type: "rolo", position: { x: 30, y: 64 }, data: { label: "LiDAR", subtitle: "Ouster OS1-64", layer: "Hardware", status: "observed", icon: "sensor", evidence: 6 } },
   { id: "imu", type: "rolo", position: { x: 30, y: 190 }, data: { label: "IMU", subtitle: "VectorNav VN-300", layer: "Hardware", status: "observed", icon: "pulse", evidence: 4 } },
   { id: "encoders", type: "rolo", position: { x: 30, y: 316 }, data: { label: "Wheel Encoders", subtitle: "x2", layer: "Hardware", status: "observed", icon: "target", evidence: 3 } },
@@ -37,7 +94,7 @@ export const TOPOLOGY_NODES = [
   { id: "safety", type: "rolo", position: { x: 852, y: 568 }, data: { label: "Safety Monitor", subtitle: "safety_monitor", layer: "Application", status: "observed", icon: "shield", evidence: 10 } },
 ];
 
-export const TOPOLOGY_EDGES = [
+export const TOPOLOGY_EDGES: Edge[] = [
   ["lidar", "jetson", "observed"], ["imu", "jetson", "observed"], ["encoders", "network", "observed"], ["camera", "storage", "declared"], ["battery", "services", "observed"],
   ["jetson", "agentd", "observed"], ["network", "scan", "observed"], ["timesync", "localization", "observed"], ["storage", "tftree", "declared"], ["services", "mapserver", "observed"],
   ["agentd", "navigation", "declared"], ["scan", "localization", "observed"], ["tftree", "localization", "observed"],
@@ -51,7 +108,7 @@ export const TOPOLOGY_EDGES = [
   className: `edge-${state}`,
 }));
 
-export const CAPABILITIES = [
+export const CAPABILITIES: CapabilityItem[] = [
   { id: "app.navigation.goal.send", layer: "Application", title: "Send navigation goal", lifecycle: "RELEASED", availability: "GATED", access: "write", risk: "R2", classification: "INTERNAL", binding: "ROS 2 action · /navigate_to_pose", version: "1.1.0", evidence: 7 },
   { id: "app.navigation.goal.cancel", layer: "Application", title: "Cancel active navigation goal", lifecycle: "RELEASED", availability: "GATED", access: "write", risk: "R2", classification: "INTERNAL", binding: "ROS 2 action · /navigate_to_pose/_action/cancel", version: "1.1.0", evidence: 8 },
   { id: "ros.topic.list", layer: "Middleware", title: "List observed ROS topics", lifecycle: "RELEASED", availability: "GATED", access: "read", risk: "R0", classification: "INTERNAL", binding: "builtin · ros2 topic list", version: "1.1.0", evidence: 10 },
@@ -61,7 +118,7 @@ export const CAPABILITIES = [
   { id: "hw.sensor.read", layer: "Hardware", title: "Read bounded sensor metadata", lifecycle: "DRAFT", availability: "DISCOVERED", access: "read", risk: "R1", classification: "SENSITIVE", binding: "semantic://sensor/lidar", version: "0.7.0", evidence: 4 },
 ];
 
-export const EVIDENCE = [
+export const EVIDENCE: EvidenceItem[] = [
   { id: "EV-2048", title: "Localization endpoint observed", source: "runtime introspection", kind: "Observed fact", integrity: "verified", time: "10:12:07", ref: "artifact://discovery/AMR-07/runs/discovery-2026-08-20/report.json" },
   { id: "EV-2047", title: "Wheel odometry publication rate below baseline", source: "ros.topic.rate", kind: "Warning", integrity: "verified", time: "10:11:52", ref: "artifact://discovery/AMR-07/runs/discovery-2026-08-20/active.json" },
   { id: "EV-2039", title: "nav2_controller binding passed adapter gate", source: "adapt gate", kind: "Gate result", integrity: "verified", time: "09:48:14", ref: "artifact://adapt/AMR-07/runs/adapt-2026-08-20/gate.json" },

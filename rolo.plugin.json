@@ -17,6 +17,7 @@
     "required_endpoints": [
       "/health",
       "/v1/robots",
+      "/v1/robots/{robot_id}/overview",
       "/v1/robots/{robot_id}/pipeline"
     ]
   },
@@ -27,4 +28,3 @@
     "allows_secret_payloads": false
   }
 }
-
