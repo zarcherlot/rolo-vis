@@ -44,22 +44,22 @@ export interface PipelineAssessment {
 }
 
 export interface OverviewBlocker {
-  schema_version: "rolo-blocker-summary/v1";
+  schema_version: "rolo-blocker-summary/v1" | "rolo-blocker-summary/v2";
   blocker_id: string;
   stage: string;
   message: string;
   recommended_action: string;
   owner: string;
   observed_at: string;
-  freshness: "fresh";
+  freshness: "fresh" | "unknown";
   source_kind: "pipeline_assessment";
   confidence: number;
   integrity_status: "validated";
-  evidence_refs: string[];
+  evidence_ids: string[];
 }
 
 export interface RobotOverview {
-  schema_version: "rolo-robot-overview/v1";
+  schema_version: "rolo-robot-overview/v1" | "rolo-robot-overview/v2";
   robot_id: string;
   state: "READY" | "ATTENTION" | "DEGRADED" | "NOT_READY";
   summary: string;
@@ -73,6 +73,83 @@ export interface RobotOverview {
   integrity_status: "validated";
 }
 
+export type TopologyLayer = "Hardware" | "Linux" | "Middleware" | "Application";
+export type TopologyState = "DECLARED" | "OBSERVED" | "GATED" | "PARTIAL" | "FAILED";
+
+export interface TopologyNode {
+  schema_version: "rolo-topology-node/v1";
+  node_id: string;
+  kind: string;
+  label: string;
+  subtitle: string;
+  layer: TopologyLayer;
+  state: TopologyState;
+  confidence: number;
+  integrity_status: "validated" | "verified";
+  evidence_ids: string[];
+  attributes: Record<string, string | number | boolean>;
+}
+
+export interface TopologyEdge {
+  schema_version: "rolo-topology-edge/v1";
+  edge_id: string;
+  source: string;
+  target: string;
+  relation: string;
+  state: TopologyState;
+  confidence: number;
+  integrity_status: "validated" | "verified";
+  evidence_ids: string[];
+}
+
+export interface RobotTopology {
+  schema_version: "rolo-robot-topology/v1";
+  robot_id: string;
+  snapshot_id: string;
+  coverage: "REGISTRY_ONLY" | "GATED_RELEASE";
+  nodes: TopologyNode[];
+  edges: TopologyEdge[];
+  observed_at: string;
+  freshness: "fresh";
+  source_kind: "robot_registry" | "gated_state_graph";
+  confidence: number;
+  integrity_status: "validated" | "verified";
+  limitations: string[];
+}
+
+export type EvidenceAuthority = "DECLARED" | "OBSERVED" | "GATED";
+
+export interface EvidenceRecord {
+  schema_version: "rolo-evidence-record/v1";
+  evidence_id: string;
+  robot_id: string;
+  title: string;
+  summary: string;
+  authority: EvidenceAuthority;
+  source_kind: "robot_manifest" | "gated_artifact" | "pipeline_artifact";
+  integrity_status: "validated" | "verified";
+  classification: "INTERNAL";
+  observed_at: string;
+  freshness: "fresh" | "unknown";
+  confidence: number;
+  reference_hint: string;
+  reference_digest: string;
+  related_node_ids: string[];
+  limitations: string[];
+}
+
+export interface EvidenceCollection {
+  schema_version: "rolo-evidence-collection/v1";
+  robot_id: string;
+  items: EvidenceRecord[];
+  total: number;
+  limit: number;
+  offset: number;
+  next_offset: number | null;
+  observed_at: string;
+  freshness: "fresh" | "unknown";
+}
+
 export interface BootstrapResult {
   mode: ConnectionMode;
   health: HealthResponse;
@@ -80,5 +157,7 @@ export interface BootstrapResult {
   robot: RobotCapability | null;
   overview: RobotOverview | null;
   pipeline: PipelineAssessment | null;
+  topology: RobotTopology | null;
+  evidence: EvidenceCollection | null;
   issues: string[];
 }

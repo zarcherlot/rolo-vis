@@ -19,6 +19,12 @@ export interface PipelineRow {
   summary: string;
   artifacts: number;
   blockers: number;
+  optional?: boolean;
+  prerequisites?: string[];
+  artifactRefs?: Array<{ name: string; reference: string }>;
+  blockerMessages?: string[];
+  agentRequirement?: string;
+  observedAt?: string;
 }
 
 export interface TopologyNodeData extends Record<string, unknown> {
@@ -29,6 +35,10 @@ export interface TopologyNodeData extends Record<string, unknown> {
   icon: TopologyIcon;
   evidence: number;
   confidence?: number;
+  kind?: string;
+  evidenceIds?: string[];
+  integrityStatus?: "validated" | "verified";
+  attributes?: Record<string, string | number | boolean>;
 }
 
 export interface CapabilityItem {
@@ -50,9 +60,14 @@ export interface EvidenceItem {
   title: string;
   source: string;
   kind: string;
-  integrity: "verified" | "unresolved";
+  integrity: "verified" | "validated" | "unresolved";
   time: string;
   ref: string;
+  digest?: string;
+  summary?: string;
+  confidence?: number;
+  classification?: string;
+  limitations?: string[];
 }
 
 export const DEMO_ROBOT: DemoRobot = {

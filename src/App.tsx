@@ -31,7 +31,7 @@ import {
   X,
 } from "@phosphor-icons/react";
 import { Background, Controls, Handle, Position, ReactFlow } from "@xyflow/react";
-import type { Node, NodeMouseHandler, NodeProps, ReactFlowInstance } from "@xyflow/react";
+import type { Edge, Node, NodeMouseHandler, NodeProps, ReactFlowInstance } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import {
   CAPABILITIES,
@@ -50,13 +50,21 @@ import type {
   TopologyStatus,
 } from "./demoData";
 import { RoloApiError, roloClient } from "./roloClient";
-import type { RobotCapability, RobotOverview } from "./types/rolo";
-import { getSurfaceSource } from "./workbenchPolicy";
+import type {
+  EvidenceAuthority,
+  EvidenceCollection,
+  EvidenceRecord,
+  RobotCapability,
+  RobotOverview,
+  RobotTopology,
+} from "./types/rolo";
+import { getOverviewPresentation, getSurfaceSource } from "./workbenchPolicy";
 import type { WorkbenchMode } from "./workbenchPolicy";
 
 type NavId = "overview" | "stack" | "capabilities" | "lifecycle" | "evidence";
 type ViewRobot = DemoRobot | (RobotCapability & { status: "online" });
 type RobotOption = DemoRobot | RobotCapability;
+type OpenEvidence = (item: EvidenceItem | string) => void;
 
 const NAV_ITEMS: Array<{ id: NavId; label: string; icon: typeof House }> = [
   { id: "overview", label: "Overview", icon: House },
@@ -91,6 +99,93 @@ const statusLabels: Record<TopologyStatus, string> = {
   unobserved: "Not observed",
 };
 const TOPOLOGY_STATUSES: TopologyStatus[] = ["observed", "partial", "failed", "unobserved"];
+const LAYER_ORDER = ["Hardware", "Linux", "Middleware", "Application"] as const;
+
+function topologyStatus(state: string): TopologyStatus {
+  if (state === "GATED" || state === "OBSERVED") return "observed";
+  if (state === "PARTIAL") return "partial";
+  if (state === "FAILED") return "failed";
+  return "unobserved";
+}
+
+function topologyIcon(kind: string): TopologyIcon {
+  if (kind === "sensor") return "sensor";
+  if (kind === "platform") return "cpu";
+  if (kind === "route") return "radio";
+  if (kind === "operation") return "route";
+  if (kind === "feature") return "nodes";
+  if (kind === "robot") return "target";
+  return "cube";
+}
+
+function aggregateLayerStatus(
+  nodes: Node<TopologyNodeData>[],
+  layer: string,
+): TopologyStatus {
+  const statuses = nodes
+    .filter((node) => node.data.layer === layer)
+    .map((node) => node.data.status);
+  if (!statuses.length || statuses.every((status) => status === "unobserved")) return "unobserved";
+  if (statuses.includes("failed")) return "failed";
+  if (statuses.includes("partial") || statuses.includes("unobserved")) return "partial";
+  return "observed";
+}
+
+function liveFlowNodes(topology: RobotTopology): Node<TopologyNodeData>[] {
+  const rows = new Map<string, number>();
+  return topology.nodes.map((node) => {
+    const layerIndex = Math.max(0, LAYER_ORDER.indexOf(node.layer));
+    const row = rows.get(node.layer) || 0;
+    rows.set(node.layer, row + 1);
+    return {
+      id: node.node_id,
+      type: "rolo",
+      position: { x: 30 + layerIndex * 274, y: 64 + row * 126 },
+      data: {
+        label: node.label,
+        subtitle: node.subtitle,
+        layer: node.layer === "Middleware" ? "ROS / Middleware" : node.layer,
+        status: topologyStatus(node.state),
+        icon: topologyIcon(node.kind),
+        evidence: node.evidence_ids.length,
+        evidenceIds: node.evidence_ids,
+        confidence: Math.round(node.confidence * 100),
+        kind: node.kind,
+        integrityStatus: node.integrity_status,
+        attributes: node.attributes,
+      },
+    };
+  });
+}
+
+function liveFlowEdges(topology: RobotTopology): Edge[] {
+  return topology.edges.map((edge) => ({
+    id: edge.edge_id,
+    source: edge.source,
+    target: edge.target,
+    type: "smoothstep",
+    animated: edge.state === "OBSERVED",
+    className: edge.state === "DECLARED" ? "edge-declared" : "edge-observed",
+    label: edge.relation,
+  }));
+}
+
+function evidenceRecordToItem(record: EvidenceRecord): EvidenceItem {
+  return {
+    id: record.evidence_id,
+    title: record.title,
+    source: record.source_kind.replace("_", " "),
+    kind: record.authority,
+    integrity: record.integrity_status,
+    time: new Date(record.observed_at).toLocaleTimeString(),
+    ref: record.reference_hint,
+    digest: record.reference_digest,
+    summary: record.summary,
+    confidence: Math.round(record.confidence * 100),
+    classification: record.classification,
+    limitations: record.limitations,
+  };
+}
 
 function StatusDot({ status }: { status: TopologyStatus }) {
   return <span className={`status-dot status-${status}`} aria-hidden="true" />;
@@ -143,7 +238,7 @@ function Sidebar({ active, onChange }: { active: NavId; onChange: (value: NavId)
 
 const MODE_LABELS: Record<WorkbenchMode, string> = {
   connecting: "Connecting",
-  live: "Live overview",
+  live: "Live trusted",
   partial: "Partial live",
   unavailable: "Unavailable",
   demo: "Demo data",
@@ -229,7 +324,7 @@ function ReadModelUnavailableView({ title, description }: { title: string; descr
         <div>
           <strong>No compatible live read model is available.</strong>
           <p>rolo-vis will not substitute demo fixtures while the workbench is connected to live data.</p>
-          <small>This surface is scheduled for the next Stack Map / Evidence milestone.</small>
+          <small>This surface remains unavailable until rolo publishes a compatible trusted read model.</small>
         </div>
       </div>
     </section>
@@ -256,14 +351,34 @@ function PageTitle({ eyebrow, title, description, action }: PageTitleProps) {
   );
 }
 
-function StackMapView({ onOpenEvidence }: { onOpenEvidence: (item: EvidenceItem) => void }) {
-  const [selectedId, setSelectedId] = useState("localization");
+function StackMapView({
+  onOpenEvidence,
+  topology,
+}: {
+  onOpenEvidence: OpenEvidence;
+  topology?: RobotTopology | null;
+}) {
+  const sourceNodes = useMemo(
+    () => topology ? liveFlowNodes(topology) : TOPOLOGY_NODES,
+    [topology],
+  );
+  const sourceEdges = useMemo(
+    () => topology ? liveFlowEdges(topology) : TOPOLOGY_EDGES,
+    [topology],
+  );
+  const [selectedId, setSelectedId] = useState(() => sourceNodes[0]?.id || "localization");
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState("all");
   const [compare, setCompare] = useState(false);
   const [toolsOpen, setToolsOpen] = useState(false);
   const [flowInstance, setFlowInstance] = useState<ReactFlowInstance | null>(null);
   const mapRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!sourceNodes.some((node) => node.id === selectedId)) {
+      setSelectedId(sourceNodes[0]?.id || "");
+    }
+  }, [selectedId, sourceNodes]);
 
   useEffect(() => {
     if (!flowInstance || !mapRef.current) return undefined;
@@ -274,7 +389,7 @@ function StackMapView({ onOpenEvidence }: { onOpenEvidence: (item: EvidenceItem)
     return () => observer.disconnect();
   }, [flowInstance]);
 
-  const nodes = useMemo(() => TOPOLOGY_NODES.map((node) => {
+  const nodes = useMemo(() => sourceNodes.map((node) => {
     const searchable = `${node.data.label} ${node.data.subtitle} ${node.data.layer}`.toLowerCase();
     const queryMatch = !query || searchable.includes(query.toLowerCase());
     const statusMatch = filter === "all" || node.data.status === filter;
@@ -283,13 +398,16 @@ function StackMapView({ onOpenEvidence }: { onOpenEvidence: (item: EvidenceItem)
       selected: node.id === selectedId,
       style: { opacity: queryMatch && statusMatch ? 1 : 0.18 },
     };
-  }), [selectedId, query, filter]);
+  }), [selectedId, query, filter, sourceNodes]);
 
-  const selectedNode = TOPOLOGY_NODES.find((node) => node.id === selectedId) || TOPOLOGY_NODES[10];
-  const details = selectedNode.data;
-  const connected = TOPOLOGY_EDGES.filter((edge) => edge.source === selectedId || edge.target === selectedId);
-  const SelectedIcon = nodeIcons[details.icon] || Cube;
   const handleNodeClick: NodeMouseHandler = useCallback((_, node) => setSelectedId(node.id), []);
+  const selectedNode = sourceNodes.find((node) => node.id === selectedId) || sourceNodes[0];
+  if (!selectedNode) {
+    return <ReadModelUnavailableView title="Stack Map" description="The topology read model contains no nodes." />;
+  }
+  const details = selectedNode.data;
+  const connected = sourceEdges.filter((edge) => edge.source === selectedId || edge.target === selectedId);
+  const SelectedIcon = nodeIcons[details.icon] || Cube;
 
   return (
     <section className="stack-workspace">
@@ -309,7 +427,7 @@ function StackMapView({ onOpenEvidence }: { onOpenEvidence: (item: EvidenceItem)
             <option value="unobserved">Not observed</option>
           </select>
         </label>
-        <button className={`secondary-button ${compare ? "is-active" : ""}`} onClick={() => setCompare((value) => !value)}>
+        <button className={`secondary-button ${compare ? "is-active" : ""}`} disabled={Boolean(topology)} onClick={() => setCompare((value) => !value)} title={topology ? "Snapshot diff is planned next" : undefined}>
           <GitBranch size={17} /> Compare snapshot
         </button>
       </div>}
@@ -327,16 +445,17 @@ function StackMapView({ onOpenEvidence }: { onOpenEvidence: (item: EvidenceItem)
           {toolsOpen ? <X size={18} /> : <MagnifyingGlass size={18} />}
         </button>
         <div className="lane-headings" aria-hidden="true">
-          {["Hardware", "Linux", "ROS / Middleware", "Application"].map((layer, index) => (
-            <div key={layer}>
+          {["Hardware", "Linux", "ROS / Middleware", "Application"].map((layer) => {
+            const status = aggregateLayerStatus(sourceNodes, layer);
+            return <div key={layer}>
               <strong>{layer}</strong>
-              <span><StatusDot status={index === 3 ? "partial" : "observed"} />{index === 3 ? "Partial" : "Observed"}</span>
-            </div>
-          ))}
+              <span><StatusDot status={status} />{statusLabels[status]}</span>
+            </div>;
+          })}
         </div>
         <ReactFlow
           nodes={nodes}
-          edges={TOPOLOGY_EDGES}
+          edges={sourceEdges}
           nodeTypes={nodeTypes}
           onNodeClick={handleNodeClick}
           onInit={setFlowInstance}
@@ -370,15 +489,15 @@ function StackMapView({ onOpenEvidence }: { onOpenEvidence: (item: EvidenceItem)
 
         <dl className="facts-grid">
           <div><dt>Status</dt><dd>{statusLabels[details.status]}</dd></div>
-          <div><dt>Since</dt><dd>Aug 20, 2026 10:12:07</dd></div>
-          <div><dt>Node</dt><dd>/{selectedId}_node</dd></div>
-          <div><dt>Lifecycle</dt><dd>{details.status === "unobserved" ? "unknown" : "active"}</dd></div>
-          <div><dt>Namespace</dt><dd>/</dd></div>
+          <div><dt>Snapshot</dt><dd>{topology ? new Date(topology.observed_at).toLocaleString() : "Aug 20, 2026 10:12:07"}</dd></div>
+          <div><dt>Node</dt><dd>{selectedId}</dd></div>
+          <div><dt>Integrity</dt><dd>{details.integrityStatus || "preview"}</dd></div>
+          <div><dt>Kind</dt><dd>{details.kind || "component"}</dd></div>
         </dl>
 
         <div className="inspector-section">
           <h4>What it does</h4>
-          <p>{details.label === "Localization" ? "Fuses LiDAR, IMU, wheel odometry, and TF data to estimate the robot pose in the map frame." : `Provides the observed ${details.label} capability within the ${details.layer} layer.`}</p>
+          <p>{topology ? `Represents ${details.label} from the ${topology.coverage === "GATED_RELEASE" ? "hash-verified active release" : "validated robot registry"}.` : details.label === "Localization" ? "Fuses LiDAR, IMU, wheel odometry, and TF data to estimate the robot pose in the map frame." : `Provides the observed ${details.label} capability within the ${details.layer} layer.`}</p>
         </div>
 
         <div className="inspector-section">
@@ -386,7 +505,7 @@ function StackMapView({ onOpenEvidence }: { onOpenEvidence: (item: EvidenceItem)
           <div className="relationship-list">
             {connected.slice(0, 5).map((edge) => {
               const peerId = edge.source === selectedId ? edge.target : edge.source;
-              const peer = TOPOLOGY_NODES.find((node) => node.id === peerId);
+              const peer = sourceNodes.find((node) => node.id === peerId);
               if (!peer) return null;
               return (
                 <button key={edge.id} onClick={() => setSelectedId(peerId)}>
@@ -400,19 +519,19 @@ function StackMapView({ onOpenEvidence }: { onOpenEvidence: (item: EvidenceItem)
         </div>
 
         <div className="inspector-section observed-record-section">
-          <h4>Observed in</h4>
-          <div className="observed-record"><FileText size={19} /><span><strong>rosbag2_2026-08-20_10-00-00</strong><small>10:00:00–10:30:00 AM · {details.evidence} records</small></span></div>
+          <h4>{topology ? "Evidence source" : "Observed in"}</h4>
+          <div className="observed-record"><FileText size={19} /><span><strong>{topology ? topology.coverage.replace("_", " ") : "rosbag2_2026-08-20_10-00-00"}</strong><small>{topology ? `${topology.integrity_status} · ${details.evidence} evidence references` : `10:00:00–10:30:00 AM · ${details.evidence} records`}</small></span></div>
         </div>
 
         <div className="inspector-section confidence-section">
-          <div className="section-title-row"><h4>Confidence</h4><strong>{details.confidence || 92}%</strong></div>
-          <div className="confidence-track"><span style={{ width: `${details.confidence || 92}%` }} /></div>
-          <p>Evidence is consistent with declared intent.</p>
+          <div className="section-title-row"><h4>Confidence</h4><strong>{details.confidence ?? 92}%</strong></div>
+          <div className="confidence-track"><span style={{ width: `${details.confidence ?? 92}%` }} /></div>
+          <p>{topology?.limitations[0] || "Evidence is consistent with declared intent."}</p>
         </div>
 
         <div className="inspector-actions">
-          <button className="primary-button" onClick={() => onOpenEvidence(EVIDENCE[0])}>Open evidence</button>
-          <button className="secondary-button" onClick={() => setCompare(true)}>Compare snapshot</button>
+          <button className="primary-button" disabled={Boolean(topology && !details.evidenceIds?.length)} onClick={() => onOpenEvidence(topology ? details.evidenceIds?.[0] || "" : EVIDENCE[0])}>Open evidence</button>
+          <button className="secondary-button" disabled={Boolean(topology)} onClick={() => setCompare(true)} title={topology ? "Snapshot diff is planned next" : undefined}>Compare snapshot</button>
         </div>
       </aside>
     </section>
@@ -424,14 +543,14 @@ interface OverviewViewProps {
   pipeline: PipelineRow[];
   overview: RobotOverview | null;
   mode: WorkbenchMode;
-  onOpenEvidence: (item: EvidenceItem) => void;
+  evidenceItems: EvidenceItem[];
+  onOpenEvidence: OpenEvidence;
   onNavigate: (view: NavId) => void;
 }
 
-function OverviewView({ robot, pipeline, overview, mode, onOpenEvidence, onNavigate }: OverviewViewProps) {
+function OverviewView({ robot, pipeline, overview, mode, evidenceItems, onOpenEvidence, onNavigate }: OverviewViewProps) {
   const primaryBlocker = overview?.blockers?.[0];
-  const attentionTitle = overview?.state === "READY" ? "Ready" : overview?.state === "DEGRADED" ? "Degraded" : "Attention required";
-  const attentionSummary = overview?.summary || "Demo data shows an Adapt dependency mismatch.";
+  const overviewPresentation = getOverviewPresentation(mode, overview, pipeline[0]?.summary);
   return (
     <section className="content-view">
       <PageTitle
@@ -441,7 +560,7 @@ function OverviewView({ robot, pipeline, overview, mode, onOpenEvidence, onNavig
         action={<button className="secondary-button" onClick={() => onNavigate("stack")}><GitBranch size={17} /> Open Stack Map</button>}
       />
       <div className="trust-summary">
-        <div className="trust-state"><WarningCircle size={30} weight="fill" /><div><strong>{attentionTitle}</strong><span>{attentionSummary}</span></div></div>
+        <div className="trust-state"><WarningCircle size={30} weight="fill" /><div><strong>{overviewPresentation.title}</strong><span>{overviewPresentation.summary}</span></div></div>
         <div className="summary-meta"><span>Freshness</span><strong>{overview?.freshness || (mode === "demo" ? "Fixture" : "Unknown")}</strong></div>
         <div className="summary-meta"><span>Integrity</span><strong>{overview?.integrity_status || (mode === "demo" ? "Preview only" : "Not asserted")}</strong></div>
         <div className="summary-meta"><span>Read model</span><strong>{overview?.schema_version || "Pipeline compatibility"}</strong></div>
@@ -463,11 +582,11 @@ function OverviewView({ robot, pipeline, overview, mode, onOpenEvidence, onNavig
           {(primaryBlocker || mode === "demo") && <div className="blocker-detail">
             <span className="blocker-icon"><Warning size={21} weight="fill" /></span>
             <div><strong>{primaryBlocker ? `${primaryBlocker.stage} blocker` : "Dependency mismatch"}</strong><p>{primaryBlocker?.message || "Localization latency p95 is 312 ms. Nav Stack v2.4.0 requires ≤ 120 ms before Adapt can pass."}</p></div>
-            <button className="primary-button" disabled={mode !== "demo"} onClick={() => onOpenEvidence(EVIDENCE[1])}>{mode === "demo" ? "View demo evidence" : "Evidence API next"}</button>
+            <button className="primary-button" disabled={mode !== "demo" && !primaryBlocker?.evidence_ids.length} onClick={() => mode === "demo" ? onOpenEvidence(EVIDENCE[1]) : primaryBlocker?.evidence_ids[0] && onOpenEvidence(primaryBlocker.evidence_ids[0])}>{mode === "demo" ? "View demo evidence" : primaryBlocker?.evidence_ids.length ? "Open blocker evidence" : "No blocker evidence"}</button>
           </div>}
         </div>
         <div className="panel attention-panel">
-          <div className="panel-heading"><div><span>Needs attention</span><h3>{overview ? `${overview.blockers.length} active items` : "Preview items"}</h3></div></div>
+          <div className="panel-heading"><div><span>Needs attention</span><h3>{overview ? `${overview.blockers.length} active items` : mode === "demo" ? "Preview items" : "Compatibility status"}</h3></div></div>
           {overview?.blockers.map((blocker) => <div className="attention-row" key={blocker.blocker_id}>
             <WarningCircle size={21} weight="fill" /><span><strong>{blocker.stage} blocked</strong><small>{blocker.message}</small></span><ArrowRight size={15} />
           </div>)}
@@ -476,8 +595,8 @@ function OverviewView({ robot, pipeline, overview, mode, onOpenEvidence, onNavig
         </div>
       </div>
       <div className="panel recent-evidence">
-        <div className="panel-heading"><div><span>Recent evidence</span><h3>{mode === "demo" ? "Preview records" : "Evidence API planned next"}</h3></div>{mode === "demo" && <button onClick={() => onNavigate("evidence")}>Open demo ledger <ArrowRight size={15} /></button>}</div>
-        {mode === "demo" ? EVIDENCE.slice(0, 3).map((item) => <EvidenceRow key={item.id} item={item} onClick={() => onOpenEvidence(item)} />) : <div className="evidence-api-notice"><Info size={20} /><span><strong>No fixture evidence is mixed into the live overview.</strong><small>The next milestone will resolve opaque evidence IDs from rolo.</small></span></div>}
+        <div className="panel-heading"><div><span>Recent evidence</span><h3>{mode === "demo" ? "Preview records" : `${evidenceItems.length} trusted records`}</h3></div>{(mode === "demo" || evidenceItems.length > 0) && <button onClick={() => onNavigate("evidence")}>{mode === "demo" ? "Open demo ledger" : "Open evidence ledger"} <ArrowRight size={15} /></button>}</div>
+        {mode === "demo" ? EVIDENCE.slice(0, 3).map((item) => <EvidenceRow key={item.id} item={item} onClick={() => onOpenEvidence(item)} />) : evidenceItems.length ? evidenceItems.slice(0, 3).map((item) => <EvidenceRow key={item.id} item={item} onClick={() => onOpenEvidence(item.id)} />) : <div className="evidence-api-notice"><Info size={20} /><span><strong>No fixture evidence is mixed into the live overview.</strong><small>The live evidence read model is unavailable for this robot.</small></span></div>}
       </div>
     </section>
   );
@@ -533,7 +652,7 @@ function CapabilityView({ onOpenEvidence }: { onOpenEvidence: (item: EvidenceIte
   );
 }
 
-function LifecycleView({ pipeline, onOpenEvidence }: { pipeline: PipelineRow[]; onOpenEvidence: (item: EvidenceItem) => void }) {
+function DemoLifecycleView({ pipeline, onOpenEvidence }: { pipeline: PipelineRow[]; onOpenEvidence: (item: EvidenceItem) => void }) {
   const [active, setActive] = useState("adapt");
   const selected = pipeline.find((item) => item.stage === active) || pipeline[0];
   if (!selected) return <section className="content-view"><PageTitle title="Lifecycle" description="No pipeline stages are available." /></section>;
@@ -574,6 +693,56 @@ function LifecycleView({ pipeline, onOpenEvidence }: { pipeline: PipelineRow[]; 
   );
 }
 
+function LiveLifecycleView({ pipeline }: { pipeline: PipelineRow[] }) {
+  const [active, setActive] = useState("adapt");
+  const selected = pipeline.find((item) => item.stage === active) || pipeline[0];
+
+  useEffect(() => {
+    if (pipeline.length && !pipeline.some((item) => item.stage === active)) {
+      setActive(pipeline[0].stage);
+    }
+  }, [active, pipeline]);
+
+  if (!selected) {
+    return <ReadModelUnavailableView title="Lifecycle" description="The live pipeline contains no stage assessments." />;
+  }
+  const prerequisites = selected.prerequisites || [];
+  const artifacts = selected.artifactRefs || [];
+  const blockers = selected.blockerMessages || [];
+  return (
+    <section className="content-view">
+      <PageTitle title="Lifecycle" description="Read-only pipeline facts; a stage status is not physical outcome evidence." />
+      <div className="lifecycle-tabs" role="tablist">
+        {pipeline.map((item, index) => (
+          <button key={item.stage} className={active === item.stage ? "is-active" : ""} onClick={() => setActive(item.stage)}>
+            <span>{index + 1}</span><strong>{item.stage}</strong><small>{item.status.replaceAll("_", " ")}</small>
+          </button>
+        ))}
+      </div>
+      <div className="lifecycle-detail-grid">
+        <div className="panel stage-detail-panel">
+          <div className="stage-detail-header"><div><span>Stage {pipeline.findIndex((item) => item.stage === active) + 1}</span><h3>{selected.stage}</h3></div><span className={`stage-status status-${selected.status.toLowerCase().replaceAll("_", "-")}`}>{selected.status.replaceAll("_", " ")}</span></div>
+          <p>{selected.summary}</p>
+          <div className="gate-checklist">
+            {blockers.map((message) => <div key={message} className="is-pending"><Warning size={20} weight="fill" /><span><strong>Reported blocker</strong><small>{message}</small></span></div>)}
+            {prerequisites.map((reference) => <div key={reference} className="is-neutral"><Info size={20} /><span><strong>{reference}</strong><small>Sanitized prerequisite declared by the stage assessment</small></span></div>)}
+            {!blockers.length && <div className="is-passed"><CheckCircle size={20} weight="fill" /><span><strong>No active blocker reported</strong><small>This statement is limited to the current pipeline assessment.</small></span></div>}
+          </div>
+        </div>
+        <div className="panel handoff-panel">
+          <span>Assessment provenance</span><h3>{selected.agentRequirement?.replaceAll("_", " ") || "Unassigned agent"}</h3>
+          <div className="handoff-hash"><code>{selected.observedAt ? `Observed ${new Date(selected.observedAt).toLocaleString()}` : "Observation time unavailable"}</code></div>
+          <dl><div><dt>Optional stage</dt><dd>{selected.optional ? "Yes" : "No"}</dd></div><div><dt>Artifacts</dt><dd>{artifacts.length}</dd></div><div><dt>Blockers</dt><dd>{blockers.length}</dd></div></dl>
+          <div className="artifact-reference-list">
+            {artifacts.map((artifact) => <div key={artifact.name}><strong>{artifact.name}</strong><code>{artifact.reference}</code></div>)}
+            {!artifacts.length && <small>No artifact reference is asserted for this stage.</small>}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function EvidenceRow({ item, onClick }: { item: EvidenceItem; onClick: () => void }) {
   return (
     <button className="evidence-row" onClick={onClick}>
@@ -587,23 +756,101 @@ function EvidenceRow({ item, onClick }: { item: EvidenceItem; onClick: () => voi
   );
 }
 
-function EvidenceView({ onOpenEvidence }: { onOpenEvidence: (item: EvidenceItem) => void }) {
+function EvidenceView({
+  onOpenEvidence,
+  items = EVIDENCE,
+  live = false,
+  collection = null,
+  robotId,
+}: {
+  onOpenEvidence: OpenEvidence;
+  items?: EvidenceItem[];
+  live?: boolean;
+  collection?: EvidenceCollection | null;
+  robotId?: string;
+}) {
   const [query, setQuery] = useState("");
   const [integrity, setIntegrity] = useState("all");
-  const filtered = EVIDENCE.filter((item) => {
+  const [authority, setAuthority] = useState<"all" | EvidenceAuthority>("all");
+  const [records, setRecords] = useState<EvidenceRecord[]>(collection?.items || []);
+  const [total, setTotal] = useState(collection?.total ?? items.length);
+  const [nextOffset, setNextOffset] = useState<number | null>(collection?.next_offset ?? null);
+  const [loading, setLoading] = useState(false);
+  const [pageError, setPageError] = useState("");
+  const requestGeneration = useRef(0);
+
+  useEffect(() => {
+    requestGeneration.current += 1;
+    setRecords(collection?.items || []);
+    setTotal(collection?.total || (live ? 0 : items.length));
+    setNextOffset(collection?.next_offset ?? null);
+    setAuthority("all");
+    setLoading(false);
+    setPageError("");
+  }, [collection, items.length, live, robotId]);
+
+  const loadPage = useCallback(async (
+    selectedAuthority: "all" | EvidenceAuthority,
+    offset: number,
+    append: boolean,
+  ) => {
+    if (!live || !robotId) return;
+    const generation = ++requestGeneration.current;
+    setLoading(true);
+    setPageError("");
+    try {
+      const page = await roloClient.evidenceCollection(
+        robotId,
+        undefined,
+        {
+          limit: 25,
+          offset,
+          authority: selectedAuthority === "all" ? undefined : selectedAuthority,
+        },
+      );
+      if (generation !== requestGeneration.current) return;
+      setRecords((current) => {
+        if (!append) return page.items;
+        const merged = new Map(current.map((record) => [record.evidence_id, record]));
+        page.items.forEach((record) => merged.set(record.evidence_id, record));
+        return [...merged.values()];
+      });
+      setTotal(page.total);
+      setNextOffset(page.next_offset);
+    } catch (error) {
+      if (generation !== requestGeneration.current) return;
+      setPageError(error instanceof Error ? error.message : "The evidence page could not be read.");
+    } finally {
+      if (generation === requestGeneration.current) setLoading(false);
+    }
+  }, [live, robotId]);
+
+  const handleAuthorityChange = (value: "all" | EvidenceAuthority) => {
+    setAuthority(value);
+    setRecords([]);
+    setTotal(0);
+    setNextOffset(null);
+    void loadPage(value, 0, false);
+  };
+
+  const visibleItems = live ? records.map(evidenceRecordToItem) : items;
+  const filtered = visibleItems.filter((item) => {
     const queryMatch = `${item.title} ${item.id} ${item.source} ${item.kind}`.toLowerCase().includes(query.toLowerCase());
     return queryMatch && (integrity === "all" || item.integrity === integrity);
   });
   return (
     <section className="content-view">
-      <PageTitle title="Evidence" description="Every conclusion can be traced to a bounded, integrity-checked source." />
+      <PageTitle title="Evidence" description={live ? "Opaque IDs resolve to bounded, sanitized evidence records from rolo." : "Every conclusion can be traced to a bounded, integrity-checked source."} />
       <div className="evidence-toolbar">
-        <div className="search-box"><MagnifyingGlass size={18} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search evidence" /></div>
-        <label className="select-control"><Funnel size={16} /><select value={integrity} onChange={(event) => setIntegrity(event.target.value)}><option value="all">All integrity states</option><option value="verified">Verified</option><option value="unresolved">Unresolved</option></select></label>
+        <div className="search-box"><MagnifyingGlass size={18} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search loaded evidence" aria-label="Search loaded evidence" /></div>
+        {live && <label className="select-control"><Funnel size={16} /><select value={authority} onChange={(event) => handleAuthorityChange(event.target.value as "all" | EvidenceAuthority)} aria-label="Filter evidence authority"><option value="all">All authority levels</option><option value="DECLARED">Declared</option><option value="OBSERVED">Observed</option><option value="GATED">Gated</option></select></label>}
+        <label className="select-control"><Funnel size={16} /><select value={integrity} onChange={(event) => setIntegrity(event.target.value)} aria-label="Filter evidence integrity"><option value="all">All integrity states</option><option value="verified">Verified</option><option value="validated">Validated declaration</option><option value="unresolved">Unresolved</option></select></label>
       </div>
       <div className="panel evidence-ledger">
         <div className="ledger-header"><span>Evidence</span><span>Type</span><span>Integrity</span><span>Observed</span></div>
-        {filtered.map((item) => <EvidenceRow key={item.id} item={item} onClick={() => onOpenEvidence(item)} />)}
+        {filtered.map((item) => <EvidenceRow key={item.id} item={item} onClick={() => onOpenEvidence(live ? item.id : item)} />)}
+        {!filtered.length && !loading && <div className="evidence-empty"><MagnifyingGlass size={24} /><strong>No evidence matches this view</strong><span>Change the search or trust filters to continue.</span></div>}
+        {live && <div className="evidence-paging"><span>{loading && !records.length ? "Loading trusted records…" : `Loaded ${records.length} of ${total} trusted records${authority === "all" ? "" : ` · ${authority.toLowerCase()}`}`}</span><div>{pageError && <small role="alert">{pageError}</small>}{nextOffset !== null && <button className="secondary-button" disabled={loading} onClick={() => void loadPage(authority, nextOffset, true)}>{loading ? "Loading…" : "Load more"}</button>}</div></div>}
       </div>
     </section>
   );
@@ -615,12 +862,12 @@ function EvidenceDrawer({ evidence, onClose }: { evidence: EvidenceItem | null; 
     <div className="drawer-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
       <aside className="evidence-drawer" aria-label="Evidence details">
         <div className="drawer-header"><div><span>{evidence.kind}</span><h3>{evidence.title}</h3></div><button onClick={onClose} aria-label="Close evidence"><X size={20} /></button></div>
-        <div className="evidence-verdict"><CheckCircle size={24} weight="fill" /><div><strong>Integrity verified</strong><span>Digest and source reference match the current run manifest.</span></div></div>
-        <dl className="drawer-facts"><div><dt>Evidence ID</dt><dd>{evidence.id}</dd></div><div><dt>Source</dt><dd>{evidence.source}</dd></div><div><dt>Observed</dt><dd>Aug 20, 2026 · {evidence.time}</dd></div><div><dt>Classification</dt><dd>INTERNAL</dd></div></dl>
-        <div className="drawer-section"><h4>Observed fact</h4><p>{evidence.title}. This record was produced by a bounded read-only probe and retained in the immutable discovery manifest.</p></div>
-        <div className="drawer-section"><h4>Artifact reference</h4><code>{evidence.ref}</code></div>
-        <div className="drawer-section"><h4>Digest</h4><code>sha256:82f38dc1b9110f2da0b36b6d86d343efc8016278c17f9a4f1885c423d77ba149</code></div>
-        <div className="drawer-note"><Info size={19} /><p>Evidence proves what rolo observed. It does not by itself prove physical outcome correctness or safety.</p></div>
+        <div className={`evidence-verdict verdict-${evidence.integrity}`}><CheckCircle size={24} weight="fill" /><div><strong>Integrity {evidence.integrity}</strong><span>{evidence.integrity === "verified" ? "The reference is bound to a hash-verified release." : "The declaration passed schema validation but does not prove runtime presence."}</span></div></div>
+        <dl className="drawer-facts"><div><dt>Evidence ID</dt><dd>{evidence.id}</dd></div><div><dt>Source</dt><dd>{evidence.source}</dd></div><div><dt>Observed</dt><dd>{evidence.time}</dd></div><div><dt>Classification</dt><dd>{evidence.classification || "INTERNAL"}</dd></div></dl>
+        <div className="drawer-section"><h4>Evidence statement</h4><p>{evidence.summary || `${evidence.title}. This record was produced by a bounded read-only source.`}</p></div>
+        <div className="drawer-section"><h4>Sanitized reference</h4><code>{evidence.ref}</code></div>
+        <div className="drawer-section"><h4>Reference digest</h4><code>{evidence.digest ? `sha256:${evidence.digest}` : "Digest available in live evidence mode"}</code></div>
+        <div className="drawer-note"><Info size={19} /><p>{evidence.limitations?.[0] || "Evidence proves what rolo observed. It does not by itself prove physical outcome correctness or safety."}</p></div>
         <button className="primary-button drawer-close" onClick={onClose}>Done</button>
       </aside>
     </div>
@@ -634,6 +881,8 @@ function AppContent() {
   const [robot, setRobot] = useState<ViewRobot | null>(null);
   const [pipeline, setPipeline] = useState<PipelineRow[]>([]);
   const [overview, setOverview] = useState<RobotOverview | null>(null);
+  const [topology, setTopology] = useState<RobotTopology | null>(null);
+  const [evidenceList, setEvidenceList] = useState<EvidenceCollection | null>(null);
   const [connectionMessage, setConnectionMessage] = useState("");
   const [evidence, setEvidence] = useState<EvidenceItem | null>(null);
 
@@ -647,6 +896,8 @@ function AppContent() {
       setRobots(result.robots);
       setRobot(result.robot ? { ...result.robot, status: "online" } : null);
       setOverview(result.overview);
+      setTopology(result.topology);
+      setEvidenceList(result.evidence);
       if (result.pipeline?.stages?.length) {
         setPipeline(result.pipeline.stages.map((stage) => ({
           stage: stage.stage,
@@ -654,6 +905,12 @@ function AppContent() {
           summary: stage.summary,
           artifacts: Object.keys(stage.artifacts || {}).length,
           blockers: stage.blockers?.length || 0,
+          optional: stage.optional,
+          prerequisites: stage.prerequisites,
+          artifactRefs: Object.entries(stage.artifacts).map(([name, reference]) => ({ name, reference })),
+          blockerMessages: stage.blockers,
+          agentRequirement: stage.agent_requirement,
+          observedAt: stage.observed_at,
         })));
       } else setPipeline([]);
       setConnectionMessage(result.issues.join(" "));
@@ -663,6 +920,8 @@ function AppContent() {
       setRobots([]);
       setPipeline([]);
       setOverview(null);
+      setTopology(null);
+      setEvidenceList(null);
       setConnectionMessage(error instanceof RoloApiError ? `${error.message}${error.path ? ` (${error.path})` : ""}` : "The rolo control plane could not be read.");
       setMode("unavailable");
     } finally {
@@ -675,6 +934,8 @@ function AppContent() {
     setRobots([DEMO_ROBOT]);
     setPipeline(DEMO_PIPELINE);
     setOverview(null);
+    setTopology(null);
+    setEvidenceList(null);
     setConnectionMessage("Explicit fixture mode; no values on this screen are live robot observations.");
     setMode("demo");
   }, []);
@@ -686,18 +947,47 @@ function AppContent() {
     return () => window.removeEventListener("keydown", handleKey);
   }, []);
 
+  const openEvidence = useCallback(async (item: EvidenceItem | string) => {
+    if (typeof item !== "string") {
+      setEvidence(item);
+      return;
+    }
+    try {
+      setEvidence(evidenceRecordToItem(await roloClient.evidence(item)));
+    } catch (error) {
+      setEvidence({
+        id: item,
+        title: "Evidence unavailable",
+        source: "rolo evidence API",
+        kind: "Unavailable",
+        integrity: "unresolved",
+        time: new Date().toLocaleTimeString(),
+        ref: "opaque ID could not be resolved",
+        summary: error instanceof Error ? error.message : "The evidence record could not be read.",
+        limitations: ["No evidence conclusion should be drawn until this record resolves."],
+      });
+    }
+  }, []);
+
   const activeLabel = NAV_ITEMS.find((item) => item.id === active)?.label || "Stack Map";
+  const evidenceItems = useMemo(
+    () => evidenceList?.items.map(evidenceRecordToItem) || [],
+    [evidenceList],
+  );
+  const stackSource = getSurfaceSource(mode, "stack", { stack: Boolean(topology) });
+  const evidenceSource = getSurfaceSource(mode, "evidence", { evidence: Boolean(evidenceList) });
+  const lifecycleSource = getSurfaceSource(mode, "lifecycle", { lifecycle: Boolean(pipeline.length) });
   return (
     <div className="app-shell">
       <Sidebar active={active} onChange={setActive} />
       <Topbar robot={robot} robots={robots} activeLabel={activeLabel} mode={mode} snapshot={overview?.observed_at} onRetry={() => connect(robot?.robot_id)} onRobotChange={connect} />
       <main className="app-main">
         {(["connecting", "unavailable"].includes(mode) || !robot) ? <ConnectionStateView mode={mode} message={connectionMessage} onRetry={() => connect()} onUseDemo={useDemo} /> : <>
-          {active === "stack" && (getSurfaceSource(mode, "stack") === "demo" ? <StackMapView onOpenEvidence={setEvidence} /> : <ReadModelUnavailableView title="Stack Map" description="Live topology needs a versioned rolo topology read model." />)}
-          {active === "overview" && <OverviewView robot={robot} pipeline={pipeline} overview={overview} mode={mode} onOpenEvidence={setEvidence} onNavigate={setActive} />}
+          {active === "stack" && (stackSource === "demo" ? <StackMapView onOpenEvidence={openEvidence} /> : stackSource === "live" ? <StackMapView topology={topology} onOpenEvidence={openEvidence} /> : <ReadModelUnavailableView title="Stack Map" description="Live topology needs a versioned rolo topology read model." />)}
+          {active === "overview" && <OverviewView robot={robot} pipeline={pipeline} overview={overview} mode={mode} evidenceItems={evidenceItems} onOpenEvidence={openEvidence} onNavigate={setActive} />}
           {active === "capabilities" && (getSurfaceSource(mode, "capabilities") === "demo" ? <CapabilityView onOpenEvidence={setEvidence} /> : <ReadModelUnavailableView title="Capabilities" description="Live capability coverage needs a versioned rolo capability read model." />)}
-          {active === "lifecycle" && <LifecycleView pipeline={pipeline} onOpenEvidence={setEvidence} />}
-          {active === "evidence" && (getSurfaceSource(mode, "evidence") === "demo" ? <EvidenceView onOpenEvidence={setEvidence} /> : <ReadModelUnavailableView title="Evidence" description="Live evidence resolution needs a versioned rolo evidence read model." />)}
+          {active === "lifecycle" && (lifecycleSource === "demo" ? <DemoLifecycleView pipeline={pipeline} onOpenEvidence={setEvidence} /> : lifecycleSource === "live" ? <LiveLifecycleView pipeline={pipeline} /> : <ReadModelUnavailableView title="Lifecycle" description="Live lifecycle requires a trusted pipeline assessment." />)}
+          {active === "evidence" && (evidenceSource === "demo" ? <EvidenceView onOpenEvidence={openEvidence} /> : evidenceSource === "live" ? <EvidenceView live collection={evidenceList} robotId={robot.robot_id} onOpenEvidence={openEvidence} /> : <ReadModelUnavailableView title="Evidence" description="Live evidence resolution needs a versioned rolo evidence read model." />)}
         </>}
       </main>
       <EvidenceDrawer evidence={evidence} onClose={() => setEvidence(null)} />

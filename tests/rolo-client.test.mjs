@@ -1,9 +1,10 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 import { TOPOLOGY_EDGES, TOPOLOGY_NODES } from "../src/demoData.ts";
 import { RoloApiError, RoloClient, RoloContractError } from "../src/roloClient.ts";
-import { getSurfaceSource } from "../src/workbenchPolicy.ts";
+import { getOverviewPresentation, getSurfaceSource } from "../src/workbenchPolicy.ts";
 
 const HEALTH = {
   status: "HEALTHY",
@@ -45,7 +46,7 @@ const PIPELINE = {
 };
 
 const OVERVIEW = {
-  schema_version: "rolo-robot-overview/v1",
+  schema_version: "rolo-robot-overview/v2",
   robot_id: "AMR-07",
   state: "READY",
   summary: "Ready",
@@ -59,6 +60,64 @@ const OVERVIEW = {
   pipeline: PIPELINE,
 };
 
+const EVIDENCE_RECORD = {
+  schema_version: "rolo-evidence-record/v1",
+  evidence_id: "ev_1234567890abcdef12",
+  robot_id: "AMR-07",
+  title: "Declared robot",
+  summary: "Declared by the robot manifest.",
+  authority: "DECLARED",
+  source_kind: "robot_manifest",
+  integrity_status: "validated",
+  classification: "INTERNAL",
+  observed_at: "2026-08-20T00:00:00Z",
+  freshness: "fresh",
+  confidence: 1,
+  reference_hint: "robot-manifest:AMR-07:robot",
+  reference_digest: "a".repeat(64),
+  related_node_ids: ["robot_1"],
+  limitations: ["Declaration only"],
+};
+
+const TOPOLOGY = {
+  schema_version: "rolo-robot-topology/v1",
+  robot_id: "AMR-07",
+  snapshot_id: "topology_1",
+  coverage: "REGISTRY_ONLY",
+  nodes: [{
+    schema_version: "rolo-topology-node/v1",
+    node_id: "robot_1",
+    kind: "robot",
+    label: "AMR-07",
+    subtitle: "differential",
+    layer: "Hardware",
+    state: "DECLARED",
+    confidence: 1,
+    integrity_status: "validated",
+    evidence_ids: [EVIDENCE_RECORD.evidence_id],
+    attributes: {},
+  }],
+  edges: [],
+  observed_at: "2026-08-20T00:00:00Z",
+  freshness: "fresh",
+  source_kind: "robot_registry",
+  confidence: 0.7,
+  integrity_status: "validated",
+  limitations: ["Registry only"],
+};
+
+const EVIDENCE_COLLECTION = {
+  schema_version: "rolo-evidence-collection/v1",
+  robot_id: "AMR-07",
+  items: [EVIDENCE_RECORD],
+  total: 1,
+  limit: 25,
+  offset: 0,
+  next_offset: null,
+  observed_at: "2026-08-20T00:00:00Z",
+  freshness: "fresh",
+};
+
 test("RoloClient bootstraps the read-only control-plane surface", async () => {
   const originalFetch = globalThis.fetch;
   const requests = [];
@@ -70,7 +129,11 @@ test("RoloClient bootstraps the read-only control-plane surface", async () => {
         ? [ROBOT]
         : url.endsWith("/overview")
           ? OVERVIEW
-          : PIPELINE;
+          : url.endsWith("/topology")
+            ? TOPOLOGY
+            : url.includes("/evidence?limit=")
+              ? EVIDENCE_COLLECTION
+              : PIPELINE;
     return { ok: true, json: async () => payload };
   };
 
@@ -79,12 +142,16 @@ test("RoloClient bootstraps the read-only control-plane surface", async () => {
     assert.equal(result.health.status, "HEALTHY");
     assert.equal(result.robots[0].robot_id, "AMR-07");
     assert.equal(result.mode, "live");
-    assert.equal(result.overview.schema_version, "rolo-robot-overview/v1");
+    assert.equal(result.overview.schema_version, "rolo-robot-overview/v2");
     assert.equal(result.pipeline.stages[0].stage, "adapt");
+    assert.equal(result.topology.schema_version, "rolo-robot-topology/v1");
+    assert.equal(result.evidence.items[0].evidence_id, EVIDENCE_RECORD.evidence_id);
     assert.deepEqual(requests, [
       "http://rolo.test/health",
       "http://rolo.test/v1/robots",
       "http://rolo.test/v1/robots/AMR-07/overview",
+      "http://rolo.test/v1/robots/AMR-07/topology",
+      "http://rolo.test/v1/robots/AMR-07/evidence?limit=25&offset=0",
     ]);
   } finally {
     globalThis.fetch = originalFetch;
@@ -97,6 +164,7 @@ test("RoloClient reports a partial connection when overview is not available", a
     if (url.endsWith("/health")) return { ok: true, json: async () => HEALTH };
     if (url.endsWith("/v1/robots")) return { ok: true, json: async () => [ROBOT] };
     if (url.endsWith("/overview")) return { ok: false, status: 404 };
+    if (url.endsWith("/topology") || url.includes("/evidence?limit=")) return { ok: false, status: 404 };
     return {
       ok: true,
       json: async () => ({ ...PIPELINE, stages: [{ ...PIPELINE.stages[0], status: "BLOCKED", blockers: ["Blocked"] }] }),
@@ -120,13 +188,37 @@ test("RoloClient downgrades a degraded control plane to partial", async () => {
       ? { ...HEALTH, status: "DEGRADED" }
       : url.endsWith("/v1/robots")
         ? [ROBOT]
-        : OVERVIEW;
+        : url.endsWith("/overview")
+          ? OVERVIEW
+          : url.endsWith("/topology")
+            ? TOPOLOGY
+            : EVIDENCE_COLLECTION;
     return { ok: true, json: async () => payload };
   };
   try {
     const result = await new RoloClient("http://rolo.test").bootstrap();
     assert.equal(result.mode, "partial");
     assert.match(result.issues[0], /degraded health/i);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("RoloClient keeps trusted overview data partial when topology fails", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url) => {
+    if (url.endsWith("/health")) return { ok: true, json: async () => HEALTH };
+    if (url.endsWith("/v1/robots")) return { ok: true, json: async () => [ROBOT] };
+    if (url.endsWith("/overview")) return { ok: true, json: async () => OVERVIEW };
+    if (url.endsWith("/topology")) return { ok: false, status: 503 };
+    return { ok: true, json: async () => EVIDENCE_COLLECTION };
+  };
+  try {
+    const result = await new RoloClient("http://rolo.test").bootstrap();
+    assert.equal(result.mode, "partial");
+    assert.equal(result.overview.schema_version, "rolo-robot-overview/v2");
+    assert.equal(result.topology, null);
+    assert.match(result.issues.join(" "), /topology.*HTTP 503/i);
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -158,6 +250,99 @@ test("RoloClient preserves HTTP failure status", async () => {
   }
 });
 
+test("RoloClient requests bounded evidence pages with an authority filter", async () => {
+  const originalFetch = globalThis.fetch;
+  let requestedUrl = "";
+  globalThis.fetch = async (url) => {
+    requestedUrl = url;
+    return {
+      ok: true,
+      json: async () => ({
+        ...EVIDENCE_COLLECTION,
+        items: [{ ...EVIDENCE_RECORD, evidence_id: "ev_gated123456789012", authority: "GATED" }],
+        total: 5,
+        limit: 2,
+        offset: 4,
+      }),
+    };
+  };
+  try {
+    const page = await new RoloClient("http://rolo.test").evidenceCollection(
+      "AMR-07",
+      undefined,
+      { limit: 2, offset: 4, authority: "GATED" },
+    );
+    assert.equal(requestedUrl, "http://rolo.test/v1/robots/AMR-07/evidence?limit=2&offset=4&authority=GATED");
+    assert.equal(page.offset, 4);
+    assert.equal(page.items[0].authority, "GATED");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("RoloClient rejects evidence pages containing another robot", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => ({
+    ok: true,
+    json: async () => ({
+      ...EVIDENCE_COLLECTION,
+      items: [{ ...EVIDENCE_RECORD, robot_id: "OTHER-ROBOT" }],
+    }),
+  });
+  try {
+    await assert.rejects(
+      () => new RoloClient("http://rolo.test").evidenceCollection("AMR-07"),
+      (error) => error instanceof RoloContractError && error.path.endsWith("/items/0"),
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("RoloClient strips legacy raw blocker evidence references", async () => {
+  const originalFetch = globalThis.fetch;
+  const rawPath = "C:\\private\\artifacts\\adapter-output.json";
+  const escapedPath = rawPath.replaceAll("\\", "\\\\");
+  const legacyOverview = {
+    ...OVERVIEW,
+    schema_version: "rolo-robot-overview/v1",
+    pipeline: {
+      ...PIPELINE,
+      stages: [{
+        ...PIPELINE.stages[0],
+        prerequisites: [rawPath],
+        artifacts: { output: rawPath },
+        blockers: [`Adapter output is missing at ${escapedPath}`],
+      }],
+    },
+    blockers: [{
+      schema_version: "rolo-blocker-summary/v1",
+      blocker_id: "adapt-blocked",
+      stage: "adapt",
+      message: `Adapter output is missing at ${escapedPath}`,
+      recommended_action: `Generate the adapter output at ${escapedPath}`,
+      owner: "adapter_agent",
+      observed_at: "2026-08-20T00:00:00Z",
+      freshness: "fresh",
+      source_kind: "pipeline_assessment",
+      confidence: 1,
+      integrity_status: "validated",
+      evidence_refs: [rawPath],
+    }],
+  };
+  globalThis.fetch = async () => ({ ok: true, json: async () => legacyOverview });
+  try {
+    const result = await new RoloClient("http://rolo.test").overview("AMR-07");
+    assert.deepEqual(result.blockers[0].evidence_ids, []);
+    assert.equal(result.blockers[0].message, "Adapter output is missing at artifact:adapter-output.json");
+    assert.deepEqual(result.pipeline.stages[0].prerequisites, ["artifact:adapter-output.json"]);
+    assert.deepEqual(result.pipeline.stages[0].artifacts, { output: "artifact:adapter-output.json" });
+    assert.doesNotMatch(JSON.stringify(result), /private/i);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("RoloClient rejects an incompatible overview contract", async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () => ({ ok: true, json: async () => ({ schema_version: "unknown/v9" }) });
@@ -181,6 +366,35 @@ test("RoloClient rejects a malformed nested pipeline contract", async () => {
     await assert.rejects(
       () => new RoloClient("http://rolo.test").overview("AMR-07"),
       (error) => error instanceof RoloContractError && error.path.endsWith("/pipeline"),
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("RoloClient rejects a dangling topology edge", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => ({
+    ok: true,
+    json: async () => ({
+      ...TOPOLOGY,
+      edges: [{
+        schema_version: "rolo-topology-edge/v1",
+        edge_id: "edge_1",
+        source: "robot_1",
+        target: "missing_node",
+        relation: "routes_to",
+        state: "GATED",
+        confidence: 1,
+        integrity_status: "verified",
+        evidence_ids: [],
+      }],
+    }),
+  });
+  try {
+    await assert.rejects(
+      () => new RoloClient("http://rolo.test").topology("AMR-07"),
+      (error) => error instanceof RoloContractError && error.path.endsWith("/edges/0"),
     );
   } finally {
     globalThis.fetch = originalFetch;
@@ -220,7 +434,50 @@ test("live modes never expose fixture-only workbench surfaces", () => {
     assert.equal(getSurfaceSource(mode, "stack"), "unavailable");
     assert.equal(getSurfaceSource(mode, "capabilities"), "unavailable");
     assert.equal(getSurfaceSource(mode, "evidence"), "unavailable");
+    assert.equal(getSurfaceSource(mode, "stack", { stack: true }), "live");
+    assert.equal(getSurfaceSource(mode, "evidence", { evidence: true }), "live");
   }
   assert.equal(getSurfaceSource("demo", "stack"), "demo");
   assert.equal(getSurfaceSource("unavailable", "overview"), "unavailable");
+});
+
+test("partial overview compatibility copy comes only from trusted pipeline data", () => {
+  const partial = getOverviewPresentation("partial", null, "Live pipeline summary");
+  const demo = getOverviewPresentation("demo", null, "Ignored live summary");
+
+  assert.deepEqual(partial, {
+    title: "Pipeline compatibility",
+    summary: "Live pipeline summary",
+  });
+  assert.doesNotMatch(JSON.stringify(partial), /demo|dependency mismatch/i);
+  assert.match(demo.title, /demo/i);
+  assert.match(demo.summary, /demo data/i);
+});
+
+test("live lifecycle component has no fixture evidence or fabricated handoff", async () => {
+  const source = await readFile(new URL("../src/App.tsx", import.meta.url), "utf8");
+  const start = source.indexOf("function LiveLifecycleView");
+  const end = source.indexOf("function EvidenceRow", start);
+  assert.ok(start >= 0 && end > start);
+  const liveLifecycle = source.slice(start, end);
+
+  assert.doesNotMatch(liveLifecycle, /\bEVIDENCE\b|\bDEMO_|sha256:82f3|adapt-20260820/);
+  assert.match(liveLifecycle, /selected\.blockerMessages|selected\.artifactRefs|selected\.observedAt/);
+});
+
+test("plugin manifest declares every trusted read-model endpoint", async () => {
+  const manifest = JSON.parse(await readFile(new URL("../rolo.plugin.json", import.meta.url), "utf8"));
+  assert.equal(manifest.version, "0.2.0");
+  assert.deepEqual(
+    new Set(manifest.api.required_endpoints),
+    new Set([
+      "/health",
+      "/v1/robots",
+      "/v1/robots/{robot_id}/overview",
+      "/v1/robots/{robot_id}/pipeline",
+      "/v1/robots/{robot_id}/topology",
+      "/v1/robots/{robot_id}/evidence",
+      "/v1/evidence/{evidence_id}",
+    ]),
+  );
 });
