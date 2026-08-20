@@ -110,7 +110,7 @@ export interface RobotTopology {
   nodes: TopologyNode[];
   edges: TopologyEdge[];
   observed_at: string;
-  freshness: "fresh";
+  freshness: "fresh" | "unknown";
   source_kind: "robot_registry" | "gated_state_graph";
   confidence: number;
   integrity_status: "validated" | "verified";
@@ -177,6 +177,67 @@ export interface CapabilitySummary {
   evidence_ids: string[];
   confidence: number;
   integrity_status: "validated" | "verified";
+  limitations: string[];
+}
+
+export interface TopologySnapshotSummary {
+  schema_version: "rolo-topology-snapshot-summary/v1";
+  snapshot_id: string;
+  release_id: string;
+  published_at: string;
+  node_count: number;
+  edge_count: number;
+  coverage: "GATED_RELEASE";
+  integrity_status: "verified";
+  is_current: boolean;
+}
+
+export interface TopologySnapshotCollection {
+  schema_version: "rolo-topology-snapshot-collection/v1";
+  robot_id: string;
+  items: TopologySnapshotSummary[];
+  total: number;
+  observed_at: string;
+  freshness: "unknown";
+  limitations: string[];
+}
+
+export type TopologyChangeKind = "ADDED" | "REMOVED" | "CHANGED";
+
+export interface TopologyNodeChange {
+  schema_version: "rolo-topology-node-change/v1";
+  node_id: string;
+  change: TopologyChangeKind;
+  changed_fields: string[];
+  before: TopologyNode | null;
+  after: TopologyNode | null;
+}
+
+export interface TopologyEdgeChange {
+  schema_version: "rolo-topology-edge-change/v1";
+  edge_id: string;
+  change: TopologyChangeKind;
+  changed_fields: string[];
+  before: TopologyEdge | null;
+  after: TopologyEdge | null;
+}
+
+export interface TopologyDiff {
+  schema_version: "rolo-topology-diff/v1";
+  robot_id: string;
+  from_snapshot: TopologySnapshotSummary;
+  to_snapshot: TopologySnapshotSummary;
+  added_nodes: number;
+  removed_nodes: number;
+  changed_nodes: number;
+  added_edges: number;
+  removed_edges: number;
+  changed_edges: number;
+  node_changes: TopologyNodeChange[];
+  edge_changes: TopologyEdgeChange[];
+  observed_at: string;
+  freshness: "unknown";
+  integrity_status: "verified";
   limitations: string[];
 }
 
@@ -324,6 +385,7 @@ export interface BootstrapResult {
   overview: RobotOverview | null;
   pipeline: PipelineAssessment | null;
   topology: RobotTopology | null;
+  topologySnapshots: TopologySnapshotCollection | null;
   evidence: EvidenceCollection | null;
   capabilities: CapabilitySummary[] | null;
   capabilityLimitations: string[];

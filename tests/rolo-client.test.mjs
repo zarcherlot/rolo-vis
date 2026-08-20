@@ -106,6 +106,62 @@ const TOPOLOGY = {
   limitations: ["Registry only"],
 };
 
+const TOPOLOGY_SNAPSHOTS = {
+  schema_version: "rolo-topology-snapshot-collection/v1",
+  robot_id: "AMR-07",
+  items: [{
+    schema_version: "rolo-topology-snapshot-summary/v1",
+    snapshot_id: "topology_snapshot_1",
+    release_id: "release-1",
+    published_at: "2026-08-19T00:00:00Z",
+    node_count: 1,
+    edge_count: 0,
+    coverage: "GATED_RELEASE",
+    integrity_status: "verified",
+    is_current: false,
+  }, {
+    schema_version: "rolo-topology-snapshot-summary/v1",
+    snapshot_id: "topology_snapshot_2",
+    release_id: "release-2",
+    published_at: "2026-08-20T00:00:00Z",
+    node_count: 1,
+    edge_count: 0,
+    coverage: "GATED_RELEASE",
+    integrity_status: "verified",
+    is_current: true,
+  }],
+  total: 2,
+  observed_at: "2026-08-20T00:00:01Z",
+  freshness: "unknown",
+  limitations: ["Verified releases only"],
+};
+
+const TOPOLOGY_DIFF = {
+  schema_version: "rolo-topology-diff/v1",
+  robot_id: "AMR-07",
+  from_snapshot: TOPOLOGY_SNAPSHOTS.items[0],
+  to_snapshot: TOPOLOGY_SNAPSHOTS.items[1],
+  added_nodes: 0,
+  removed_nodes: 0,
+  changed_nodes: 1,
+  added_edges: 0,
+  removed_edges: 0,
+  changed_edges: 0,
+  node_changes: [{
+    schema_version: "rolo-topology-node-change/v1",
+    node_id: "robot_1",
+    change: "CHANGED",
+    changed_fields: ["state"],
+    before: TOPOLOGY.nodes[0],
+    after: { ...TOPOLOGY.nodes[0], state: "GATED", integrity_status: "verified" },
+  }],
+  edge_changes: [],
+  observed_at: "2026-08-20T00:00:00Z",
+  freshness: "unknown",
+  integrity_status: "verified",
+  limitations: ["Gated declarations only"],
+};
+
 const EVIDENCE_COLLECTION = {
   schema_version: "rolo-evidence-collection/v1",
   robot_id: "AMR-07",
@@ -263,6 +319,8 @@ test("RoloClient bootstraps the read-only control-plane surface", async () => {
         ? [ROBOT]
         : url.endsWith("/overview")
           ? OVERVIEW
+          : url.endsWith("/topology/snapshots")
+            ? TOPOLOGY_SNAPSHOTS
           : url.endsWith("/topology")
             ? TOPOLOGY
             : url.includes("/runs?limit=")
@@ -283,6 +341,7 @@ test("RoloClient bootstraps the read-only control-plane surface", async () => {
     assert.equal(result.overview.schema_version, "rolo-robot-overview/v2");
     assert.equal(result.pipeline.stages[0].stage, "adapt");
     assert.equal(result.topology.schema_version, "rolo-robot-topology/v1");
+    assert.equal(result.topologySnapshots.total, 2);
     assert.equal(result.evidence.items[0].evidence_id, EVIDENCE_RECORD.evidence_id);
     assert.equal(result.capabilities[0].operation, "tool.catalog");
     assert.equal(result.runs.items[0].run_id, "run-1");
@@ -291,6 +350,7 @@ test("RoloClient bootstraps the read-only control-plane surface", async () => {
       "http://rolo.test/v1/robots",
       "http://rolo.test/v1/robots/AMR-07/overview",
       "http://rolo.test/v1/robots/AMR-07/topology",
+      "http://rolo.test/v1/robots/AMR-07/topology/snapshots",
       "http://rolo.test/v1/robots/AMR-07/evidence?limit=25&offset=0",
       "http://rolo.test/v1/robots/AMR-07/capabilities?limit=100&offset=0",
       "http://rolo.test/v1/robots/AMR-07/runs?limit=50&offset=0",
@@ -306,7 +366,7 @@ test("RoloClient reports a partial connection when overview is not available", a
     if (url.endsWith("/health")) return { ok: true, json: async () => HEALTH };
     if (url.endsWith("/v1/robots")) return { ok: true, json: async () => [ROBOT] };
     if (url.endsWith("/overview")) return { ok: false, status: 404 };
-    if (url.endsWith("/topology") || url.includes("/evidence?limit=")) return { ok: false, status: 404 };
+    if (url.endsWith("/topology") || url.endsWith("/topology/snapshots") || url.includes("/evidence?limit=")) return { ok: false, status: 404 };
     if (url.includes("/capabilities?limit=")) return { ok: true, json: async () => CAPABILITY_COLLECTION };
     if (url.includes("/runs?limit=")) return { ok: true, json: async () => RUN_COLLECTION };
     return {
@@ -334,6 +394,8 @@ test("RoloClient downgrades a degraded control plane to partial", async () => {
         ? [ROBOT]
         : url.endsWith("/overview")
           ? OVERVIEW
+          : url.endsWith("/topology/snapshots")
+            ? TOPOLOGY_SNAPSHOTS
           : url.endsWith("/topology")
             ? TOPOLOGY
             : url.includes("/runs?limit=")
@@ -358,6 +420,7 @@ test("RoloClient keeps trusted overview data partial when topology fails", async
     if (url.endsWith("/health")) return { ok: true, json: async () => HEALTH };
     if (url.endsWith("/v1/robots")) return { ok: true, json: async () => [ROBOT] };
     if (url.endsWith("/overview")) return { ok: true, json: async () => OVERVIEW };
+    if (url.endsWith("/topology/snapshots")) return { ok: true, json: async () => TOPOLOGY_SNAPSHOTS };
     if (url.endsWith("/topology")) return { ok: false, status: 503 };
     if (url.includes("/capabilities?limit=")) return { ok: true, json: async () => CAPABILITY_COLLECTION };
     if (url.includes("/runs?limit=")) return { ok: true, json: async () => RUN_COLLECTION };
@@ -567,6 +630,32 @@ test("RoloClient rejects a malformed nested pipeline contract", async () => {
   }
 });
 
+test("RoloClient reads verified topology history and a contract-bound diff", async () => {
+  const originalFetch = globalThis.fetch;
+  const requests = [];
+  globalThis.fetch = async (url) => {
+    requests.push(url);
+    return {
+      ok: true,
+      json: async () => url.endsWith("/topology/snapshots") ? TOPOLOGY_SNAPSHOTS : TOPOLOGY_DIFF,
+    };
+  };
+  try {
+    const client = new RoloClient("http://rolo.test");
+    const snapshots = await client.topologySnapshots("AMR-07");
+    const diff = await client.topologyDiff("AMR-07", "topology_snapshot_1", "topology_snapshot_2");
+    assert.equal(snapshots.items[1].is_current, true);
+    assert.equal(diff.changed_nodes, 1);
+    assert.equal(diff.node_changes[0].changed_fields[0], "state");
+    assert.deepEqual(requests, [
+      "http://rolo.test/v1/robots/AMR-07/topology/snapshots",
+      "http://rolo.test/v1/robots/AMR-07/topology/diff?from=topology_snapshot_1&to=topology_snapshot_2",
+    ]);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("RoloClient rejects a dangling topology edge", async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () => ({
@@ -664,7 +753,7 @@ test("live lifecycle component has no fixture evidence or fabricated handoff", a
 
 test("plugin manifest declares every trusted read-model endpoint", async () => {
   const manifest = JSON.parse(await readFile(new URL("../rolo.plugin.json", import.meta.url), "utf8"));
-  assert.equal(manifest.version, "0.4.0");
+  assert.equal(manifest.version, "0.5.0");
   assert.deepEqual(
     new Set(manifest.api.required_endpoints),
     new Set([
@@ -673,6 +762,8 @@ test("plugin manifest declares every trusted read-model endpoint", async () => {
       "/v1/robots/{robot_id}/overview",
       "/v1/robots/{robot_id}/pipeline",
       "/v1/robots/{robot_id}/topology",
+      "/v1/robots/{robot_id}/topology/snapshots",
+      "/v1/robots/{robot_id}/topology/diff",
       "/v1/robots/{robot_id}/capabilities",
       "/v1/robots/{robot_id}/capabilities/{operation}",
       "/v1/robots/{robot_id}/runs",

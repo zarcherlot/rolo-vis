@@ -61,6 +61,8 @@ import type {
   RobotCapability,
   RobotOverview,
   RobotTopology,
+  TopologyDiff,
+  TopologySnapshotCollection,
 } from "./types/rolo";
 import { getOverviewPresentation, getSurfaceSource } from "./workbenchPolicy";
 import type { WorkbenchMode } from "./workbenchPolicy";
@@ -358,9 +360,13 @@ function PageTitle({ eyebrow, title, description, action }: PageTitleProps) {
 function StackMapView({
   onOpenEvidence,
   topology,
+  topologySnapshots,
+  robotId,
 }: {
   onOpenEvidence: OpenEvidence;
   topology?: RobotTopology | null;
+  topologySnapshots?: TopologySnapshotCollection | null;
+  robotId?: string;
 }) {
   const sourceNodes = useMemo(
     () => topology ? liveFlowNodes(topology) : TOPOLOGY_NODES,
@@ -374,6 +380,11 @@ function StackMapView({
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState("all");
   const [compare, setCompare] = useState(false);
+  const [fromSnapshotId, setFromSnapshotId] = useState("");
+  const [toSnapshotId, setToSnapshotId] = useState("");
+  const [topologyDiff, setTopologyDiff] = useState<TopologyDiff | null>(null);
+  const [compareMessage, setCompareMessage] = useState("");
+  const [compareLoading, setCompareLoading] = useState(false);
   const [toolsOpen, setToolsOpen] = useState(false);
   const [flowInstance, setFlowInstance] = useState<ReactFlowInstance | null>(null);
   const mapRef = useRef<HTMLDivElement | null>(null);
@@ -385,6 +396,22 @@ function StackMapView({
   }, [selectedId, sourceNodes]);
 
   useEffect(() => {
+    const snapshots = topologySnapshots?.items || [];
+    if (snapshots.length < 2) {
+      setFromSnapshotId("");
+      setToSnapshotId("");
+      setTopologyDiff(null);
+      return;
+    }
+    const current = snapshots.find((item) => item.is_current) || snapshots[0];
+    const baseline = snapshots.find((item) => item.snapshot_id !== current.snapshot_id) || snapshots[1];
+    setFromSnapshotId(baseline.snapshot_id);
+    setToSnapshotId(current.snapshot_id);
+    setTopologyDiff(null);
+    setCompareMessage("");
+  }, [topologySnapshots]);
+
+  useEffect(() => {
     if (!flowInstance || !mapRef.current) return undefined;
     const observer = new ResizeObserver(() => {
       window.requestAnimationFrame(() => flowInstance.fitView({ padding: 0.08, duration: 0 }));
@@ -393,16 +420,39 @@ function StackMapView({
     return () => observer.disconnect();
   }, [flowInstance]);
 
+  const diffByNode = useMemo(
+    () => new Map(topologyDiff?.node_changes.map((item) => [item.node_id, item]) || []),
+    [topologyDiff],
+  );
   const nodes = useMemo(() => sourceNodes.map((node) => {
     const searchable = `${node.data.label} ${node.data.subtitle} ${node.data.layer}`.toLowerCase();
     const queryMatch = !query || searchable.includes(query.toLowerCase());
     const statusMatch = filter === "all" || node.data.status === filter;
+    const change = diffByNode.get(node.id);
     return {
       ...node,
       selected: node.id === selectedId,
+      className: change ? `topology-diff-node diff-${change.change.toLowerCase()}` : node.className,
       style: { opacity: queryMatch && statusMatch ? 1 : 0.18 },
     };
-  }), [selectedId, query, filter, sourceNodes]);
+  }), [selectedId, query, filter, sourceNodes, diffByNode]);
+
+  const loadComparison = useCallback(async () => {
+    if (!robotId || !fromSnapshotId || !toSnapshotId || fromSnapshotId === toSnapshotId) {
+      setCompareMessage("Choose two different verified snapshots.");
+      return;
+    }
+    setCompareLoading(true);
+    setCompareMessage("");
+    try {
+      setTopologyDiff(await roloClient.topologyDiff(robotId, fromSnapshotId, toSnapshotId));
+    } catch (error) {
+      setTopologyDiff(null);
+      setCompareMessage(error instanceof Error ? error.message : "Snapshot comparison is unavailable.");
+    } finally {
+      setCompareLoading(false);
+    }
+  }, [fromSnapshotId, robotId, toSnapshotId]);
 
   const handleNodeClick: NodeMouseHandler = useCallback((_, node) => setSelectedId(node.id), []);
   const selectedNode = sourceNodes.find((node) => node.id === selectedId) || sourceNodes[0];
@@ -411,6 +461,7 @@ function StackMapView({
   }
   const details = selectedNode.data;
   const connected = sourceEdges.filter((edge) => edge.source === selectedId || edge.target === selectedId);
+  const selectedChange = diffByNode.get(selectedId);
   const SelectedIcon = nodeIcons[details.icon] || Cube;
 
   return (
@@ -431,16 +482,39 @@ function StackMapView({
             <option value="unobserved">Not observed</option>
           </select>
         </label>
-        <button className={`secondary-button ${compare ? "is-active" : ""}`} disabled={Boolean(topology)} onClick={() => setCompare((value) => !value)} title={topology ? "Snapshot diff is planned next" : undefined}>
+        <button className={`secondary-button ${compare ? "is-active" : ""}`} disabled={Boolean(topology && (topologySnapshots?.items.length || 0) < 2)} onClick={() => setCompare((value) => !value)} title={topology && (topologySnapshots?.items.length || 0) < 2 ? "Two verified snapshots are required" : undefined}>
           <GitBranch size={17} /> Compare snapshot
         </button>
       </div>}
 
-      {compare && (
+      {compare && !topology && (
         <div className="compare-banner">
           <Info size={18} weight="fill" />
           <span>Comparing Aug 20 against Aug 18: 2 bindings changed, 1 node disappeared.</span>
           <button onClick={() => setCompare(false)}><X size={16} /></button>
+        </div>
+      )}
+
+      {compare && topology && (
+        <div className="snapshot-compare-panel" aria-label="Verified topology snapshot comparison">
+          <div className="snapshot-compare-heading">
+            <div><span>Verified history</span><strong>Compare gated snapshots</strong></div>
+            <button onClick={() => setCompare(false)} aria-label="Close snapshot comparison"><X size={16} /></button>
+          </div>
+          <div className="snapshot-selectors">
+            <label><span>Baseline</span><select value={fromSnapshotId} onChange={(event) => { setFromSnapshotId(event.target.value); setTopologyDiff(null); }} aria-label="Baseline topology snapshot">{topologySnapshots?.items.map((item) => <option key={item.snapshot_id} value={item.snapshot_id}>{new Date(item.published_at).toLocaleString()} · {item.release_id}</option>)}</select></label>
+            <ArrowRight size={16} />
+            <label><span>Target</span><select value={toSnapshotId} onChange={(event) => { setToSnapshotId(event.target.value); setTopologyDiff(null); }} aria-label="Target topology snapshot">{topologySnapshots?.items.map((item) => <option key={item.snapshot_id} value={item.snapshot_id}>{new Date(item.published_at).toLocaleString()} · {item.release_id}{item.is_current ? " · current" : ""}</option>)}</select></label>
+          </div>
+          <button className="primary-button snapshot-compare-action" disabled={compareLoading || fromSnapshotId === toSnapshotId} onClick={() => void loadComparison()}>{compareLoading ? "Comparing…" : "Compare verified evidence"}</button>
+          {compareMessage && <small role="alert" className="snapshot-compare-message">{compareMessage}</small>}
+          {topologyDiff && <div className="snapshot-diff-summary">
+            <span className="diff-added"><strong>+{topologyDiff.added_nodes}</strong> nodes</span>
+            <span className="diff-removed"><strong>−{topologyDiff.removed_nodes}</strong> nodes</span>
+            <span className="diff-changed"><strong>{topologyDiff.changed_nodes}</strong> changed</span>
+            <span><strong>{topologyDiff.added_edges + topologyDiff.removed_edges + topologyDiff.changed_edges}</strong> relationships</span>
+          </div>}
+          <p>{topologyDiff?.limitations[0] || topologySnapshots?.limitations[0]}</p>
         </div>
       )}
 
@@ -533,9 +607,14 @@ function StackMapView({
           <p>{topology?.limitations[0] || "Evidence is consistent with declared intent."}</p>
         </div>
 
+        {selectedChange && <div className="inspector-section topology-change-section">
+          <div className="section-title-row"><h4>Snapshot change</h4><strong className={`diff-label diff-${selectedChange.change.toLowerCase()}`}>{selectedChange.change}</strong></div>
+          <p>{selectedChange.change === "CHANGED" ? `Changed fields: ${selectedChange.changed_fields.join(", ")}.` : `${details.label} was ${selectedChange.change.toLowerCase()} between the selected gated releases.`}</p>
+        </div>}
+
         <div className="inspector-actions">
           <button className="primary-button" disabled={Boolean(topology && !details.evidenceIds?.length)} onClick={() => onOpenEvidence(topology ? details.evidenceIds?.[0] || "" : EVIDENCE[0])}>Open evidence</button>
-          <button className="secondary-button" disabled={Boolean(topology)} onClick={() => setCompare(true)} title={topology ? "Snapshot diff is planned next" : undefined}>Compare snapshot</button>
+          <button className="secondary-button" disabled={Boolean(topology && (topologySnapshots?.items.length || 0) < 2)} onClick={() => setCompare(true)} title={topology && (topologySnapshots?.items.length || 0) < 2 ? "Two verified snapshots are required" : undefined}>Compare snapshot</button>
         </div>
       </aside>
     </section>
@@ -1073,6 +1152,7 @@ function AppContent() {
   const [pipeline, setPipeline] = useState<PipelineRow[]>([]);
   const [overview, setOverview] = useState<RobotOverview | null>(null);
   const [topology, setTopology] = useState<RobotTopology | null>(null);
+  const [topologySnapshots, setTopologySnapshots] = useState<TopologySnapshotCollection | null>(null);
   const [evidenceList, setEvidenceList] = useState<EvidenceCollection | null>(null);
   const [capabilityList, setCapabilityList] = useState<CapabilitySummary[] | null>(null);
   const [capabilityLimitations, setCapabilityLimitations] = useState<string[]>([]);
@@ -1091,6 +1171,7 @@ function AppContent() {
       setRobot(result.robot ? { ...result.robot, status: "online" } : null);
       setOverview(result.overview);
       setTopology(result.topology);
+      setTopologySnapshots(result.topologySnapshots);
       setEvidenceList(result.evidence);
       setCapabilityList(result.capabilities);
       setCapabilityLimitations(result.capabilityLimitations);
@@ -1118,6 +1199,7 @@ function AppContent() {
       setPipeline([]);
       setOverview(null);
       setTopology(null);
+      setTopologySnapshots(null);
       setEvidenceList(null);
       setCapabilityList(null);
       setCapabilityLimitations([]);
@@ -1135,6 +1217,7 @@ function AppContent() {
     setPipeline(DEMO_PIPELINE);
     setOverview(null);
     setTopology(null);
+    setTopologySnapshots(null);
     setEvidenceList(null);
     setCapabilityList(null);
     setCapabilityLimitations([]);
@@ -1187,7 +1270,7 @@ function AppContent() {
       <Topbar robot={robot} robots={robots} activeLabel={activeLabel} mode={mode} snapshot={overview?.observed_at} onRetry={() => connect(robot?.robot_id)} onRobotChange={connect} />
       <main className="app-main">
         {(["connecting", "unavailable"].includes(mode) || !robot) ? <ConnectionStateView mode={mode} message={connectionMessage} onRetry={() => connect()} onUseDemo={useDemo} /> : <>
-          {active === "stack" && (stackSource === "demo" ? <StackMapView onOpenEvidence={openEvidence} /> : stackSource === "live" ? <StackMapView topology={topology} onOpenEvidence={openEvidence} /> : <ReadModelUnavailableView title="Stack Map" description="Live topology needs a versioned rolo topology read model." />)}
+          {active === "stack" && (stackSource === "demo" ? <StackMapView onOpenEvidence={openEvidence} /> : stackSource === "live" ? <StackMapView topology={topology} topologySnapshots={topologySnapshots} robotId={robot.robot_id} onOpenEvidence={openEvidence} /> : <ReadModelUnavailableView title="Stack Map" description="Live topology needs a versioned rolo topology read model." />)}
           {active === "overview" && <OverviewView robot={robot} pipeline={pipeline} overview={overview} mode={mode} evidenceItems={evidenceItems} onOpenEvidence={openEvidence} onNavigate={setActive} />}
           {active === "capabilities" && (capabilitySource === "demo" ? <DemoCapabilityView onOpenEvidence={setEvidence} /> : capabilitySource === "live" && capabilityList ? <LiveCapabilityView robotId={robot.robot_id} items={capabilityList} limitations={capabilityLimitations} onOpenEvidence={openEvidence} /> : <ReadModelUnavailableView title="Capabilities" description="Live capability coverage needs a versioned rolo capability read model." />)}
           {active === "lifecycle" && (lifecycleSource === "demo" ? <DemoLifecycleView pipeline={pipeline} onOpenEvidence={setEvidence} /> : lifecycleSource === "live" && lifecycleRuns ? <LiveLifecycleView pipeline={pipeline} runs={lifecycleRuns} robotId={robot.robot_id} onOpenEvidence={openEvidence} /> : <ReadModelUnavailableView title="Lifecycle" description="Live lifecycle requires trusted stage and run read models." />)}

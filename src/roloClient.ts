@@ -15,6 +15,11 @@ import type {
   RobotOverview,
   RobotTopology,
   StageAssessment,
+  TopologyDiff,
+  TopologyEdge,
+  TopologyNode,
+  TopologySnapshotCollection,
+  TopologySnapshotSummary,
 } from "./types/rolo";
 
 const DEFAULT_BASE = "/rolo-api";
@@ -257,6 +262,93 @@ function parseRobotTopology(value: unknown, path: string, expectedRobotId: strin
   return value as unknown as RobotTopology;
 }
 
+function parseTopologySnapshotSummary(value: unknown, path: string): TopologySnapshotSummary {
+  requireContract(isRecord(value), "topology snapshot summary must be an object", path);
+  requireContract(value.schema_version === "rolo-topology-snapshot-summary/v1", "unsupported topology snapshot summary schema", path);
+  requireContract(typeof value.snapshot_id === "string" && value.snapshot_id.length > 0, "missing topology snapshot identity", path);
+  requireContract(typeof value.release_id === "string" && value.release_id.length > 0, "missing topology release identity", path);
+  requireContract(isTimestamp(value.published_at), "invalid topology snapshot time", path);
+  requireContract(Number.isInteger(value.node_count) && Number(value.node_count) >= 0, "invalid topology snapshot node count", path);
+  requireContract(Number.isInteger(value.edge_count) && Number(value.edge_count) >= 0, "invalid topology snapshot edge count", path);
+  requireContract(value.coverage === "GATED_RELEASE" && value.integrity_status === "verified", "topology snapshot is not verified", path);
+  requireContract(typeof value.is_current === "boolean", "invalid current topology marker", path);
+  return value as unknown as TopologySnapshotSummary;
+}
+
+function parseTopologySnapshotCollection(value: unknown, path: string, robotId: string): TopologySnapshotCollection {
+  requireContract(isRecord(value), "topology snapshot collection must be an object", path);
+  requireContract(value.schema_version === "rolo-topology-snapshot-collection/v1", "unsupported topology snapshot collection schema", path);
+  requireContract(value.robot_id === robotId && Array.isArray(value.items), "invalid topology snapshot collection identity or items", path);
+  const items = value.items.map((item, index) => parseTopologySnapshotSummary(item, `${path}/items/${index}`));
+  requireContract(new Set(items.map((item) => item.snapshot_id)).size === items.length, "duplicate topology snapshot identity", path);
+  requireContract(Number.isInteger(value.total) && Number(value.total) === items.length, "invalid topology snapshot total", path);
+  requireContract(isTimestamp(value.observed_at) && value.freshness === "unknown", "invalid topology snapshot observation metadata", path);
+  requireContract(isStringArray(value.limitations), "invalid topology snapshot limitations", path);
+  return { ...value, items } as unknown as TopologySnapshotCollection;
+}
+
+function parseDiffNode(value: unknown, path: string): TopologyNode {
+  requireContract(isRecord(value), "topology diff node must be an object", path);
+  requireContract(value.schema_version === "rolo-topology-node/v1" && typeof value.node_id === "string", "invalid topology diff node identity", path);
+  requireContract(typeof value.kind === "string" && typeof value.label === "string" && typeof value.subtitle === "string", "invalid topology diff node presentation", path);
+  requireContract(["Hardware", "Linux", "Middleware", "Application"].includes(String(value.layer)), "invalid topology diff node layer", path);
+  requireContract(["DECLARED", "OBSERVED", "GATED", "PARTIAL", "FAILED"].includes(String(value.state)), "invalid topology diff node state", path);
+  requireContract(isConfidence(value.confidence) && ["validated", "verified"].includes(String(value.integrity_status)), "invalid topology diff node trust metadata", path);
+  requireContract(isStringArray(value.evidence_ids) && isSafeAttributes(value.attributes), "invalid topology diff node evidence or attributes", path);
+  return value as unknown as TopologyNode;
+}
+
+function parseDiffEdge(value: unknown, path: string): TopologyEdge {
+  requireContract(isRecord(value), "topology diff edge must be an object", path);
+  requireContract(value.schema_version === "rolo-topology-edge/v1" && typeof value.edge_id === "string", "invalid topology diff edge identity", path);
+  requireContract(typeof value.source === "string" && typeof value.target === "string" && typeof value.relation === "string", "invalid topology diff edge relationship", path);
+  requireContract(["DECLARED", "OBSERVED", "GATED", "PARTIAL", "FAILED"].includes(String(value.state)), "invalid topology diff edge state", path);
+  requireContract(isConfidence(value.confidence) && ["validated", "verified"].includes(String(value.integrity_status)), "invalid topology diff edge trust metadata", path);
+  requireContract(isStringArray(value.evidence_ids), "invalid topology diff edge evidence", path);
+  return value as unknown as TopologyEdge;
+}
+
+function parseTopologyDiff(
+  value: unknown,
+  path: string,
+  robotId: string,
+  fromSnapshotId: string,
+  toSnapshotId: string,
+): TopologyDiff {
+  requireContract(isRecord(value), "topology diff must be an object", path);
+  requireContract(value.schema_version === "rolo-topology-diff/v1" && value.robot_id === robotId, "invalid topology diff identity", path);
+  const fromSnapshot = parseTopologySnapshotSummary(value.from_snapshot, `${path}/from_snapshot`);
+  const toSnapshot = parseTopologySnapshotSummary(value.to_snapshot, `${path}/to_snapshot`);
+  requireContract(fromSnapshot.snapshot_id === fromSnapshotId && toSnapshot.snapshot_id === toSnapshotId, "topology diff does not match requested snapshots", path);
+  const countKeys = ["added_nodes", "removed_nodes", "changed_nodes", "added_edges", "removed_edges", "changed_edges"] as const;
+  requireContract(countKeys.every((key) => Number.isInteger(value[key]) && Number(value[key]) >= 0), "invalid topology diff counts", path);
+  requireContract(Array.isArray(value.node_changes) && Array.isArray(value.edge_changes), "invalid topology diff changes", path);
+  const changes = ["ADDED", "REMOVED", "CHANGED"];
+  const nodeChanges = value.node_changes.map((item, index) => {
+    const itemPath = `${path}/node_changes/${index}`;
+    requireContract(isRecord(item) && item.schema_version === "rolo-topology-node-change/v1", "invalid topology node change", itemPath);
+    requireContract(typeof item.node_id === "string" && changes.includes(String(item.change)), "invalid topology node change identity", itemPath);
+    requireContract(isStringArray(item.changed_fields), "invalid topology node changed fields", itemPath);
+    const before = item.before === null ? null : parseDiffNode(item.before, `${itemPath}/before`);
+    const after = item.after === null ? null : parseDiffNode(item.after, `${itemPath}/after`);
+    requireContract((item.change === "ADDED" && before === null && after?.node_id === item.node_id) || (item.change === "REMOVED" && before?.node_id === item.node_id && after === null) || (item.change === "CHANGED" && before?.node_id === item.node_id && after?.node_id === item.node_id && item.changed_fields.length > 0), "inconsistent topology node change", itemPath);
+    return { ...item, before, after };
+  });
+  const edgeChanges = value.edge_changes.map((item, index) => {
+    const itemPath = `${path}/edge_changes/${index}`;
+    requireContract(isRecord(item) && item.schema_version === "rolo-topology-edge-change/v1", "invalid topology edge change", itemPath);
+    requireContract(typeof item.edge_id === "string" && changes.includes(String(item.change)), "invalid topology edge change identity", itemPath);
+    requireContract(isStringArray(item.changed_fields), "invalid topology edge changed fields", itemPath);
+    const before = item.before === null ? null : parseDiffEdge(item.before, `${itemPath}/before`);
+    const after = item.after === null ? null : parseDiffEdge(item.after, `${itemPath}/after`);
+    requireContract((item.change === "ADDED" && before === null && after?.edge_id === item.edge_id) || (item.change === "REMOVED" && before?.edge_id === item.edge_id && after === null) || (item.change === "CHANGED" && before?.edge_id === item.edge_id && after?.edge_id === item.edge_id && item.changed_fields.length > 0), "inconsistent topology edge change", itemPath);
+    return { ...item, before, after };
+  });
+  requireContract(isTimestamp(value.observed_at) && value.freshness === "unknown" && value.integrity_status === "verified", "invalid topology diff trust metadata", path);
+  requireContract(isStringArray(value.limitations), "invalid topology diff limitations", path);
+  return { ...value, from_snapshot: fromSnapshot, to_snapshot: toSnapshot, node_changes: nodeChanges, edge_changes: edgeChanges } as unknown as TopologyDiff;
+}
+
 function parseEvidenceRecord(
   value: unknown,
   path: string,
@@ -474,6 +566,32 @@ export class RoloClient {
     return parseRobotTopology(await this.request<unknown>(path, options), path, robotId);
   }
 
+  async topologySnapshots(robotId: string, options?: RequestInit) {
+    const path = `/v1/robots/${encodeURIComponent(robotId)}/topology/snapshots`;
+    return parseTopologySnapshotCollection(
+      await this.request<unknown>(path, options),
+      path,
+      robotId,
+    );
+  }
+
+  async topologyDiff(
+    robotId: string,
+    fromSnapshotId: string,
+    toSnapshotId: string,
+    options?: RequestInit,
+  ) {
+    const query = new URLSearchParams({ from: fromSnapshotId, to: toSnapshotId });
+    const path = `/v1/robots/${encodeURIComponent(robotId)}/topology/diff?${query.toString()}`;
+    return parseTopologyDiff(
+      await this.request<unknown>(path, options),
+      path,
+      robotId,
+      fromSnapshotId,
+      toSnapshotId,
+    );
+  }
+
   async evidenceCollection(
     robotId: string,
     options?: RequestInit,
@@ -562,6 +680,7 @@ export class RoloClient {
         overview: null,
         pipeline: null,
         topology: null,
+        topologySnapshots: null,
         evidence: null,
         capabilities: null,
         capabilityLimitations: [],
@@ -582,8 +701,9 @@ export class RoloClient {
       issues.push("The overview read model is unavailable; showing the compatible pipeline view.");
     }
 
-    const [topologyResult, evidenceResult, capabilitiesResult, runsResult] = await Promise.allSettled([
+    const [topologyResult, snapshotResult, evidenceResult, capabilitiesResult, runsResult] = await Promise.allSettled([
       this.topology(robot.robot_id, options),
+      this.topologySnapshots(robot.robot_id, options),
       this.evidenceCollection(robot.robot_id, options),
       this.capabilities(robot.robot_id, options),
       this.runs(robot.robot_id, options),
@@ -601,6 +721,7 @@ export class RoloClient {
       throw result.reason;
     };
     const topology = optionalReadModel(topologyResult, "topology");
+    const topologySnapshots = optionalReadModel(snapshotResult, "topology snapshot history");
     const evidence = optionalReadModel(evidenceResult, "evidence");
     const capabilityResult = optionalReadModel(capabilitiesResult, "capability");
     const capabilities = capabilityResult?.items || null;
@@ -616,6 +737,7 @@ export class RoloClient {
       overview,
       pipeline,
       topology,
+      topologySnapshots,
       evidence,
       capabilities,
       capabilityLimitations: capabilityResult?.limitations || [],

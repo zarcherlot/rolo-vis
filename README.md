@@ -5,6 +5,7 @@
 ## MVP
 
 - Topology-first Stack Map across Hardware, Linux, ROS/Middleware, and Application.
+- Hash-verified gated topology history with snapshot comparison and bounded change details.
 - Robot Overview focused on trust, blockers, and next action.
 - Capability Explorer for canonical operations, risk, lifecycle, and bindings.
 - Lifecycle gate view for Adapt → Diagnose → Verify.
