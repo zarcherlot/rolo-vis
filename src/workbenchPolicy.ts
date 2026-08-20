@@ -1,5 +1,5 @@
 export type WorkbenchMode = "connecting" | "live" | "partial" | "unavailable" | "demo";
-export type WorkbenchSurface = "overview" | "stack" | "capabilities" | "lifecycle" | "wiki" | "evidence";
+export type WorkbenchSurface = "fleet" | "overview" | "stack" | "capabilities" | "lifecycle" | "wiki" | "evidence";
 export type SurfaceSource = "live" | "demo" | "unavailable";
 
 const LIVE_SURFACES = new Set<WorkbenchSurface>(["overview", "lifecycle"]);

@@ -434,6 +434,73 @@ export interface RobotWikiSnapshot {
   limitations: string[];
 }
 
+export interface FleetRobotSummary {
+  schema_version: "rolo-fleet-robot-summary/v1";
+  robot_id: string;
+  adapter: string;
+  architecture: string;
+  ros_distro: string;
+  state: "READY" | "ATTENTION" | "DEGRADED" | "NOT_READY";
+  active_stage: "adapt" | "diagnose" | "verify" | null;
+  active_status: StageStatus | null;
+  blocker_count: number;
+  next_action: string;
+  observed_at: string;
+  freshness: "fresh";
+  source_kind: "computed_robot_overview";
+  confidence: number;
+  integrity_status: "validated";
+}
+
+export interface FleetCollection {
+  schema_version: "rolo-fleet-collection/v1";
+  items: FleetRobotSummary[];
+  total: number;
+  limit: number;
+  offset: number;
+  next_offset: number | null;
+  ready: number;
+  attention: number;
+  degraded: number;
+  not_ready: number;
+  blocker_count: number;
+  observed_at: string;
+  freshness: "fresh";
+  source_kind: "computed_fleet_overviews";
+  confidence: number;
+  integrity_status: "validated";
+}
+
+export interface FleetBlockerSummary {
+  schema_version: "rolo-fleet-blocker-summary/v1";
+  blocker_id: string;
+  robot_id: string;
+  stage: "adapt" | "diagnose" | "verify";
+  message: string;
+  recommended_action: string;
+  owner: string;
+  evidence_ids: string[];
+  observed_at: string;
+  freshness: "fresh";
+  source_kind: "pipeline_assessment";
+  confidence: number;
+  integrity_status: "validated";
+}
+
+export interface FleetBlockerCollection {
+  schema_version: "rolo-fleet-blocker-collection/v1";
+  items: FleetBlockerSummary[];
+  total: number;
+  limit: number;
+  offset: number;
+  next_offset: number | null;
+  observed_at: string;
+  freshness: "fresh";
+  source_kind: "computed_pipeline_blockers";
+  confidence: number;
+  integrity_status: "validated";
+}
+
 export interface BootstrapResult {
   mode: ConnectionMode;
   health: HealthResponse;

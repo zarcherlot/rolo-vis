@@ -209,6 +209,69 @@ const WIKI = {
   limitations: ["Insights remain advisory."],
 };
 
+const FLEET = {
+  schema_version: "rolo-fleet-collection/v1",
+  items: [{
+    schema_version: "rolo-fleet-robot-summary/v1",
+    robot_id: "AMR-07",
+    adapter: "test-adapter",
+    architecture: "arm64",
+    ros_distro: "humble",
+    state: "ATTENTION",
+    active_stage: "adapt",
+    active_status: "BLOCKED",
+    blocker_count: 1,
+    next_action: "Run adapt discovery",
+    observed_at: "2026-08-20T00:00:00Z",
+    freshness: "fresh",
+    source_kind: "computed_robot_overview",
+    confidence: 1,
+    integrity_status: "validated",
+  }],
+  total: 1,
+  limit: 100,
+  offset: 0,
+  next_offset: null,
+  ready: 0,
+  attention: 1,
+  degraded: 0,
+  not_ready: 0,
+  blocker_count: 1,
+  observed_at: "2026-08-20T00:00:00Z",
+  freshness: "fresh",
+  source_kind: "computed_fleet_overviews",
+  confidence: 1,
+  integrity_status: "validated",
+};
+
+const FLEET_BLOCKERS = {
+  schema_version: "rolo-fleet-blocker-collection/v1",
+  items: [{
+    schema_version: "rolo-fleet-blocker-summary/v1",
+    blocker_id: "blocker_123",
+    robot_id: "AMR-07",
+    stage: "adapt",
+    message: "Run adapt discovery",
+    recommended_action: "Run adapt discovery",
+    owner: "adapter_agent",
+    evidence_ids: [],
+    observed_at: "2026-08-20T00:00:00Z",
+    freshness: "fresh",
+    source_kind: "pipeline_assessment",
+    confidence: 1,
+    integrity_status: "validated",
+  }],
+  total: 1,
+  limit: 100,
+  offset: 0,
+  next_offset: null,
+  observed_at: "2026-08-20T00:00:00Z",
+  freshness: "fresh",
+  source_kind: "computed_pipeline_blockers",
+  confidence: 1,
+  integrity_status: "validated",
+};
+
 const EVIDENCE_COLLECTION = {
   schema_version: "rolo-evidence-collection/v1",
   robot_id: "AMR-07",
@@ -721,6 +784,46 @@ test("RoloClient reads a trust-separated Robot Wiki", async () => {
   }
 });
 
+test("RoloClient reads validated Fleet and Blocker Inbox aggregates", async () => {
+  const originalFetch = globalThis.fetch;
+  const urls = [];
+  globalThis.fetch = async (url) => {
+    urls.push(String(url));
+    return { ok: true, json: async () => String(url).includes("/blockers") ? FLEET_BLOCKERS : FLEET };
+  };
+  try {
+    const client = new RoloClient("http://rolo.test");
+    const [fleet, blockers] = await Promise.all([client.fleet(), client.blockers()]);
+    assert.equal(fleet.items[0].state, "ATTENTION");
+    assert.equal(blockers.items[0].owner, "adapter_agent");
+    assert.deepEqual(urls.sort(), [
+      "http://rolo.test/v1/blockers?limit=100&offset=0",
+      "http://rolo.test/v1/fleet?limit=100&offset=0",
+    ]);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("RoloClient rejects raw paths in the Blocker Inbox", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => ({
+    ok: true,
+    json: async () => ({
+      ...FLEET_BLOCKERS,
+      items: [{ ...FLEET_BLOCKERS.items[0], message: String.raw`Inspect C:\private\adapt.json` }],
+    }),
+  });
+  try {
+    await assert.rejects(
+      () => new RoloClient("http://rolo.test").blockers(),
+      (error) => error instanceof RoloContractError && error.path.startsWith("/v1/blockers"),
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("RoloClient rejects unsafe Robot Wiki references", async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () => ({ ok: true, json: async () => ({ ...WIKI, sections: [{ ...WIKI.sections[0], lines: ["artifact://private/report.json"] }] }) });
@@ -797,10 +900,12 @@ test("live modes never expose fixture-only workbench surfaces", () => {
     assert.equal(getSurfaceSource(mode, "capabilities"), "unavailable");
     assert.equal(getSurfaceSource(mode, "evidence"), "unavailable");
     assert.equal(getSurfaceSource(mode, "wiki"), "unavailable");
+    assert.equal(getSurfaceSource(mode, "fleet"), "unavailable");
     assert.equal(getSurfaceSource(mode, "stack", { stack: true }), "live");
     assert.equal(getSurfaceSource(mode, "evidence", { evidence: true }), "live");
     assert.equal(getSurfaceSource(mode, "capabilities", { capabilities: true }), "live");
     assert.equal(getSurfaceSource(mode, "wiki", { wiki: true }), "live");
+    assert.equal(getSurfaceSource(mode, "fleet", { fleet: true }), "live");
   }
   assert.equal(getSurfaceSource("demo", "stack"), "demo");
   assert.equal(getSurfaceSource("unavailable", "overview"), "unavailable");
@@ -833,11 +938,13 @@ test("live lifecycle component has no fixture evidence or fabricated handoff", a
 
 test("plugin manifest declares every trusted read-model endpoint", async () => {
   const manifest = JSON.parse(await readFile(new URL("../rolo.plugin.json", import.meta.url), "utf8"));
-  assert.equal(manifest.version, "0.6.0");
+  assert.equal(manifest.version, "0.7.0");
   assert.deepEqual(
     new Set(manifest.api.required_endpoints),
     new Set([
       "/health",
+      "/v1/fleet",
+      "/v1/blockers",
       "/v1/robots",
       "/v1/robots/{robot_id}/overview",
       "/v1/robots/{robot_id}/pipeline",

@@ -23,6 +23,7 @@ import {
   Network,
   Path,
   Pulse,
+  Robot,
   ShieldCheck,
   Stack,
   Target,
@@ -57,6 +58,8 @@ import type {
   EvidenceAuthority,
   EvidenceCollection,
   EvidenceRecord,
+  FleetBlockerCollection,
+  FleetCollection,
   LifecycleRunCollection,
   LifecycleRunDetail,
   RobotCapability,
@@ -69,12 +72,13 @@ import type {
 import { getOverviewPresentation, getSurfaceSource } from "./workbenchPolicy";
 import type { WorkbenchMode } from "./workbenchPolicy";
 
-type NavId = "overview" | "stack" | "capabilities" | "lifecycle" | "wiki" | "evidence";
+type NavId = "fleet" | "overview" | "stack" | "capabilities" | "lifecycle" | "wiki" | "evidence";
 type ViewRobot = DemoRobot | (RobotCapability & { status: "online" });
 type RobotOption = DemoRobot | RobotCapability;
 type OpenEvidence = (item: EvidenceItem | string) => void;
 
 const NAV_ITEMS: Array<{ id: NavId; label: string; icon: typeof House }> = [
+  { id: "fleet", label: "Fleet", icon: Robot },
   { id: "overview", label: "Overview", icon: House },
   { id: "stack", label: "Stack Map", icon: GitBranch },
   { id: "capabilities", label: "Capabilities", icon: Stack },
@@ -357,6 +361,85 @@ function PageTitle({ eyebrow, title, description, action }: PageTitleProps) {
       </div>
       {action}
     </div>
+  );
+}
+
+function FleetView({
+  fleet,
+  blockers,
+  onSelectRobot,
+  onOpenEvidence,
+}: {
+  fleet: FleetCollection;
+  blockers: FleetBlockerCollection;
+  onSelectRobot: (robotId: string) => void;
+  onOpenEvidence: OpenEvidence;
+}) {
+  const [query, setQuery] = useState("");
+  const [stateFilter, setStateFilter] = useState("all");
+  const [stageFilter, setStageFilter] = useState("all");
+  const normalizedQuery = query.trim().toLowerCase();
+  const filteredRobots = fleet.items.filter((item) =>
+    (stateFilter === "all" || item.state === stateFilter)
+    && (!normalizedQuery || `${item.robot_id} ${item.adapter} ${item.architecture} ${item.ros_distro} ${item.next_action}`.toLowerCase().includes(normalizedQuery)),
+  );
+  const filteredBlockers = blockers.items.filter((item) =>
+    (stageFilter === "all" || item.stage === stageFilter)
+    && (!normalizedQuery || `${item.robot_id} ${item.message} ${item.owner}`.toLowerCase().includes(normalizedQuery)),
+  );
+  const summary = [
+    { label: "Ready", value: fleet.ready, state: "ready" },
+    { label: "Attention", value: fleet.attention, state: "attention" },
+    { label: "Degraded", value: fleet.degraded, state: "degraded" },
+    { label: "Not ready", value: fleet.not_ready, state: "not-ready" },
+    { label: "Open blockers", value: fleet.blocker_count, state: "blockers" },
+  ];
+  return (
+    <section className="content-view fleet-view">
+      <PageTitle
+        eyebrow="Cross-robot workspace"
+        title="Fleet"
+        description="Validated robot overviews and pipeline blockers, aggregated without inventing runtime telemetry."
+        action={<div className="fleet-observed"><ShieldCheck size={16} /><span>Validated snapshot<br /><small>{new Date(fleet.observed_at).toLocaleString()}</small></span></div>}
+      />
+      <div className="fleet-summary">
+        {summary.map((item) => <div className={`panel fleet-summary-card fleet-summary-${item.state}`} key={item.label}><span>{item.label}</span><strong>{item.value}</strong></div>)}
+      </div>
+      <div className="fleet-toolbar">
+        <label className="search-box"><MagnifyingGlass size={17} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search robots, adapters, blockers…" /></label>
+        <label className="select-control"><Funnel size={15} /><select value={stateFilter} onChange={(event) => setStateFilter(event.target.value)}><option value="all">All robot states</option><option value="READY">Ready</option><option value="ATTENTION">Attention</option><option value="DEGRADED">Degraded</option><option value="NOT_READY">Not ready</option></select></label>
+        <label className="select-control"><GitBranch size={15} /><select value={stageFilter} onChange={(event) => setStageFilter(event.target.value)}><option value="all">All blocker stages</option><option value="adapt">Adapt</option><option value="diagnose">Diagnose</option><option value="verify">Verify</option></select></label>
+      </div>
+      <div className="fleet-layout">
+        <section className="panel fleet-robots">
+          <header><div><span>Robot readiness</span><h3>{filteredRobots.length} visible robots</h3></div><small>Overview state · active stage · next action</small></header>
+          <div className="fleet-table-heading"><span>Robot</span><span>State</span><span>Active stage</span><span>Blockers</span><span>Observed</span></div>
+          {filteredRobots.map((item) => (
+            <button key={item.robot_id} className="fleet-robot-row" onClick={() => onSelectRobot(item.robot_id)}>
+              <span className="fleet-robot-name"><Robot size={19} /><span><strong>{item.robot_id}</strong><small>{item.adapter} · {item.architecture} · ROS {item.ros_distro}</small></span></span>
+              <span className={`fleet-state fleet-state-${item.state.toLowerCase().replace("_", "-")}`}><StatusDot status={item.state === "READY" ? "observed" : item.state === "ATTENTION" ? "failed" : item.state === "DEGRADED" ? "partial" : "unobserved"} />{item.state.replace("_", " ")}</span>
+              <span className="fleet-stage"><strong>{item.active_stage || "—"}</strong><small>{item.active_status?.replace("_", " ") || "No assessment"}</small></span>
+              <strong className={item.blocker_count ? "has-blockers" : ""}>{item.blocker_count}</strong>
+              <time>{new Date(item.observed_at).toLocaleTimeString()}</time>
+              <span className="fleet-next-action">Next: {item.next_action}</span><ArrowRight size={15} />
+            </button>
+          ))}
+          {!filteredRobots.length && <div className="evidence-empty"><Robot size={24} /><strong>No robots match this view</strong><span>Change the search or state filter.</span></div>}
+        </section>
+        <aside className="panel blocker-inbox">
+          <header><div><span>Blocker Inbox</span><h3>{filteredBlockers.length} visible blockers</h3></div><small>Validated pipeline assessments</small></header>
+          {filteredBlockers.map((item) => (
+            <button key={item.blocker_id} onClick={() => item.evidence_ids[0] ? onOpenEvidence(item.evidence_ids[0]) : onSelectRobot(item.robot_id)}>
+              <span className="blocker-inbox-heading"><strong>{item.robot_id}</strong><em>{item.stage}</em></span>
+              <p>{item.message}</p>
+              <dl><div><dt>Owner</dt><dd>{item.owner.replaceAll("_", " ")}</dd></div><div><dt>Evidence</dt><dd>{item.evidence_ids.length || "No bound artifact"}</dd></div></dl>
+              <span className="blocker-action">{item.recommended_action}<ArrowRight size={13} /></span>
+            </button>
+          ))}
+          {!filteredBlockers.length && <div className="evidence-empty"><CheckCircle size={24} /><strong>No blockers match this view</strong><span>Validated pipeline blockers will appear here.</span></div>}
+        </aside>
+      </div>
+    </section>
   );
 }
 
@@ -1245,6 +1328,11 @@ function AppContent() {
   const [wikiRequestRobotId, setWikiRequestRobotId] = useState("");
   const [wikiLoading, setWikiLoading] = useState(false);
   const [wikiMessage, setWikiMessage] = useState("");
+  const [fleet, setFleet] = useState<FleetCollection | null>(null);
+  const [fleetBlockers, setFleetBlockers] = useState<FleetBlockerCollection | null>(null);
+  const [fleetRequested, setFleetRequested] = useState(false);
+  const [fleetLoading, setFleetLoading] = useState(false);
+  const [fleetMessage, setFleetMessage] = useState("");
   const [connectionMessage, setConnectionMessage] = useState("");
   const [evidence, setEvidence] = useState<EvidenceItem | null>(null);
 
@@ -1255,6 +1343,11 @@ function AppContent() {
     setWikiRequestRobotId("");
     setWikiLoading(false);
     setWikiMessage("");
+    setFleet(null);
+    setFleetBlockers(null);
+    setFleetRequested(false);
+    setFleetLoading(false);
+    setFleetMessage("");
     const controller = new AbortController();
     const timeout = window.setTimeout(() => controller.abort(), 5000);
     try {
@@ -1319,6 +1412,11 @@ function AppContent() {
     setWikiRequestRobotId("");
     setWikiLoading(false);
     setWikiMessage("");
+    setFleet(null);
+    setFleetBlockers(null);
+    setFleetRequested(false);
+    setFleetLoading(false);
+    setFleetMessage("");
     setConnectionMessage("Explicit fixture mode; no values on this screen are live robot observations.");
     setMode("demo");
   }, []);
@@ -1350,6 +1448,30 @@ function AppContent() {
     };
   }, [active, mode, robot, wiki]);
   useEffect(() => {
+    if (active !== "fleet" || fleetRequested || (fleet && fleetBlockers) || !["live", "partial"].includes(mode)) return;
+    let current = true;
+    const controller = new AbortController();
+    setFleetRequested(true);
+    setFleetLoading(true);
+    setFleetMessage("");
+    void Promise.all([
+      roloClient.fleet({ signal: controller.signal }),
+      roloClient.blockers({ signal: controller.signal }),
+    ]).then(([fleetSnapshot, blockerSnapshot]) => {
+      if (!current) return;
+      setFleet(fleetSnapshot);
+      setFleetBlockers(blockerSnapshot);
+    }).catch((error: unknown) => {
+      if (current) setFleetMessage(error instanceof Error ? error.message : "The Fleet workspace could not be read.");
+    }).finally(() => { if (current) setFleetLoading(false); });
+    return () => {
+      current = false;
+      controller.abort();
+      setFleetRequested(false);
+      setFleetLoading(false);
+    };
+  }, [active, mode, fleet, fleetBlockers]);
+  useEffect(() => {
     const handleKey = (event: KeyboardEvent) => { if (event.key === "Escape") setEvidence(null); };
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
@@ -1376,6 +1498,10 @@ function AppContent() {
       });
     }
   }, []);
+  const selectFleetRobot = useCallback((robotId: string) => {
+    setActive("overview");
+    void connect(robotId);
+  }, [connect]);
 
   const activeLabel = NAV_ITEMS.find((item) => item.id === active)?.label || "Stack Map";
   const evidenceItems = useMemo(
@@ -1393,6 +1519,7 @@ function AppContent() {
       <main className="app-main">
         {(["connecting", "unavailable"].includes(mode) || !robot) ? <ConnectionStateView mode={mode} message={connectionMessage} onRetry={() => connect()} onUseDemo={useDemo} /> : <>
           {active === "stack" && (stackSource === "demo" ? <StackMapView onOpenEvidence={openEvidence} /> : stackSource === "live" ? <StackMapView topology={topology} topologySnapshots={topologySnapshots} robotId={robot.robot_id} onOpenEvidence={openEvidence} /> : <ReadModelUnavailableView title="Stack Map" description="Live topology needs a versioned rolo topology read model." />)}
+          {active === "fleet" && (mode === "demo" ? <ReadModelUnavailableView title="Fleet" description="The labeled demo fixture represents one robot and does not include a fleet aggregate." /> : fleet && fleetBlockers ? <FleetView fleet={fleet} blockers={fleetBlockers} onSelectRobot={selectFleetRobot} onOpenEvidence={openEvidence} /> : fleetLoading ? <section className="content-view"><PageTitle title="Fleet" description="Aggregating validated robot overviews and pipeline blockers…" /><div className="panel read-model-unavailable" role="status"><Pulse size={26} /><div><strong>Loading Fleet</strong><p>No runtime telemetry is inferred while this read model is loading.</p></div></div></section> : <ReadModelUnavailableView title="Fleet" description={fleetMessage || "Open this surface to read the validated Fleet aggregate."} />)}
           {active === "overview" && <OverviewView robot={robot} pipeline={pipeline} overview={overview} mode={mode} evidenceItems={evidenceItems} onOpenEvidence={openEvidence} onNavigate={setActive} />}
           {active === "capabilities" && (capabilitySource === "demo" ? <DemoCapabilityView onOpenEvidence={setEvidence} /> : capabilitySource === "live" && capabilityList ? <LiveCapabilityView robotId={robot.robot_id} items={capabilityList} limitations={capabilityLimitations} onOpenEvidence={openEvidence} /> : <ReadModelUnavailableView title="Capabilities" description="Live capability coverage needs a versioned rolo capability read model." />)}
           {active === "lifecycle" && (lifecycleSource === "demo" ? <DemoLifecycleView pipeline={pipeline} onOpenEvidence={setEvidence} /> : lifecycleSource === "live" && lifecycleRuns ? <LiveLifecycleView pipeline={pipeline} runs={lifecycleRuns} robotId={robot.robot_id} onOpenEvidence={openEvidence} /> : <ReadModelUnavailableView title="Lifecycle" description="Live lifecycle requires trusted stage and run read models." />)}

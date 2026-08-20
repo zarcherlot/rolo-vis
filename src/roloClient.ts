@@ -6,6 +6,10 @@ import type {
   EvidenceAuthority,
   EvidenceCollection,
   EvidenceRecord,
+  FleetBlockerCollection,
+  FleetBlockerSummary,
+  FleetCollection,
+  FleetRobotSummary,
   HealthResponse,
   LifecycleRunCollection,
   LifecycleRunDetail,
@@ -261,6 +265,13 @@ function parseRobotTopology(value: unknown, path: string, expectedRobotId: strin
   requireContract(isConfidence(value.confidence) && ["validated", "verified"].includes(String(value.integrity_status)), "invalid topology trust metadata", path);
   requireContract(isStringArray(value.limitations), "invalid topology limitations", path);
   return value as unknown as RobotTopology;
+}
+
+function containsUnsafeReference(value: unknown): boolean {
+  const serialized = JSON.stringify(value);
+  return serialized.includes("artifact://")
+    || /[A-Za-z]:\\\\/.test(serialized)
+    || /\/(?:home|root|etc|var|tmp|workspace|mnt|Users)\//i.test(serialized);
 }
 
 function parseTopologySnapshotSummary(value: unknown, path: string): TopologySnapshotSummary {
@@ -562,9 +573,61 @@ function parseRobotWiki(value: unknown, path: string, robotId: string): RobotWik
 
   requireContract(value.freshness === "unknown" && value.source_kind === "verified_discovery_snapshot" && value.integrity_status === "verified", "invalid robot Wiki trust metadata", path);
   requireContract(isConfidence(value.confidence) && isStringArray(value.limitations), "invalid robot Wiki confidence or limitations", path);
-  const serialized = JSON.stringify(value);
-  requireContract(!serialized.includes("artifact://") && !/[A-Za-z]:\\\\/.test(serialized) && !/\/(?:home|root|etc|var|tmp|workspace|mnt|Users)\//i.test(serialized), "robot Wiki contains an unsafe reference", path);
+  requireContract(!containsUnsafeReference(value), "robot Wiki contains an unsafe reference", path);
   return value as unknown as RobotWikiSnapshot;
+}
+
+function parseFleetRobotSummary(value: unknown, path: string): FleetRobotSummary {
+  requireContract(isRecord(value) && value.schema_version === "rolo-fleet-robot-summary/v1", "invalid fleet robot summary", path);
+  requireContract(typeof value.robot_id === "string" && Boolean(value.robot_id) && typeof value.adapter === "string", "invalid fleet robot identity", path);
+  requireContract(typeof value.architecture === "string" && typeof value.ros_distro === "string", "invalid fleet robot platform", path);
+  requireContract(["READY", "ATTENTION", "DEGRADED", "NOT_READY"].includes(String(value.state)), "invalid fleet robot state", path);
+  requireContract(value.active_stage === null || ["adapt", "diagnose", "verify"].includes(String(value.active_stage)), "invalid fleet active stage", path);
+  requireContract(value.active_status === null || ["NOT_STARTED", "BLOCKED", "DEGRADED", "READY", "COMPLETE"].includes(String(value.active_status)), "invalid fleet active status", path);
+  requireContract(Number.isInteger(value.blocker_count) && Number(value.blocker_count) >= 0 && typeof value.next_action === "string", "invalid fleet blocker summary", path);
+  requireContract(isTimestamp(value.observed_at) && value.freshness === "fresh" && value.source_kind === "computed_robot_overview", "invalid fleet robot observation metadata", path);
+  requireContract(isConfidence(value.confidence) && value.integrity_status === "validated", "invalid fleet robot trust metadata", path);
+  return value as unknown as FleetRobotSummary;
+}
+
+function parseFleetCollection(value: unknown, path: string): FleetCollection {
+  requireContract(isRecord(value) && value.schema_version === "rolo-fleet-collection/v1" && Array.isArray(value.items), "invalid fleet collection", path);
+  const items = value.items.map((item, index) => parseFleetRobotSummary(item, `${path}/items/${index}`));
+  requireContract(new Set(items.map((item) => item.robot_id)).size === items.length, "duplicate robot in fleet collection", path);
+  requireContract(Number.isInteger(value.total) && Number(value.total) >= items.length, "invalid fleet total", path);
+  requireContract(Number.isInteger(value.limit) && Number(value.limit) >= 1 && Number(value.limit) <= 100 && items.length <= Number(value.limit), "invalid fleet page limit", path);
+  requireContract(Number.isInteger(value.offset) && Number(value.offset) >= 0 && (value.next_offset === null || (Number.isInteger(value.next_offset) && Number(value.next_offset) > Number(value.offset))), "invalid fleet page offset", path);
+  const countKeys = ["ready", "attention", "degraded", "not_ready", "blocker_count"] as const;
+  requireContract(countKeys.every((key) => Number.isInteger(value[key]) && Number(value[key]) >= 0), "invalid fleet counts", path);
+  requireContract(Number(value.ready) + Number(value.attention) + Number(value.degraded) + Number(value.not_ready) >= items.length, "fleet state counts do not cover the page", path);
+  requireContract(isTimestamp(value.observed_at) && value.freshness === "fresh" && value.source_kind === "computed_fleet_overviews", "invalid fleet observation metadata", path);
+  requireContract(isConfidence(value.confidence) && value.integrity_status === "validated", "invalid fleet trust metadata", path);
+  requireContract(!containsUnsafeReference(value), "fleet collection contains an unsafe reference", path);
+  return { ...value, items } as unknown as FleetCollection;
+}
+
+function parseFleetBlockerSummary(value: unknown, path: string): FleetBlockerSummary {
+  requireContract(isRecord(value) && value.schema_version === "rolo-fleet-blocker-summary/v1", "invalid fleet blocker", path);
+  requireContract(typeof value.blocker_id === "string" && Boolean(value.blocker_id) && typeof value.robot_id === "string" && Boolean(value.robot_id), "invalid fleet blocker identity", path);
+  requireContract(["adapt", "diagnose", "verify"].includes(String(value.stage)), "invalid fleet blocker stage", path);
+  requireContract(typeof value.message === "string" && typeof value.recommended_action === "string" && typeof value.owner === "string", "invalid fleet blocker guidance", path);
+  requireContract(isStringArray(value.evidence_ids) && value.evidence_ids.every((item) => item.startsWith("ev_")), "invalid fleet blocker evidence", path);
+  requireContract(isTimestamp(value.observed_at) && value.freshness === "fresh" && value.source_kind === "pipeline_assessment", "invalid fleet blocker observation metadata", path);
+  requireContract(isConfidence(value.confidence) && value.integrity_status === "validated", "invalid fleet blocker trust metadata", path);
+  return value as unknown as FleetBlockerSummary;
+}
+
+function parseFleetBlockerCollection(value: unknown, path: string): FleetBlockerCollection {
+  requireContract(isRecord(value) && value.schema_version === "rolo-fleet-blocker-collection/v1" && Array.isArray(value.items), "invalid fleet blocker collection", path);
+  const items = value.items.map((item, index) => parseFleetBlockerSummary(item, `${path}/items/${index}`));
+  requireContract(new Set(items.map((item) => item.blocker_id)).size === items.length, "duplicate blocker in fleet collection", path);
+  requireContract(Number.isInteger(value.total) && Number(value.total) >= items.length, "invalid fleet blocker total", path);
+  requireContract(Number.isInteger(value.limit) && Number(value.limit) >= 1 && Number(value.limit) <= 100 && items.length <= Number(value.limit), "invalid fleet blocker page limit", path);
+  requireContract(Number.isInteger(value.offset) && Number(value.offset) >= 0 && (value.next_offset === null || (Number.isInteger(value.next_offset) && Number(value.next_offset) > Number(value.offset))), "invalid fleet blocker page offset", path);
+  requireContract(isTimestamp(value.observed_at) && value.freshness === "fresh" && value.source_kind === "computed_pipeline_blockers", "invalid fleet blocker collection metadata", path);
+  requireContract(isConfidence(value.confidence) && value.integrity_status === "validated", "invalid fleet blocker collection trust", path);
+  requireContract(!containsUnsafeReference(value), "fleet blocker collection contains an unsafe reference", path);
+  return { ...value, items } as unknown as FleetBlockerCollection;
 }
 
 export class RoloClient {
@@ -624,6 +687,16 @@ export class RoloClient {
   async topology(robotId: string, options?: RequestInit) {
     const path = `/v1/robots/${encodeURIComponent(robotId)}/topology`;
     return parseRobotTopology(await this.request<unknown>(path, options), path, robotId);
+  }
+
+  async fleet(options?: RequestInit) {
+    const path = "/v1/fleet?limit=100&offset=0";
+    return parseFleetCollection(await this.request<unknown>(path, options), path);
+  }
+
+  async blockers(options?: RequestInit) {
+    const path = "/v1/blockers?limit=100&offset=0";
+    return parseFleetBlockerCollection(await this.request<unknown>(path, options), path);
   }
 
   async topologySnapshots(robotId: string, options?: RequestInit) {

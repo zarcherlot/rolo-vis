@@ -2,10 +2,12 @@
   "schema_version": "rolo-plugin/v1",
   "id": "rolo-vis",
   "name": "rolo Workbench",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "kind": "web-workbench",
   "entry": "dist/client/index.html",
   "capabilities": [
+    "fleet.overview.read",
+    "fleet.blockers.read",
     "robot.overview.read",
     "robot.topology.read",
     "robot.topology.diff.read",
@@ -18,6 +20,8 @@
     "base_path": "/rolo-api",
     "required_endpoints": [
       "/health",
+      "/v1/fleet",
+      "/v1/blockers",
       "/v1/robots",
       "/v1/robots/{robot_id}/overview",
       "/v1/robots/{robot_id}/pipeline",
