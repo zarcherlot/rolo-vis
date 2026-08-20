@@ -126,7 +126,7 @@ export interface EvidenceRecord {
   title: string;
   summary: string;
   authority: EvidenceAuthority;
-  source_kind: "robot_manifest" | "gated_artifact" | "pipeline_artifact" | "lifecycle_run" | "lifecycle_gate" | "lifecycle_handoff";
+  source_kind: "robot_manifest" | "gated_artifact" | "pipeline_artifact" | "lifecycle_run" | "lifecycle_gate" | "lifecycle_handoff" | "wiki_insight" | "wiki_diff";
   integrity_status: "validated" | "verified";
   classification: "INTERNAL";
   observed_at: string;
@@ -375,6 +375,63 @@ export interface LifecycleRunDetail {
   artifacts: LifecycleArtifactSummary[];
   observed_at: string;
   freshness: "fresh" | "unknown";
+}
+
+export type WikiLayer = "Hardware" | "Linux" | "Middleware" | "Application" | "Dependencies";
+
+export interface WikiLayerSummary {
+  schema_version: "rolo-wiki-layer-summary/v1";
+  layer: WikiLayer;
+  status: "OBSERVED" | "PARTIAL" | "UNAVAILABLE" | "UNKNOWN";
+  summary: string;
+  facts: Record<string, string | number | boolean>;
+}
+
+export interface WikiSection {
+  schema_version: "rolo-wiki-section/v1";
+  heading: string;
+  lines: string[];
+}
+
+export interface WikiInsightSummary {
+  schema_version: "rolo-wiki-insight-summary/v1";
+  category: "SAFETY" | "ARCHITECTURE" | "HARDWARE" | "OPERATIONS" | "MAINTENANCE";
+  statement: string;
+  confidence: "LOW" | "MEDIUM";
+  verification: string;
+  source: "DETERMINISTIC_RULE" | "ADAPT_AGENT_SKILL";
+  evidence_id: string;
+}
+
+export interface WikiChangeSummary {
+  schema_version: "rolo-wiki-change-summary/v1";
+  category: "PLATFORM" | "ROS" | "APPLICATION" | "HARDWARE" | "OPERATION" | "UNKNOWN";
+  added: string[];
+  removed: string[];
+  changed: string[];
+  evidence_id: string;
+}
+
+export interface RobotWikiSnapshot {
+  schema_version: "rolo-robot-wiki/v1";
+  robot_id: string;
+  discovery_id: string;
+  discovery_status: string;
+  created_at: string;
+  content_origin: "GENERATED_MATCH" | "HUMAN_EDITED" | "MISSING";
+  content_integrity: "validated" | "unverified" | "unavailable";
+  sections: WikiSection[];
+  layers: WikiLayerSummary[];
+  insights: WikiInsightSummary[];
+  diff_status: "NO_BASELINE" | "UNCHANGED" | "CHANGED";
+  baseline_discovery_id: string | null;
+  changes: WikiChangeSummary[];
+  observed_at: string;
+  freshness: "unknown";
+  source_kind: "verified_discovery_snapshot";
+  confidence: number;
+  integrity_status: "verified";
+  limitations: string[];
 }
 
 export interface BootstrapResult {

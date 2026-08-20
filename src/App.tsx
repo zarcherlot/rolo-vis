@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import {
   ArrowRight,
   Bell,
+  BookOpenText,
   Broadcast,
   Camera,
   CaretDown,
@@ -61,13 +62,14 @@ import type {
   RobotCapability,
   RobotOverview,
   RobotTopology,
+  RobotWikiSnapshot,
   TopologyDiff,
   TopologySnapshotCollection,
 } from "./types/rolo";
 import { getOverviewPresentation, getSurfaceSource } from "./workbenchPolicy";
 import type { WorkbenchMode } from "./workbenchPolicy";
 
-type NavId = "overview" | "stack" | "capabilities" | "lifecycle" | "evidence";
+type NavId = "overview" | "stack" | "capabilities" | "lifecycle" | "wiki" | "evidence";
 type ViewRobot = DemoRobot | (RobotCapability & { status: "online" });
 type RobotOption = DemoRobot | RobotCapability;
 type OpenEvidence = (item: EvidenceItem | string) => void;
@@ -77,6 +79,7 @@ const NAV_ITEMS: Array<{ id: NavId; label: string; icon: typeof House }> = [
   { id: "stack", label: "Stack Map", icon: GitBranch },
   { id: "capabilities", label: "Capabilities", icon: Stack },
   { id: "lifecycle", label: "Lifecycle", icon: Clock },
+  { id: "wiki", label: "Robot Wiki", icon: BookOpenText },
   { id: "evidence", label: "Evidence", icon: FileText },
 ];
 
@@ -1013,6 +1016,87 @@ function LiveLifecycleView({
   );
 }
 
+function WikiView({ wiki, onOpenEvidence }: { wiki: RobotWikiSnapshot; onOpenEvidence: OpenEvidence }) {
+  const [selectedHeading, setSelectedHeading] = useState(wiki.sections[0]?.heading || "");
+  useEffect(() => {
+    setSelectedHeading(wiki.sections[0]?.heading || "");
+  }, [wiki.discovery_id, wiki.sections]);
+  const selectedSection = wiki.sections.find((section) => section.heading === selectedHeading) || wiki.sections[0];
+  const narrativeLabel = wiki.content_origin === "GENERATED_MATCH"
+    ? "Generated text matches snapshot"
+    : wiki.content_origin === "HUMAN_EDITED" ? "Human-maintained text" : "Narrative unavailable";
+  return (
+    <section className="content-view wiki-view">
+      <PageTitle
+        eyebrow="Verified discovery knowledge"
+        title="Robot Wiki"
+        description="A human-readable robot model with machine observations, advisory insights, and discovery changes kept in separate trust lanes."
+      />
+      <div className="wiki-trust-strip panel">
+        <div><ShieldCheck size={23} weight="fill" /><span><strong>Manifest-verified snapshot</strong><small>{wiki.discovery_id}</small></span></div>
+        <dl>
+          <div><dt>Discovery</dt><dd>{wiki.discovery_status}</dd></div>
+          <div><dt>Observed</dt><dd>{new Date(wiki.observed_at).toLocaleString()}</dd></div>
+          <div><dt>Narrative</dt><dd className={`wiki-integrity-${wiki.content_integrity}`}>{narrativeLabel} · {wiki.content_integrity}</dd></div>
+        </dl>
+      </div>
+
+      <div className="wiki-layer-grid">
+        {wiki.layers.map((layer) => (
+          <article className="panel wiki-layer-card" key={layer.layer}>
+            <header><span>{layer.layer}</span><strong className={`wiki-status-${layer.status.toLowerCase()}`}>{layer.status}</strong></header>
+            <p>{layer.summary}</p>
+            <dl>{Object.entries(layer.facts).map(([key, value]) => <div key={key}><dt>{key.replaceAll("_", " ")}</dt><dd>{String(value)}</dd></div>)}</dl>
+          </article>
+        ))}
+      </div>
+
+      <div className="wiki-layout">
+        <nav className="panel wiki-section-nav" aria-label="Wiki sections">
+          <header><span>Human-readable Wiki</span><small>{wiki.sections.length} sections</small></header>
+          {wiki.sections.map((section) => (
+            <button key={section.heading} className={section.heading === selectedSection?.heading ? "is-active" : ""} onClick={() => setSelectedHeading(section.heading)}>
+              <BookOpenText size={17} /><span>{section.heading}</span><ArrowRight size={13} />
+            </button>
+          ))}
+          {!wiki.sections.length && <p>No human-readable Wiki text is available.</p>}
+        </nav>
+        <article className="panel wiki-document">
+          <header><span>{wiki.content_origin === "HUMAN_EDITED" ? "Human-maintained · unverified" : "Generated narrative · validated"}</span><h3>{selectedSection?.heading || "Narrative unavailable"}</h3></header>
+          {selectedSection ? <div>{selectedSection.lines.map((line, index) => <p key={`${selectedSection.heading}-${index}`}>{line}</p>)}</div> : <div className="empty-state"><BookOpenText size={27} /><strong>No narrative content</strong><span>Machine observations remain available in the verified panels.</span></div>}
+        </article>
+        <aside className="panel wiki-insights">
+          <header><span>Advisory insights</span><small>{wiki.insights.length} manifest-verified records</small></header>
+          {wiki.insights.map((insight) => (
+            <button key={insight.evidence_id} onClick={() => onOpenEvidence(insight.evidence_id)}>
+              <span className="wiki-insight-meta"><strong>{insight.category}</strong><em>{insight.confidence} confidence</em></span>
+              <p>{insight.statement}</p>
+              <small>Verify: {insight.verification}</small>
+              <span className="wiki-evidence-link"><ShieldCheck size={14} /> Open evidence</span>
+            </button>
+          ))}
+          {!wiki.insights.length && <p className="wiki-empty-copy">No advisory insight was produced for this discovery.</p>}
+        </aside>
+      </div>
+
+      <section className="panel wiki-change-panel">
+        <header><div><span>Discovery change set</span><h3>{wiki.diff_status.replaceAll("_", " ")}</h3></div><small>{wiki.baseline_discovery_id ? `Baseline ${wiki.baseline_discovery_id}` : "No previous verified baseline"}</small></header>
+        <div className="wiki-change-grid">
+          {wiki.changes.map((change) => (
+            <button key={change.evidence_id} onClick={() => onOpenEvidence(change.evidence_id)}>
+              <span><strong>{change.category}</strong><ShieldCheck size={15} /></span>
+              <dl><div><dt>Added</dt><dd>{change.added.length}</dd></div><div><dt>Removed</dt><dd>{change.removed.length}</dd></div><div><dt>Changed</dt><dd>{change.changed.length}</dd></div></dl>
+              {[...change.added, ...change.removed, ...change.changed].slice(0, 3).map((item) => <small key={item}>{item}</small>)}
+            </button>
+          ))}
+          {!wiki.changes.length && <p className="wiki-empty-copy">No domain-level changes were reported.</p>}
+        </div>
+      </section>
+      {wiki.limitations.length > 0 && <div className="wiki-limitations"><Info size={17} /><p>{wiki.limitations.join(" ")}</p></div>}
+    </section>
+  );
+}
+
 function EvidenceRow({ item, onClick }: { item: EvidenceItem; onClick: () => void }) {
   return (
     <button className="evidence-row" onClick={onClick}>
@@ -1157,12 +1241,20 @@ function AppContent() {
   const [capabilityList, setCapabilityList] = useState<CapabilitySummary[] | null>(null);
   const [capabilityLimitations, setCapabilityLimitations] = useState<string[]>([]);
   const [lifecycleRuns, setLifecycleRuns] = useState<LifecycleRunCollection | null>(null);
+  const [wiki, setWiki] = useState<RobotWikiSnapshot | null>(null);
+  const [wikiRequestRobotId, setWikiRequestRobotId] = useState("");
+  const [wikiLoading, setWikiLoading] = useState(false);
+  const [wikiMessage, setWikiMessage] = useState("");
   const [connectionMessage, setConnectionMessage] = useState("");
   const [evidence, setEvidence] = useState<EvidenceItem | null>(null);
 
   const connect = useCallback(async (requestedRobotId?: string) => {
     setMode("connecting");
     setConnectionMessage("");
+    setWiki(null);
+    setWikiRequestRobotId("");
+    setWikiLoading(false);
+    setWikiMessage("");
     const controller = new AbortController();
     const timeout = window.setTimeout(() => controller.abort(), 5000);
     try {
@@ -1204,6 +1296,7 @@ function AppContent() {
       setCapabilityList(null);
       setCapabilityLimitations([]);
       setLifecycleRuns(null);
+      setWiki(null);
       setConnectionMessage(error instanceof RoloApiError ? `${error.message}${error.path ? ` (${error.path})` : ""}` : "The rolo control plane could not be read.");
       setMode("unavailable");
     } finally {
@@ -1222,11 +1315,40 @@ function AppContent() {
     setCapabilityList(null);
     setCapabilityLimitations([]);
     setLifecycleRuns(null);
+    setWiki(null);
+    setWikiRequestRobotId("");
+    setWikiLoading(false);
+    setWikiMessage("");
     setConnectionMessage("Explicit fixture mode; no values on this screen are live robot observations.");
     setMode("demo");
   }, []);
 
   useEffect(() => { void connect(); }, [connect]);
+  useEffect(() => {
+    if (active !== "wiki" || !robot || wiki || wikiLoading || wikiRequestRobotId === robot.robot_id || !["live", "partial"].includes(mode)) return;
+    let current = true;
+    const controller = new AbortController();
+    const requestedRobotId = robot.robot_id;
+    setWikiLoading(true);
+    setWikiRequestRobotId(requestedRobotId);
+    setWikiMessage("");
+    void roloClient.wiki(requestedRobotId, { signal: controller.signal }).then((snapshot) => {
+      if (current) setWiki(snapshot);
+    }).catch((error: unknown) => {
+      if (!current) return;
+      if (error instanceof RoloApiError && error.status === 404) {
+        setWikiMessage("No verified discovery Wiki is available for this robot yet.");
+      } else {
+        setWikiMessage(error instanceof Error ? error.message : "The robot Wiki could not be read.");
+      }
+    }).finally(() => { if (current) setWikiLoading(false); });
+    return () => {
+      current = false;
+      controller.abort();
+      setWikiLoading(false);
+      setWikiRequestRobotId((value) => value === requestedRobotId ? "" : value);
+    };
+  }, [active, mode, robot, wiki]);
   useEffect(() => {
     const handleKey = (event: KeyboardEvent) => { if (event.key === "Escape") setEvidence(null); };
     window.addEventListener("keydown", handleKey);
@@ -1274,6 +1396,7 @@ function AppContent() {
           {active === "overview" && <OverviewView robot={robot} pipeline={pipeline} overview={overview} mode={mode} evidenceItems={evidenceItems} onOpenEvidence={openEvidence} onNavigate={setActive} />}
           {active === "capabilities" && (capabilitySource === "demo" ? <DemoCapabilityView onOpenEvidence={setEvidence} /> : capabilitySource === "live" && capabilityList ? <LiveCapabilityView robotId={robot.robot_id} items={capabilityList} limitations={capabilityLimitations} onOpenEvidence={openEvidence} /> : <ReadModelUnavailableView title="Capabilities" description="Live capability coverage needs a versioned rolo capability read model." />)}
           {active === "lifecycle" && (lifecycleSource === "demo" ? <DemoLifecycleView pipeline={pipeline} onOpenEvidence={setEvidence} /> : lifecycleSource === "live" && lifecycleRuns ? <LiveLifecycleView pipeline={pipeline} runs={lifecycleRuns} robotId={robot.robot_id} onOpenEvidence={openEvidence} /> : <ReadModelUnavailableView title="Lifecycle" description="Live lifecycle requires trusted stage and run read models." />)}
+          {active === "wiki" && (mode === "demo" ? <ReadModelUnavailableView title="Robot Wiki" description="The labeled demo fixture does not include discovery Wiki evidence." /> : wiki ? <WikiView wiki={wiki} onOpenEvidence={openEvidence} /> : wikiLoading ? <section className="content-view"><PageTitle title="Robot Wiki" description="Reading the latest manifest-verified discovery snapshot…" /><div className="panel read-model-unavailable" role="status"><Pulse size={26} /><div><strong>Loading Robot Wiki</strong><p>Human narrative and machine evidence are being resolved independently.</p></div></div></section> : <ReadModelUnavailableView title="Robot Wiki" description={wikiMessage || "Open this surface to read a verified discovery Wiki."} />)}
           {active === "evidence" && (evidenceSource === "demo" ? <EvidenceView onOpenEvidence={openEvidence} /> : evidenceSource === "live" ? <EvidenceView live collection={evidenceList} robotId={robot.robot_id} onOpenEvidence={openEvidence} /> : <ReadModelUnavailableView title="Evidence" description="Live evidence resolution needs a versioned rolo evidence read model." />)}
         </>}
       </main>

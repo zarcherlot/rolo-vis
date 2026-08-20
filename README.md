@@ -10,6 +10,7 @@
 - Capability Explorer for canonical operations, risk, lifecycle, and bindings.
 - Lifecycle gate view for Adapt → Diagnose → Verify.
 - Immutable lifecycle run details with independent gate checks and verified handoffs.
+- Robot Wiki with manifest-verified discovery summaries, advisory insights, and evidence-linked changes.
 - Evidence ledger with provenance and integrity status.
 - Live rolo API probing with an explicit demo fallback when no robot runtime is reachable.
 
@@ -30,6 +31,8 @@ npm run dev
 To keep the browser on the same origin while targeting a different local rolo port, set `ROLO_API_PROXY_TARGET` before starting Vite.
 
 The plugin is read-only. It does not provide teleoperation, a free-form terminal, arbitrary file browsing, or operation invocation.
+
+Robot Wiki keeps its trust lanes explicit: machine insights and discovery diffs come from the verified discovery manifest, while human-maintained Wiki text is shown separately as validated, unverified, or unavailable. Human prose is never promoted to a machine-observed fact.
 
 ## Build and verify
 

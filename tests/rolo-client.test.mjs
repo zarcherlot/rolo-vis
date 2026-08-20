@@ -162,6 +162,53 @@ const TOPOLOGY_DIFF = {
   limitations: ["Gated declarations only"],
 };
 
+const WIKI = {
+  schema_version: "rolo-robot-wiki/v1",
+  robot_id: "AMR-07",
+  discovery_id: "discovery-20260820",
+  discovery_status: "SUCCEEDED",
+  created_at: "2026-08-20T00:00:00Z",
+  content_origin: "HUMAN_EDITED",
+  content_integrity: "unverified",
+  sections: [{
+    schema_version: "rolo-wiki-section/v1",
+    heading: "Architecture",
+    lines: ["The robot uses a bounded navigation stack."],
+  }],
+  layers: ["Hardware", "Linux", "Middleware", "Application", "Dependencies"].map((layer) => ({
+    schema_version: "rolo-wiki-layer-summary/v1",
+    layer,
+    status: "OBSERVED",
+    summary: `Observed ${layer} facts.`,
+    facts: { count: 1 },
+  })),
+  insights: [{
+    schema_version: "rolo-wiki-insight-summary/v1",
+    category: "ARCHITECTURE",
+    statement: "Navigation depends on middleware discovery.",
+    confidence: "MEDIUM",
+    verification: "Verify against the active graph.",
+    source: "DETERMINISTIC_RULE",
+    evidence_id: "ev_abcdef123456789012",
+  }],
+  diff_status: "CHANGED",
+  baseline_discovery_id: "discovery-20260819",
+  changes: [{
+    schema_version: "rolo-wiki-change-summary/v1",
+    category: "ROS",
+    added: ["topic /map"],
+    removed: [],
+    changed: [],
+    evidence_id: "ev_1234567890abcdef12",
+  }],
+  observed_at: "2026-08-20T00:00:00Z",
+  freshness: "unknown",
+  source_kind: "verified_discovery_snapshot",
+  confidence: 1,
+  integrity_status: "verified",
+  limitations: ["Insights remain advisory."],
+};
+
 const EVIDENCE_COLLECTION = {
   schema_version: "rolo-evidence-collection/v1",
   robot_id: "AMR-07",
@@ -656,6 +703,37 @@ test("RoloClient reads verified topology history and a contract-bound diff", asy
   }
 });
 
+test("RoloClient reads a trust-separated Robot Wiki", async () => {
+  const originalFetch = globalThis.fetch;
+  const urls = [];
+  globalThis.fetch = async (url) => {
+    urls.push(String(url));
+    return { ok: true, json: async () => WIKI };
+  };
+  try {
+    const wiki = await new RoloClient("http://rolo.test").wiki("AMR-07");
+    assert.equal(wiki.content_origin, "HUMAN_EDITED");
+    assert.equal(wiki.content_integrity, "unverified");
+    assert.equal(wiki.insights[0].evidence_id, "ev_abcdef123456789012");
+    assert.deepEqual(urls, ["http://rolo.test/v1/robots/AMR-07/wiki"]);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("RoloClient rejects unsafe Robot Wiki references", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => ({ ok: true, json: async () => ({ ...WIKI, sections: [{ ...WIKI.sections[0], lines: ["artifact://private/report.json"] }] }) });
+  try {
+    await assert.rejects(
+      () => new RoloClient("http://rolo.test").wiki("AMR-07"),
+      (error) => error instanceof RoloContractError && error.path.endsWith("/wiki"),
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("RoloClient rejects a dangling topology edge", async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () => ({
@@ -718,9 +796,11 @@ test("live modes never expose fixture-only workbench surfaces", () => {
     assert.equal(getSurfaceSource(mode, "stack"), "unavailable");
     assert.equal(getSurfaceSource(mode, "capabilities"), "unavailable");
     assert.equal(getSurfaceSource(mode, "evidence"), "unavailable");
+    assert.equal(getSurfaceSource(mode, "wiki"), "unavailable");
     assert.equal(getSurfaceSource(mode, "stack", { stack: true }), "live");
     assert.equal(getSurfaceSource(mode, "evidence", { evidence: true }), "live");
     assert.equal(getSurfaceSource(mode, "capabilities", { capabilities: true }), "live");
+    assert.equal(getSurfaceSource(mode, "wiki", { wiki: true }), "live");
   }
   assert.equal(getSurfaceSource("demo", "stack"), "demo");
   assert.equal(getSurfaceSource("unavailable", "overview"), "unavailable");
@@ -753,7 +833,7 @@ test("live lifecycle component has no fixture evidence or fabricated handoff", a
 
 test("plugin manifest declares every trusted read-model endpoint", async () => {
   const manifest = JSON.parse(await readFile(new URL("../rolo.plugin.json", import.meta.url), "utf8"));
-  assert.equal(manifest.version, "0.5.0");
+  assert.equal(manifest.version, "0.6.0");
   assert.deepEqual(
     new Set(manifest.api.required_endpoints),
     new Set([
@@ -768,6 +848,7 @@ test("plugin manifest declares every trusted read-model endpoint", async () => {
       "/v1/robots/{robot_id}/capabilities/{operation}",
       "/v1/robots/{robot_id}/runs",
       "/v1/robots/{robot_id}/runs/{run_id}",
+      "/v1/robots/{robot_id}/wiki",
       "/v1/robots/{robot_id}/evidence",
       "/v1/evidence/{evidence_id}",
     ]),

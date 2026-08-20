@@ -2,7 +2,7 @@
   "schema_version": "rolo-plugin/v1",
   "id": "rolo-vis",
   "name": "rolo Workbench",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "kind": "web-workbench",
   "entry": "dist/client/index.html",
   "capabilities": [
@@ -11,6 +11,7 @@
     "robot.topology.diff.read",
     "robot.capabilities.read",
     "robot.lifecycle.read",
+    "robot.wiki.read",
     "robot.evidence.read"
   ],
   "api": {
@@ -27,6 +28,7 @@
       "/v1/robots/{robot_id}/capabilities/{operation}",
       "/v1/robots/{robot_id}/runs",
       "/v1/robots/{robot_id}/runs/{run_id}",
+      "/v1/robots/{robot_id}/wiki",
       "/v1/robots/{robot_id}/evidence",
       "/v1/evidence/{evidence_id}"
     ]

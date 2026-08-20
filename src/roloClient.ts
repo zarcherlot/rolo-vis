@@ -14,6 +14,7 @@ import type {
   RobotCapability,
   RobotOverview,
   RobotTopology,
+  RobotWikiSnapshot,
   StageAssessment,
   TopologyDiff,
   TopologyEdge,
@@ -361,7 +362,7 @@ function parseEvidenceRecord(
   requireContract(typeof value.robot_id === "string" && (!expectedRobotId || value.robot_id === expectedRobotId), "evidence robot identity does not match request", path);
   requireContract(typeof value.title === "string" && typeof value.summary === "string", "invalid evidence title or summary", path);
   requireContract(["DECLARED", "OBSERVED", "GATED"].includes(String(value.authority)), "invalid evidence authority", path);
-  requireContract(["robot_manifest", "gated_artifact", "pipeline_artifact", "lifecycle_run", "lifecycle_gate", "lifecycle_handoff"].includes(String(value.source_kind)), "invalid evidence source", path);
+  requireContract(["robot_manifest", "gated_artifact", "pipeline_artifact", "lifecycle_run", "lifecycle_gate", "lifecycle_handoff", "wiki_insight", "wiki_diff"].includes(String(value.source_kind)), "invalid evidence source", path);
   requireContract(["validated", "verified"].includes(String(value.integrity_status)) && value.classification === "INTERNAL", "invalid evidence integrity or classification", path);
   requireContract(isTimestamp(value.observed_at) && ["fresh", "unknown"].includes(String(value.freshness)) && isConfidence(value.confidence), "invalid evidence observation metadata", path);
   requireContract(typeof value.reference_hint === "string" && /^[0-9a-f]{64}$/.test(String(value.reference_digest)), "invalid evidence reference metadata", path);
@@ -507,6 +508,65 @@ function parseLifecycleRunDetail(value: unknown, path: string, robotId: string, 
   return { ...value, run } as unknown as LifecycleRunDetail;
 }
 
+function parseRobotWiki(value: unknown, path: string, robotId: string): RobotWikiSnapshot {
+  requireContract(isRecord(value), "robot Wiki must be an object", path);
+  requireContract(value.schema_version === "rolo-robot-wiki/v1", "unsupported robot Wiki schema", path);
+  requireContract(value.robot_id === robotId && typeof value.discovery_id === "string" && Boolean(value.discovery_id), "robot Wiki identity does not match request", path);
+  requireContract(typeof value.discovery_status === "string" && Boolean(value.discovery_status), "invalid robot Wiki discovery status", path);
+  requireContract(isTimestamp(value.created_at) && isTimestamp(value.observed_at), "invalid robot Wiki timestamps", path);
+  requireContract(["GENERATED_MATCH", "HUMAN_EDITED", "MISSING"].includes(String(value.content_origin)), "invalid robot Wiki content origin", path);
+  requireContract(["validated", "unverified", "unavailable"].includes(String(value.content_integrity)), "invalid robot Wiki content integrity", path);
+  const expectedIntegrity = value.content_origin === "GENERATED_MATCH"
+    ? "validated"
+    : value.content_origin === "HUMAN_EDITED" ? "unverified" : "unavailable";
+  requireContract(value.content_integrity === expectedIntegrity, "inconsistent robot Wiki narrative trust", path);
+
+  requireContract(Array.isArray(value.sections) && value.sections.length <= 24, "invalid robot Wiki sections", path);
+  for (const [index, section] of value.sections.entries()) {
+    const sectionPath = `${path}/sections/${index}`;
+    requireContract(isRecord(section) && section.schema_version === "rolo-wiki-section/v1", "invalid robot Wiki section", sectionPath);
+    requireContract(typeof section.heading === "string" && Boolean(section.heading), "invalid robot Wiki section heading", sectionPath);
+    requireContract(isStringArray(section.lines) && section.lines.length <= 30 && section.lines.every((line) => line.length <= 400), "invalid robot Wiki section lines", sectionPath);
+  }
+
+  requireContract(Array.isArray(value.layers) && value.layers.length === 5, "invalid robot Wiki layer summaries", path);
+  const layerNames = ["Hardware", "Linux", "Middleware", "Application", "Dependencies"];
+  for (const [index, layer] of value.layers.entries()) {
+    const layerPath = `${path}/layers/${index}`;
+    requireContract(isRecord(layer) && layer.schema_version === "rolo-wiki-layer-summary/v1", "invalid robot Wiki layer", layerPath);
+    requireContract(layerNames.includes(String(layer.layer)) && ["OBSERVED", "PARTIAL", "UNAVAILABLE", "UNKNOWN"].includes(String(layer.status)), "invalid robot Wiki layer state", layerPath);
+    requireContract(typeof layer.summary === "string" && isSafeAttributes(layer.facts), "invalid robot Wiki layer facts", layerPath);
+  }
+  requireContract(new Set(value.layers.map((layer) => isRecord(layer) ? layer.layer : null)).size === value.layers.length, "duplicate robot Wiki layers", path);
+
+  requireContract(Array.isArray(value.insights) && value.insights.length <= 40, "invalid robot Wiki insights", path);
+  for (const [index, insight] of value.insights.entries()) {
+    const insightPath = `${path}/insights/${index}`;
+    requireContract(isRecord(insight) && insight.schema_version === "rolo-wiki-insight-summary/v1", "invalid robot Wiki insight", insightPath);
+    requireContract(["SAFETY", "ARCHITECTURE", "HARDWARE", "OPERATIONS", "MAINTENANCE"].includes(String(insight.category)), "invalid robot Wiki insight category", insightPath);
+    requireContract(typeof insight.statement === "string" && typeof insight.verification === "string", "invalid robot Wiki insight text", insightPath);
+    requireContract(["LOW", "MEDIUM"].includes(String(insight.confidence)) && ["DETERMINISTIC_RULE", "ADAPT_AGENT_SKILL"].includes(String(insight.source)), "invalid robot Wiki insight provenance", insightPath);
+    requireContract(typeof insight.evidence_id === "string" && insight.evidence_id.startsWith("ev_"), "invalid robot Wiki insight evidence", insightPath);
+  }
+
+  requireContract(["NO_BASELINE", "UNCHANGED", "CHANGED"].includes(String(value.diff_status)), "invalid robot Wiki diff status", path);
+  requireContract(value.baseline_discovery_id === null || typeof value.baseline_discovery_id === "string", "invalid robot Wiki baseline", path);
+  requireContract(Array.isArray(value.changes) && value.changes.length <= 12, "invalid robot Wiki changes", path);
+  for (const [index, change] of value.changes.entries()) {
+    const changePath = `${path}/changes/${index}`;
+    requireContract(isRecord(change) && change.schema_version === "rolo-wiki-change-summary/v1", "invalid robot Wiki change", changePath);
+    requireContract(["PLATFORM", "ROS", "APPLICATION", "HARDWARE", "OPERATION", "UNKNOWN"].includes(String(change.category)), "invalid robot Wiki change category", changePath);
+    requireContract(isStringArray(change.added) && change.added.length <= 40 && isStringArray(change.removed) && change.removed.length <= 40 && isStringArray(change.changed) && change.changed.length <= 20, "invalid robot Wiki change values", changePath);
+    requireContract(typeof change.evidence_id === "string" && change.evidence_id.startsWith("ev_"), "invalid robot Wiki change evidence", changePath);
+  }
+
+  requireContract(value.freshness === "unknown" && value.source_kind === "verified_discovery_snapshot" && value.integrity_status === "verified", "invalid robot Wiki trust metadata", path);
+  requireContract(isConfidence(value.confidence) && isStringArray(value.limitations), "invalid robot Wiki confidence or limitations", path);
+  const serialized = JSON.stringify(value);
+  requireContract(!serialized.includes("artifact://") && !/[A-Za-z]:\\\\/.test(serialized) && !/\/(?:home|root|etc|var|tmp|workspace|mnt|Users)\//i.test(serialized), "robot Wiki contains an unsafe reference", path);
+  return value as unknown as RobotWikiSnapshot;
+}
+
 export class RoloClient {
   baseUrl: string;
 
@@ -590,6 +650,11 @@ export class RoloClient {
       fromSnapshotId,
       toSnapshotId,
     );
+  }
+
+  async wiki(robotId: string, options?: RequestInit) {
+    const path = `/v1/robots/${encodeURIComponent(robotId)}/wiki`;
+    return parseRobotWiki(await this.request<unknown>(path, options), path, robotId);
   }
 
   async evidenceCollection(
