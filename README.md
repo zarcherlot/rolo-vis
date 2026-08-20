@@ -25,6 +25,8 @@ $env:VITE_ROLO_API_BASE='http://127.0.0.1:8080'
 npm run dev
 ```
 
+To keep the browser on the same origin while targeting a different local rolo port, set `ROLO_API_PROXY_TARGET` before starting Vite.
+
 The plugin is read-only. It does not provide teleoperation, a free-form terminal, arbitrary file browsing, or operation invocation.
 
 ## Build and verify

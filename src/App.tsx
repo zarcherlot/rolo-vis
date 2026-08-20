@@ -51,6 +51,8 @@ import type {
 } from "./demoData";
 import { RoloApiError, roloClient } from "./roloClient";
 import type {
+  CapabilityDetail,
+  CapabilitySummary,
   EvidenceAuthority,
   EvidenceCollection,
   EvidenceRecord,
@@ -602,7 +604,7 @@ function OverviewView({ robot, pipeline, overview, mode, evidenceItems, onOpenEv
   );
 }
 
-function CapabilityView({ onOpenEvidence }: { onOpenEvidence: (item: EvidenceItem) => void }) {
+function DemoCapabilityView({ onOpenEvidence }: { onOpenEvidence: (item: EvidenceItem) => void }) {
   const [selected, setSelected] = useState(CAPABILITIES[0]);
   const [query, setQuery] = useState("");
   const visible = CAPABILITIES.filter((item) => `${item.id} ${item.title} ${item.layer}`.toLowerCase().includes(query.toLowerCase()));
@@ -646,6 +648,130 @@ function CapabilityView({ onOpenEvidence }: { onOpenEvidence: (item: EvidenceIte
             ))}
           </div>
           <button className="primary-button detail-cta" onClick={() => onOpenEvidence(EVIDENCE[2])}>View evidence</button>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function LiveCapabilityView({
+  robotId,
+  items,
+  limitations,
+  onOpenEvidence,
+}: {
+  robotId: string;
+  items: CapabilitySummary[];
+  limitations: string[];
+  onOpenEvidence: OpenEvidence;
+}) {
+  const [selectedOperation, setSelectedOperation] = useState(items[0]?.operation || "");
+  const [detail, setDetail] = useState<CapabilityDetail | null>(null);
+  const [detailMessage, setDetailMessage] = useState("");
+  const [query, setQuery] = useState("");
+  const [layer, setLayer] = useState("All layers");
+  const [tab, setTab] = useState<"overview" | "contract" | "binding" | "evidence">("overview");
+
+  useEffect(() => {
+    if (!items.some((item) => item.operation === selectedOperation)) {
+      setSelectedOperation(items[0]?.operation || "");
+    }
+  }, [items, selectedOperation]);
+
+  useEffect(() => {
+    if (!selectedOperation) {
+      setDetail(null);
+      return;
+    }
+    const controller = new AbortController();
+    setDetail(null);
+    setDetailMessage("Loading trusted contract…");
+    void roloClient.capability(robotId, selectedOperation, { signal: controller.signal })
+      .then((result) => {
+        setDetail(result);
+        setDetailMessage("");
+      })
+      .catch((error) => {
+        if (controller.signal.aborted) return;
+        setDetailMessage(error instanceof Error ? error.message : "Capability detail is unavailable.");
+      });
+    return () => controller.abort();
+  }, [robotId, selectedOperation]);
+
+  const visible = items.filter((item) => {
+    const matchesQuery = `${item.operation} ${item.description} ${item.layer}`.toLowerCase().includes(query.toLowerCase());
+    return matchesQuery && (layer === "All layers" || item.layer === layer);
+  });
+  const selected = items.find((item) => item.operation === selectedOperation) || items[0];
+  const counts = items.reduce<Record<string, number>>((result, item) => {
+    result[item.availability] = (result[item.availability] || 0) + 1;
+    return result;
+  }, {});
+  const width = (status: string) => `${items.length ? ((counts[status] || 0) / items.length) * 100 : 0}%`;
+  const detailItem = detail?.capability || selected;
+
+  return (
+    <section className="content-view capabilities-view">
+      <PageTitle
+        title="Capabilities"
+        description="Canonical contracts joined with current robot applicability, bindings, and evidence."
+        action={<div className="coverage-summary"><strong>{items.length} canonical operations · {counts.VERIFIED || 0} verified</strong><span><i style={{ width: width("VERIFIED") }} /><i style={{ width: width("AVAILABLE") }} /><i style={{ width: width("UNAVAILABLE") }} /><i style={{ width: width("UNKNOWN") }} /></span></div>}
+      />
+      <div className="capability-layout">
+        <div className="capability-list panel">
+          <div className="capability-toolbar">
+            <div className="capability-search search-box"><MagnifyingGlass size={18} /><input aria-label="Search canonical operations" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search operations" /></div>
+            <label className="capability-layer-filter"><span>Layer</span><select value={layer} onChange={(event) => setLayer(event.target.value)}>{["All layers", "Hardware", "Linux", "Middleware", "Application"].map((value) => <option key={value}>{value}</option>)}</select></label>
+          </div>
+          <div className="layer-summary-row"><span>Operation</span><span>Lifecycle</span><span>Availability</span></div>
+          {visible.map((item) => (
+            <button key={item.operation} className={`operation-row ${selected?.operation === item.operation ? "is-selected" : ""}`} onClick={() => { setSelectedOperation(item.operation); setTab("overview"); }}>
+              <span className="operation-main"><code>{item.operation}</code><small>{item.layer} · {item.applicability.replace("_", " ")}</small></span>
+              <span className={`mini-chip lifecycle-${item.lifecycle.toLowerCase()}`}>{item.lifecycle}</span>
+              <span className={`mini-chip availability-${item.availability.toLowerCase()}`}>{item.availability}</span>
+              <ArrowRight size={15} />
+            </button>
+          ))}
+          {!visible.length && <div className="empty-state"><MagnifyingGlass size={28} /><strong>No operations found</strong><span>Change the query or layer filter.</span></div>}
+        </div>
+        <div className="capability-detail panel" aria-live="polite">
+          {!detailItem ? <div className="empty-state"><Info size={28} /><strong>No capability records</strong><span>The API returned an empty product registry.</span></div> : <>
+            <div className="detail-layer">{detailItem.layer}</div>
+            <code className="detail-operation">{detailItem.operation}</code>
+            <p>{detailItem.description}</p>
+            <div className="capability-badges">
+              <div><span>Availability</span><strong className={`mini-chip availability-${detailItem.availability.toLowerCase()}`}>{detailItem.availability}</strong></div>
+              <div><span>Lifecycle</span><strong className={`mini-chip lifecycle-${detailItem.lifecycle.toLowerCase()}`}>{detailItem.lifecycle}</strong></div>
+              <div><span>Applicability</span><strong>{detailItem.applicability.replace("_", " ")}</strong></div>
+              <div><span>Access</span><strong>{detailItem.access}</strong></div>
+              <div><span>Risk</span><strong className={`risk-${detailItem.risk.toLowerCase()}`}>{detailItem.risk}</strong></div>
+              <div><span>Classification</span><strong>{detailItem.data_classification}</strong></div>
+            </div>
+            <div className="capability-tabs" role="tablist" aria-label="Capability detail">
+              {(["overview", "contract", "binding", "evidence"] as const).map((value) => <button key={value} role="tab" aria-selected={tab === value} className={tab === value ? "is-active" : ""} onClick={() => setTab(value)}>{value}</button>)}
+            </div>
+            {detailMessage && !detail && <div className="capability-detail-message"><Info size={18} /><span>{detailMessage}</span></div>}
+            {tab === "overview" && <>
+              <div className="contract-facts">
+                <div><span>Registration</span><strong>{detailItem.registration.replace("_", " ")}</strong></div>
+                <div><span>Contract</span><strong>v{detailItem.contract_version}</strong></div>
+                <div><span>Last verified</span><strong>{detailItem.last_verified_at ? new Date(detailItem.last_verified_at).toLocaleString() : "Not verified"}</strong></div>
+              </div>
+              <div className="trust-chain"><h4>Current trust statement</h4>
+                <div><span><CheckCircle size={18} weight="fill" /></span><strong>Canonical contract validated</strong><small>{detailItem.contract_digest.slice(0, 12)}…</small></div>
+                <div><span className={detailItem.integrity_status === "verified" ? "" : "trust-unknown"}><ShieldCheck size={18} weight="fill" /></span><strong>{detailItem.integrity_status === "verified" ? "Gated release binding" : "No gated release proof"}</strong><small>{detailItem.binding_count} bindings</small></div>
+              </div>
+              {(detailItem.limitations.length || limitations.length) > 0 && <div className="capability-limitations"><strong>Known limits</strong>{[...new Set([...detailItem.limitations, ...limitations])].map((value) => <p key={value}>{value}</p>)}</div>}
+            </>}
+            {tab === "contract" && detail && <div className="capability-contract-view">
+              <div><span>Input schema</span><pre>{JSON.stringify(detail.contract.input_schema, null, 2)}</pre></div>
+              <div><span>Output schema</span><pre>{JSON.stringify(detail.contract.output_schema, null, 2)}</pre></div>
+              <div className="contract-rule-list"><strong>Preconditions</strong>{detail.contract.preconditions.length ? detail.contract.preconditions.map((value) => <p key={value}>{value}</p>) : <p>None declared.</p>}<strong>Result semantics</strong><p>{detail.contract.result_semantics} · {detail.contract.execution_mode}</p></div>
+            </div>}
+            {tab === "binding" && detail && <div className="capability-binding-list">{detail.bindings.length ? detail.bindings.map((binding) => <div key={binding.binding_id}><span className={`mini-chip authority-${binding.authority.toLowerCase()}`}>{binding.authority}</span><code>{binding.endpoint}</code><small>{binding.kind}{binding.interface_type ? ` · ${binding.interface_type}` : ""}</small></div>) : <div className="empty-state"><Network size={26} /><strong>No observed binding</strong><span>This contract is not bound to a current robot endpoint.</span></div>}</div>}
+            {tab === "evidence" && <div className="capability-evidence-list">{detailItem.evidence_ids.length ? detailItem.evidence_ids.map((id) => <button key={id} onClick={() => onOpenEvidence(id)}><ShieldCheck size={17} /><code>{id}</code><ArrowRight size={14} /></button>) : <div className="empty-state"><FileText size={26} /><strong>No gated evidence record</strong><span>Contract validation alone is not runtime or outcome evidence.</span></div>}</div>}
+            {detailItem.evidence_ids[0] && <button className="primary-button detail-cta" onClick={() => onOpenEvidence(detailItem.evidence_ids[0])}>View primary evidence</button>}
+          </>}
         </div>
       </div>
     </section>
@@ -883,6 +1009,8 @@ function AppContent() {
   const [overview, setOverview] = useState<RobotOverview | null>(null);
   const [topology, setTopology] = useState<RobotTopology | null>(null);
   const [evidenceList, setEvidenceList] = useState<EvidenceCollection | null>(null);
+  const [capabilityList, setCapabilityList] = useState<CapabilitySummary[] | null>(null);
+  const [capabilityLimitations, setCapabilityLimitations] = useState<string[]>([]);
   const [connectionMessage, setConnectionMessage] = useState("");
   const [evidence, setEvidence] = useState<EvidenceItem | null>(null);
 
@@ -898,6 +1026,8 @@ function AppContent() {
       setOverview(result.overview);
       setTopology(result.topology);
       setEvidenceList(result.evidence);
+      setCapabilityList(result.capabilities);
+      setCapabilityLimitations(result.capabilityLimitations);
       if (result.pipeline?.stages?.length) {
         setPipeline(result.pipeline.stages.map((stage) => ({
           stage: stage.stage,
@@ -922,6 +1052,8 @@ function AppContent() {
       setOverview(null);
       setTopology(null);
       setEvidenceList(null);
+      setCapabilityList(null);
+      setCapabilityLimitations([]);
       setConnectionMessage(error instanceof RoloApiError ? `${error.message}${error.path ? ` (${error.path})` : ""}` : "The rolo control plane could not be read.");
       setMode("unavailable");
     } finally {
@@ -936,6 +1068,8 @@ function AppContent() {
     setOverview(null);
     setTopology(null);
     setEvidenceList(null);
+    setCapabilityList(null);
+    setCapabilityLimitations([]);
     setConnectionMessage("Explicit fixture mode; no values on this screen are live robot observations.");
     setMode("demo");
   }, []);
@@ -977,6 +1111,7 @@ function AppContent() {
   const stackSource = getSurfaceSource(mode, "stack", { stack: Boolean(topology) });
   const evidenceSource = getSurfaceSource(mode, "evidence", { evidence: Boolean(evidenceList) });
   const lifecycleSource = getSurfaceSource(mode, "lifecycle", { lifecycle: Boolean(pipeline.length) });
+  const capabilitySource = getSurfaceSource(mode, "capabilities", { capabilities: Boolean(capabilityList) });
   return (
     <div className="app-shell">
       <Sidebar active={active} onChange={setActive} />
@@ -985,7 +1120,7 @@ function AppContent() {
         {(["connecting", "unavailable"].includes(mode) || !robot) ? <ConnectionStateView mode={mode} message={connectionMessage} onRetry={() => connect()} onUseDemo={useDemo} /> : <>
           {active === "stack" && (stackSource === "demo" ? <StackMapView onOpenEvidence={openEvidence} /> : stackSource === "live" ? <StackMapView topology={topology} onOpenEvidence={openEvidence} /> : <ReadModelUnavailableView title="Stack Map" description="Live topology needs a versioned rolo topology read model." />)}
           {active === "overview" && <OverviewView robot={robot} pipeline={pipeline} overview={overview} mode={mode} evidenceItems={evidenceItems} onOpenEvidence={openEvidence} onNavigate={setActive} />}
-          {active === "capabilities" && (getSurfaceSource(mode, "capabilities") === "demo" ? <CapabilityView onOpenEvidence={setEvidence} /> : <ReadModelUnavailableView title="Capabilities" description="Live capability coverage needs a versioned rolo capability read model." />)}
+          {active === "capabilities" && (capabilitySource === "demo" ? <DemoCapabilityView onOpenEvidence={setEvidence} /> : capabilitySource === "live" && capabilityList ? <LiveCapabilityView robotId={robot.robot_id} items={capabilityList} limitations={capabilityLimitations} onOpenEvidence={openEvidence} /> : <ReadModelUnavailableView title="Capabilities" description="Live capability coverage needs a versioned rolo capability read model." />)}
           {active === "lifecycle" && (lifecycleSource === "demo" ? <DemoLifecycleView pipeline={pipeline} onOpenEvidence={setEvidence} /> : lifecycleSource === "live" ? <LiveLifecycleView pipeline={pipeline} /> : <ReadModelUnavailableView title="Lifecycle" description="Live lifecycle requires a trusted pipeline assessment." />)}
           {active === "evidence" && (evidenceSource === "demo" ? <EvidenceView onOpenEvidence={openEvidence} /> : evidenceSource === "live" ? <EvidenceView live collection={evidenceList} robotId={robot.robot_id} onOpenEvidence={openEvidence} /> : <ReadModelUnavailableView title="Evidence" description="Live evidence resolution needs a versioned rolo evidence read model." />)}
         </>}

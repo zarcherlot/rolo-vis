@@ -1,5 +1,8 @@
 import type {
   BootstrapResult,
+  CapabilityCollection,
+  CapabilityDetail,
+  CapabilitySummary,
   EvidenceAuthority,
   EvidenceCollection,
   EvidenceRecord,
@@ -293,6 +296,64 @@ function parseEvidenceCollection(
   return { ...value, items } as unknown as EvidenceCollection;
 }
 
+function parseCapabilitySummary(value: unknown, path: string): CapabilitySummary {
+  requireContract(isRecord(value), "capability summary must be an object", path);
+  requireContract(value.schema_version === "rolo-capability-summary/v1", "unsupported capability summary schema", path);
+  requireContract(typeof value.operation === "string" && value.operation.length > 0, "missing canonical operation", path);
+  requireContract(["Hardware", "Linux", "Middleware", "Application"].includes(String(value.layer)), "invalid capability layer", path);
+  requireContract(typeof value.description === "string", "invalid capability description", path);
+  requireContract(["DRAFT", "GATEABLE", "RELEASED", "DEPRECATED"].includes(String(value.lifecycle)), "invalid capability lifecycle", path);
+  requireContract(["APPLICABLE", "NOT_OBSERVED", "UNKNOWN"].includes(String(value.applicability)), "invalid capability applicability", path);
+  requireContract(["VERIFIED", "AVAILABLE", "UNAVAILABLE", "UNKNOWN"].includes(String(value.availability)), "invalid capability availability", path);
+  requireContract(["BUILTIN", "REGISTERED", "NOT_REGISTERED", "STALE"].includes(String(value.registration)), "invalid capability registration", path);
+  requireContract(["read", "write"].includes(String(value.access)) && ["R0", "R1", "R2", "R3"].includes(String(value.risk)), "invalid capability access or risk", path);
+  requireContract(["PUBLIC", "INTERNAL", "SENSITIVE", "SECRET"].includes(String(value.data_classification)), "invalid capability classification", path);
+  requireContract(typeof value.contract_version === "string" && /^[0-9a-f]{64}$/.test(String(value.contract_digest)), "invalid capability contract identity", path);
+  requireContract(Number.isInteger(value.binding_count) && Number(value.binding_count) >= 0, "invalid capability binding count", path);
+  requireContract(value.last_verified_at === null || isTimestamp(value.last_verified_at), "invalid capability verification time", path);
+  requireContract(isStringArray(value.evidence_ids) && isConfidence(value.confidence), "invalid capability evidence or confidence", path);
+  requireContract(["validated", "verified"].includes(String(value.integrity_status)) && isStringArray(value.limitations), "invalid capability integrity or limitations", path);
+  return value as unknown as CapabilitySummary;
+}
+
+function parseCapabilityCollection(
+  value: unknown,
+  path: string,
+  robotId: string,
+  expectedPage: { limit: number; offset: number },
+): CapabilityCollection {
+  requireContract(isRecord(value), "capability collection must be an object", path);
+  requireContract(value.schema_version === "rolo-capability-collection/v1", "unsupported capability collection schema", path);
+  requireContract(value.robot_id === robotId && Array.isArray(value.items), "invalid capability collection identity or items", path);
+  const items = value.items.map((item, index) => parseCapabilitySummary(item, `${path}/items/${index}`));
+  requireContract(new Set(items.map((item) => item.operation)).size === items.length, "capability page contains duplicate operations", path);
+  requireContract(Number.isInteger(value.total) && Number(value.total) >= items.length, "invalid capability collection total", path);
+  requireContract(value.limit === expectedPage.limit && value.offset === expectedPage.offset && items.length <= expectedPage.limit, "capability collection does not match the requested page", path);
+  requireContract(value.next_offset === null || (Number.isInteger(value.next_offset) && Number(value.next_offset) > Number(value.offset)), "invalid capability next offset", path);
+  requireContract(isTimestamp(value.observed_at) && ["fresh", "unknown"].includes(String(value.freshness)), "invalid capability observation metadata", path);
+  requireContract(["product_registry", "discovery", "gated_release"].includes(String(value.source_kind)) && isStringArray(value.limitations), "invalid capability source metadata", path);
+  return { ...value, items } as unknown as CapabilityCollection;
+}
+
+function parseCapabilityDetail(value: unknown, path: string, robotId: string, operation: string): CapabilityDetail {
+  requireContract(isRecord(value), "capability detail must be an object", path);
+  requireContract(value.schema_version === "rolo-capability-detail/v1" && value.robot_id === robotId, "invalid capability detail identity", path);
+  const capability = parseCapabilitySummary(value.capability, `${path}/capability`);
+  requireContract(capability.operation === operation, "capability operation does not match request", path);
+  requireContract(isRecord(value.contract) && value.contract.schema_version === "rolo-capability-contract/v1", "invalid capability contract", path);
+  requireContract(isRecord(value.contract.input_schema) && isRecord(value.contract.output_schema), "invalid capability schemas", path);
+  requireContract(Array.isArray(value.bindings), "capability bindings must be an array", path);
+  for (const [index, binding] of value.bindings.entries()) {
+    const bindingPath = `${path}/bindings/${index}`;
+    requireContract(isRecord(binding) && binding.schema_version === "rolo-capability-binding/v1", "invalid capability binding", bindingPath);
+    requireContract(typeof binding.binding_id === "string" && typeof binding.endpoint === "string", "invalid capability binding identity", bindingPath);
+    requireContract(["gated_release", "discovery_candidate"].includes(String(binding.source)) && ["GATED", "OBSERVED", "DECLARED"].includes(String(binding.authority)), "invalid capability binding authority", bindingPath);
+    requireContract(/^[0-9a-f]{64}$/.test(String(binding.reference_digest)) && isStringArray(binding.evidence_ids) && isStringArray(binding.limitations), "invalid capability binding evidence", bindingPath);
+  }
+  requireContract(isTimestamp(value.observed_at) && ["fresh", "unknown"].includes(String(value.freshness)), "invalid capability detail observation metadata", path);
+  return { ...value, capability } as unknown as CapabilityDetail;
+}
+
 export class RoloClient {
   baseUrl: string;
 
@@ -375,6 +436,42 @@ export class RoloClient {
     return parseEvidenceRecord(await this.request<unknown>(path, options), path, evidenceId);
   }
 
+  async capabilityPage(
+    robotId: string,
+    options?: RequestInit,
+    page: { limit?: number; offset?: number } = {},
+  ) {
+    const limit = page.limit ?? 100;
+    const offset = page.offset ?? 0;
+    const path = `/v1/robots/${encodeURIComponent(robotId)}/capabilities?limit=${limit}&offset=${offset}`;
+    return parseCapabilityCollection(
+      await this.request<unknown>(path, options),
+      path,
+      robotId,
+      { limit, offset },
+    );
+  }
+
+  async capabilities(robotId: string, options?: RequestInit) {
+    const first = await this.capabilityPage(robotId, options);
+    const offsets: number[] = [];
+    for (let offset = first.next_offset; offset !== null && offset < first.total; offset += first.limit) {
+      offsets.push(offset);
+    }
+    const remaining = await Promise.all(
+      offsets.map((offset) => this.capabilityPage(robotId, options, { limit: first.limit, offset })),
+    );
+    const items = [first, ...remaining].flatMap((page) => page.items);
+    requireContract(items.length === first.total, "capability pages do not cover the advertised total", `/v1/robots/${encodeURIComponent(robotId)}/capabilities`);
+    requireContract(new Set(items.map((item) => item.operation)).size === items.length, "capability pages contain duplicate operations", `/v1/robots/${encodeURIComponent(robotId)}/capabilities`);
+    return { items, limitations: first.limitations };
+  }
+
+  async capability(robotId: string, operation: string, options?: RequestInit) {
+    const path = `/v1/robots/${encodeURIComponent(robotId)}/capabilities/${encodeURIComponent(operation)}`;
+    return parseCapabilityDetail(await this.request<unknown>(path, options), path, robotId, operation);
+  }
+
   async bootstrap(options: RequestInit = {}, requestedRobotId?: string): Promise<BootstrapResult> {
     const health = await this.health(options);
     if (health.status === "UNHEALTHY") {
@@ -395,6 +492,8 @@ export class RoloClient {
         pipeline: null,
         topology: null,
         evidence: null,
+        capabilities: null,
+        capabilityLimitations: [],
         issues: [...healthIssues, "The control plane is reachable but no robots are registered."],
       };
     }
@@ -411,9 +510,10 @@ export class RoloClient {
       issues.push("The overview read model is unavailable; showing the compatible pipeline view.");
     }
 
-    const [topologyResult, evidenceResult] = await Promise.allSettled([
+    const [topologyResult, evidenceResult, capabilitiesResult] = await Promise.allSettled([
       this.topology(robot.robot_id, options),
       this.evidenceCollection(robot.robot_id, options),
+      this.capabilities(robot.robot_id, options),
     ]);
     const optionalReadModel = <T>(
       result: PromiseSettledResult<T>,
@@ -429,8 +529,10 @@ export class RoloClient {
     };
     const topology = optionalReadModel(topologyResult, "topology");
     const evidence = optionalReadModel(evidenceResult, "evidence");
+    const capabilityResult = optionalReadModel(capabilitiesResult, "capability");
+    const capabilities = capabilityResult?.items || null;
     const complete = Boolean(
-      health.status === "HEALTHY" && overview && topology && evidence,
+      health.status === "HEALTHY" && overview && topology && evidence && capabilities,
     );
     return {
       mode: complete ? "live" : "partial",
@@ -441,6 +543,8 @@ export class RoloClient {
       pipeline,
       topology,
       evidence,
+      capabilities,
+      capabilityLimitations: capabilityResult?.limitations || [],
       issues,
     };
   }

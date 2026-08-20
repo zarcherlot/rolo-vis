@@ -2,7 +2,7 @@
   "schema_version": "rolo-plugin/v1",
   "id": "rolo-vis",
   "name": "rolo Workbench",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "kind": "web-workbench",
   "entry": "dist/client/index.html",
   "capabilities": [
@@ -20,6 +20,8 @@
       "/v1/robots/{robot_id}/overview",
       "/v1/robots/{robot_id}/pipeline",
       "/v1/robots/{robot_id}/topology",
+      "/v1/robots/{robot_id}/capabilities",
+      "/v1/robots/{robot_id}/capabilities/{operation}",
       "/v1/robots/{robot_id}/evidence",
       "/v1/evidence/{evidence_id}"
     ]

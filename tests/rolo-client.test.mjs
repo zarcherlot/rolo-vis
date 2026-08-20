@@ -118,6 +118,73 @@ const EVIDENCE_COLLECTION = {
   freshness: "fresh",
 };
 
+const CAPABILITY_SUMMARY = {
+  schema_version: "rolo-capability-summary/v1",
+  operation: "tool.catalog",
+  layer: "Application",
+  description: "Read the active gated Tool Catalog for one robot identity.",
+  lifecycle: "RELEASED",
+  applicability: "APPLICABLE",
+  availability: "AVAILABLE",
+  registration: "BUILTIN",
+  access: "read",
+  risk: "R0",
+  data_classification: "INTERNAL",
+  contract_version: "1.1.0",
+  contract_digest: "b".repeat(64),
+  paired_operation: null,
+  replacement_operation: null,
+  compensation_operation: null,
+  binding_count: 0,
+  last_verified_at: null,
+  evidence_ids: [],
+  confidence: 0.9,
+  integrity_status: "validated",
+  limitations: ["Built-in availability is not outcome evidence."],
+};
+
+const CAPABILITY_COLLECTION = {
+  schema_version: "rolo-capability-collection/v1",
+  robot_id: "AMR-07",
+  items: [CAPABILITY_SUMMARY],
+  total: 1,
+  limit: 100,
+  offset: 0,
+  next_offset: null,
+  observed_at: "2026-08-20T00:00:00Z",
+  freshness: "fresh",
+  source_kind: "product_registry",
+  limitations: ["Applicability is unknown until discovery."],
+};
+
+const CAPABILITY_DETAIL = {
+  schema_version: "rolo-capability-detail/v1",
+  robot_id: "AMR-07",
+  capability: CAPABILITY_SUMMARY,
+  contract: {
+    schema_version: "rolo-capability-contract/v1",
+    input_schema: { type: "object" },
+    output_schema: { type: "object" },
+    capability_requirements: [],
+    preconditions: [],
+    postconditions: [],
+    semantic_units: {},
+    coordinate_frames: [],
+    time_semantics: "UTC",
+    result_semantics: "OBSERVATION",
+    execution_mode: "REQUEST_RESPONSE",
+    idempotent: true,
+    cancelable: false,
+    max_duration_s: 5,
+    side_effects: [],
+    resource_locks: [],
+    requires_quiescence: false,
+  },
+  bindings: [],
+  observed_at: "2026-08-20T00:00:00Z",
+  freshness: "fresh",
+};
+
 test("RoloClient bootstraps the read-only control-plane surface", async () => {
   const originalFetch = globalThis.fetch;
   const requests = [];
@@ -131,6 +198,8 @@ test("RoloClient bootstraps the read-only control-plane surface", async () => {
           ? OVERVIEW
           : url.endsWith("/topology")
             ? TOPOLOGY
+            : url.includes("/capabilities?limit=")
+              ? CAPABILITY_COLLECTION
             : url.includes("/evidence?limit=")
               ? EVIDENCE_COLLECTION
               : PIPELINE;
@@ -146,12 +215,14 @@ test("RoloClient bootstraps the read-only control-plane surface", async () => {
     assert.equal(result.pipeline.stages[0].stage, "adapt");
     assert.equal(result.topology.schema_version, "rolo-robot-topology/v1");
     assert.equal(result.evidence.items[0].evidence_id, EVIDENCE_RECORD.evidence_id);
+    assert.equal(result.capabilities[0].operation, "tool.catalog");
     assert.deepEqual(requests, [
       "http://rolo.test/health",
       "http://rolo.test/v1/robots",
       "http://rolo.test/v1/robots/AMR-07/overview",
       "http://rolo.test/v1/robots/AMR-07/topology",
       "http://rolo.test/v1/robots/AMR-07/evidence?limit=25&offset=0",
+      "http://rolo.test/v1/robots/AMR-07/capabilities?limit=100&offset=0",
     ]);
   } finally {
     globalThis.fetch = originalFetch;
@@ -165,6 +236,7 @@ test("RoloClient reports a partial connection when overview is not available", a
     if (url.endsWith("/v1/robots")) return { ok: true, json: async () => [ROBOT] };
     if (url.endsWith("/overview")) return { ok: false, status: 404 };
     if (url.endsWith("/topology") || url.includes("/evidence?limit=")) return { ok: false, status: 404 };
+    if (url.includes("/capabilities?limit=")) return { ok: true, json: async () => CAPABILITY_COLLECTION };
     return {
       ok: true,
       json: async () => ({ ...PIPELINE, stages: [{ ...PIPELINE.stages[0], status: "BLOCKED", blockers: ["Blocked"] }] }),
@@ -192,7 +264,9 @@ test("RoloClient downgrades a degraded control plane to partial", async () => {
           ? OVERVIEW
           : url.endsWith("/topology")
             ? TOPOLOGY
-            : EVIDENCE_COLLECTION;
+            : url.includes("/capabilities?limit=")
+              ? CAPABILITY_COLLECTION
+              : EVIDENCE_COLLECTION;
     return { ok: true, json: async () => payload };
   };
   try {
@@ -211,6 +285,7 @@ test("RoloClient keeps trusted overview data partial when topology fails", async
     if (url.endsWith("/v1/robots")) return { ok: true, json: async () => [ROBOT] };
     if (url.endsWith("/overview")) return { ok: true, json: async () => OVERVIEW };
     if (url.endsWith("/topology")) return { ok: false, status: 503 };
+    if (url.includes("/capabilities?limit=")) return { ok: true, json: async () => CAPABILITY_COLLECTION };
     return { ok: true, json: async () => EVIDENCE_COLLECTION };
   };
   try {
@@ -275,6 +350,28 @@ test("RoloClient requests bounded evidence pages with an authority filter", asyn
     assert.equal(requestedUrl, "http://rolo.test/v1/robots/AMR-07/evidence?limit=2&offset=4&authority=GATED");
     assert.equal(page.offset, 4);
     assert.equal(page.items[0].authority, "GATED");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("RoloClient reads capability coverage and a contract-bound detail", async () => {
+  const originalFetch = globalThis.fetch;
+  const requests = [];
+  globalThis.fetch = async (url) => {
+    requests.push(url);
+    return { ok: true, json: async () => url.includes("/capabilities/tool.catalog") ? CAPABILITY_DETAIL : CAPABILITY_COLLECTION };
+  };
+  try {
+    const client = new RoloClient("http://rolo.test");
+    const coverage = await client.capabilities("AMR-07");
+    const detail = await client.capability("AMR-07", "tool.catalog");
+    assert.equal(coverage.items[0].availability, "AVAILABLE");
+    assert.equal(detail.contract.result_semantics, "OBSERVATION");
+    assert.deepEqual(requests, [
+      "http://rolo.test/v1/robots/AMR-07/capabilities?limit=100&offset=0",
+      "http://rolo.test/v1/robots/AMR-07/capabilities/tool.catalog",
+    ]);
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -436,6 +533,7 @@ test("live modes never expose fixture-only workbench surfaces", () => {
     assert.equal(getSurfaceSource(mode, "evidence"), "unavailable");
     assert.equal(getSurfaceSource(mode, "stack", { stack: true }), "live");
     assert.equal(getSurfaceSource(mode, "evidence", { evidence: true }), "live");
+    assert.equal(getSurfaceSource(mode, "capabilities", { capabilities: true }), "live");
   }
   assert.equal(getSurfaceSource("demo", "stack"), "demo");
   assert.equal(getSurfaceSource("unavailable", "overview"), "unavailable");
@@ -467,7 +565,7 @@ test("live lifecycle component has no fixture evidence or fabricated handoff", a
 
 test("plugin manifest declares every trusted read-model endpoint", async () => {
   const manifest = JSON.parse(await readFile(new URL("../rolo.plugin.json", import.meta.url), "utf8"));
-  assert.equal(manifest.version, "0.2.0");
+  assert.equal(manifest.version, "0.3.0");
   assert.deepEqual(
     new Set(manifest.api.required_endpoints),
     new Set([
@@ -476,6 +574,8 @@ test("plugin manifest declares every trusted read-model endpoint", async () => {
       "/v1/robots/{robot_id}/overview",
       "/v1/robots/{robot_id}/pipeline",
       "/v1/robots/{robot_id}/topology",
+      "/v1/robots/{robot_id}/capabilities",
+      "/v1/robots/{robot_id}/capabilities/{operation}",
       "/v1/robots/{robot_id}/evidence",
       "/v1/evidence/{evidence_id}",
     ]),

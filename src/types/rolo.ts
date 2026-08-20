@@ -150,6 +150,95 @@ export interface EvidenceCollection {
   freshness: "fresh" | "unknown";
 }
 
+export type CapabilityLayer = "Hardware" | "Linux" | "Middleware" | "Application";
+export type CapabilityApplicability = "APPLICABLE" | "NOT_OBSERVED" | "UNKNOWN";
+export type CapabilityAvailability = "VERIFIED" | "AVAILABLE" | "UNAVAILABLE" | "UNKNOWN";
+export type CapabilityRegistration = "BUILTIN" | "REGISTERED" | "NOT_REGISTERED" | "STALE";
+
+export interface CapabilitySummary {
+  schema_version: "rolo-capability-summary/v1";
+  operation: string;
+  layer: CapabilityLayer;
+  description: string;
+  lifecycle: "DRAFT" | "GATEABLE" | "RELEASED" | "DEPRECATED";
+  applicability: CapabilityApplicability;
+  availability: CapabilityAvailability;
+  registration: CapabilityRegistration;
+  access: "read" | "write";
+  risk: "R0" | "R1" | "R2" | "R3";
+  data_classification: "PUBLIC" | "INTERNAL" | "SENSITIVE" | "SECRET";
+  contract_version: string;
+  contract_digest: string;
+  paired_operation: string | null;
+  replacement_operation: string | null;
+  compensation_operation: string | null;
+  binding_count: number;
+  last_verified_at: string | null;
+  evidence_ids: string[];
+  confidence: number;
+  integrity_status: "validated" | "verified";
+  limitations: string[];
+}
+
+export interface CapabilityCollection {
+  schema_version: "rolo-capability-collection/v1";
+  robot_id: string;
+  items: CapabilitySummary[];
+  total: number;
+  limit: number;
+  offset: number;
+  next_offset: number | null;
+  observed_at: string;
+  freshness: "fresh" | "unknown";
+  source_kind: "product_registry" | "discovery" | "gated_release";
+  limitations: string[];
+}
+
+export interface CapabilityBinding {
+  schema_version: "rolo-capability-binding/v1";
+  binding_id: string;
+  source: "gated_release" | "discovery_candidate";
+  authority: "GATED" | "OBSERVED" | "DECLARED";
+  kind: string;
+  endpoint: string;
+  interface_type: string | null;
+  adapter: string | null;
+  observed_at: string | null;
+  evidence_ids: string[];
+  reference_digest: string;
+  limitations: string[];
+}
+
+export interface CapabilityContract {
+  schema_version: "rolo-capability-contract/v1";
+  input_schema: Record<string, unknown>;
+  output_schema: Record<string, unknown>;
+  capability_requirements: string[];
+  preconditions: string[];
+  postconditions: string[];
+  semantic_units: Record<string, string>;
+  coordinate_frames: string[];
+  time_semantics: string;
+  result_semantics: string;
+  execution_mode: string;
+  idempotent: boolean;
+  cancelable: boolean;
+  max_duration_s: number;
+  side_effects: string[];
+  resource_locks: string[];
+  requires_quiescence: boolean;
+}
+
+export interface CapabilityDetail {
+  schema_version: "rolo-capability-detail/v1";
+  robot_id: string;
+  capability: CapabilitySummary;
+  contract: CapabilityContract;
+  bindings: CapabilityBinding[];
+  observed_at: string;
+  freshness: "fresh" | "unknown";
+}
+
 export interface BootstrapResult {
   mode: ConnectionMode;
   health: HealthResponse;
@@ -159,5 +248,7 @@ export interface BootstrapResult {
   pipeline: PipelineAssessment | null;
   topology: RobotTopology | null;
   evidence: EvidenceCollection | null;
+  capabilities: CapabilitySummary[] | null;
+  capabilityLimitations: string[];
   issues: string[];
 }
