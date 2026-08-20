@@ -162,6 +162,43 @@ const TOPOLOGY_DIFF = {
   limitations: ["Gated declarations only"],
 };
 
+const TOPOLOGY_PATH = {
+  schema_version: "rolo-topology-path-explanation/v1",
+  robot_id: "AMR-07",
+  snapshot_id: "topology_1",
+  from_node_id: "robot_1",
+  to_node_id: "adapter_1",
+  found: true,
+  hop_count: 1,
+  nodes: [TOPOLOGY.nodes[0], {
+    ...TOPOLOGY.nodes[0],
+    node_id: "adapter_1",
+    kind: "adapter",
+    label: "Adapter",
+    layer: "Application",
+  }],
+  steps: [{
+    schema_version: "rolo-topology-path-step/v1",
+    index: 0,
+    from_node_id: "robot_1",
+    to_node_id: "adapter_1",
+    edge_id: "edge_path_1",
+    relation: "hosts",
+    direction: "FORWARD",
+    state: "DECLARED",
+    confidence: 1,
+    integrity_status: "validated",
+    evidence_ids: [EVIDENCE_RECORD.evidence_id],
+  }],
+  summary: "A 1-hop topology connection was found.",
+  observed_at: "2026-08-20T00:00:00Z",
+  freshness: "fresh",
+  source_kind: "topology_path_projection",
+  confidence: 1,
+  integrity_status: "validated",
+  limitations: ["This path does not prove physical reachability."],
+};
+
 const WIKI = {
   schema_version: "rolo-robot-wiki/v1",
   robot_id: "AMR-07",
@@ -207,6 +244,40 @@ const WIKI = {
   confidence: 1,
   integrity_status: "verified",
   limitations: ["Insights remain advisory."],
+};
+
+const DISCOVERY_HISTORY = {
+  schema_version: "rolo-discovery-snapshot-collection/v1",
+  robot_id: "AMR-07",
+  items: [{
+    schema_version: "rolo-discovery-snapshot-summary/v1",
+    robot_id: "AMR-07",
+    discovery_id: "discovery-20260820",
+    status: "PARTIAL",
+    discovery_mode: "ARTIFACT_DOC",
+    created_at: "2026-08-20T00:00:00Z",
+    is_latest: true,
+    probe_total: 4,
+    observed_probes: 2,
+    partial_probes: 1,
+    unavailable_probes: 1,
+    operation_candidates: 14,
+    semantic_bindings: 3,
+    warning_count: 2,
+    confidence: 0.8,
+    integrity_status: "verified",
+    limitations: ["Discovery coverage does not prove task success."],
+  }],
+  total: 1,
+  limit: 100,
+  offset: 0,
+  next_offset: null,
+  excluded_unverified: 0,
+  observed_at: "2026-08-20T00:00:00Z",
+  freshness: "unknown",
+  source_kind: "verified_discovery_history",
+  integrity_status: "verified",
+  limitations: ["Only manifest-verified discovery reports are included."],
 };
 
 const FLEET = {
@@ -766,6 +837,36 @@ test("RoloClient reads verified topology history and a contract-bound diff", asy
   }
 });
 
+test("RoloClient reads a contiguous evidence-bound topology path", async () => {
+  const originalFetch = globalThis.fetch;
+  const urls = [];
+  globalThis.fetch = async (url) => {
+    urls.push(String(url));
+    return { ok: true, json: async () => TOPOLOGY_PATH };
+  };
+  try {
+    const path = await new RoloClient("http://rolo.test").topologyPath("AMR-07", "robot_1", "adapter_1");
+    assert.equal(path.hop_count, 1);
+    assert.equal(path.steps[0].evidence_ids[0], EVIDENCE_RECORD.evidence_id);
+    assert.deepEqual(urls, ["http://rolo.test/v1/robots/AMR-07/topology/path?from=robot_1&to=adapter_1&max_hops=8"]);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("RoloClient rejects a non-contiguous topology path", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => ({ ok: true, json: async () => ({ ...TOPOLOGY_PATH, steps: [{ ...TOPOLOGY_PATH.steps[0], to_node_id: "robot_1" }] }) });
+  try {
+    await assert.rejects(
+      () => new RoloClient("http://rolo.test").topologyPath("AMR-07", "robot_1", "adapter_1"),
+      (error) => error instanceof RoloContractError && error.path.includes("/topology/path"),
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("RoloClient reads a trust-separated Robot Wiki", async () => {
   const originalFetch = globalThis.fetch;
   const urls = [];
@@ -779,6 +880,44 @@ test("RoloClient reads a trust-separated Robot Wiki", async () => {
     assert.equal(wiki.content_integrity, "unverified");
     assert.equal(wiki.insights[0].evidence_id, "ev_abcdef123456789012");
     assert.deepEqual(urls, ["http://rolo.test/v1/robots/AMR-07/wiki"]);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("RoloClient reads manifest-verified discovery history", async () => {
+  const originalFetch = globalThis.fetch;
+  const urls = [];
+  globalThis.fetch = async (url) => {
+    urls.push(String(url));
+    return { ok: true, json: async () => DISCOVERY_HISTORY };
+  };
+  try {
+    const history = await new RoloClient("http://rolo.test").discoveries("AMR-07");
+    assert.equal(history.items[0].is_latest, true);
+    assert.equal(history.items[0].operation_candidates, 14);
+    assert.deepEqual(urls, ["http://rolo.test/v1/robots/AMR-07/discoveries?limit=100&offset=0"]);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("RoloClient rejects inconsistent discovery probe coverage", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => ({
+    ok: true,
+    json: async () => ({
+      ...DISCOVERY_HISTORY,
+      items: [{ ...DISCOVERY_HISTORY.items[0], observed_probes: 4 }],
+    }),
+  });
+  try {
+    await assert.rejects(
+      () => new RoloClient("http://rolo.test").discoveries("AMR-07"),
+      (error) => error instanceof RoloContractError
+        && error.path.includes("/discoveries")
+        && error.path.includes("/items/0"),
+    );
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -936,9 +1075,20 @@ test("live lifecycle component has no fixture evidence or fabricated handoff", a
   assert.match(liveLifecycle, /runDetail\.gate_checks|runDetail\.handoff|runDetail\.artifacts/);
 });
 
+test("live Stack Map delegates path explanation to the trusted API", async () => {
+  const source = await readFile(new URL("../src/App.tsx", import.meta.url), "utf8");
+  const start = source.indexOf("function StackMapView");
+  const end = source.indexOf("interface OverviewViewProps", start);
+  const stackMap = source.slice(start, end);
+
+  assert.match(stackMap, /roloClient\.topologyPath/);
+  assert.match(stackMap, /physical reachability|pathExplanation\.limitations/);
+  assert.doesNotMatch(stackMap, /breadth.first|shortestPath|new Map\(sourceEdges/);
+});
+
 test("plugin manifest declares every trusted read-model endpoint", async () => {
   const manifest = JSON.parse(await readFile(new URL("../rolo.plugin.json", import.meta.url), "utf8"));
-  assert.equal(manifest.version, "0.7.0");
+  assert.equal(manifest.version, "0.9.0");
   assert.deepEqual(
     new Set(manifest.api.required_endpoints),
     new Set([
@@ -951,11 +1101,13 @@ test("plugin manifest declares every trusted read-model endpoint", async () => {
       "/v1/robots/{robot_id}/topology",
       "/v1/robots/{robot_id}/topology/snapshots",
       "/v1/robots/{robot_id}/topology/diff",
+      "/v1/robots/{robot_id}/topology/path",
       "/v1/robots/{robot_id}/capabilities",
       "/v1/robots/{robot_id}/capabilities/{operation}",
       "/v1/robots/{robot_id}/runs",
       "/v1/robots/{robot_id}/runs/{run_id}",
       "/v1/robots/{robot_id}/wiki",
+      "/v1/robots/{robot_id}/discoveries",
       "/v1/robots/{robot_id}/evidence",
       "/v1/evidence/{evidence_id}",
     ]),

@@ -55,6 +55,7 @@ import { RoloApiError, roloClient } from "./roloClient";
 import type {
   CapabilityDetail,
   CapabilitySummary,
+  DiscoverySnapshotCollection,
   EvidenceAuthority,
   EvidenceCollection,
   EvidenceRecord,
@@ -67,6 +68,7 @@ import type {
   RobotTopology,
   RobotWikiSnapshot,
   TopologyDiff,
+  TopologyPathExplanation,
   TopologySnapshotCollection,
 } from "./types/rolo";
 import { getOverviewPresentation, getSurfaceSource } from "./workbenchPolicy";
@@ -471,6 +473,12 @@ function StackMapView({
   const [topologyDiff, setTopologyDiff] = useState<TopologyDiff | null>(null);
   const [compareMessage, setCompareMessage] = useState("");
   const [compareLoading, setCompareLoading] = useState(false);
+  const [pathOpen, setPathOpen] = useState(false);
+  const [pathFromId, setPathFromId] = useState("");
+  const [pathToId, setPathToId] = useState("");
+  const [pathExplanation, setPathExplanation] = useState<TopologyPathExplanation | null>(null);
+  const [pathMessage, setPathMessage] = useState("");
+  const [pathLoading, setPathLoading] = useState(false);
   const [toolsOpen, setToolsOpen] = useState(false);
   const [flowInstance, setFlowInstance] = useState<ReactFlowInstance | null>(null);
   const mapRef = useRef<HTMLDivElement | null>(null);
@@ -480,6 +488,14 @@ function StackMapView({
       setSelectedId(sourceNodes[0]?.id || "");
     }
   }, [selectedId, sourceNodes]);
+
+  useEffect(() => {
+    setPathOpen(false);
+    setPathFromId("");
+    setPathToId("");
+    setPathExplanation(null);
+    setPathMessage("");
+  }, [topology?.snapshot_id]);
 
   useEffect(() => {
     const snapshots = topologySnapshots?.items || [];
@@ -510,6 +526,14 @@ function StackMapView({
     () => new Map(topologyDiff?.node_changes.map((item) => [item.node_id, item]) || []),
     [topologyDiff],
   );
+  const pathNodeIds = useMemo(
+    () => new Set(pathExplanation?.nodes.map((node) => node.node_id) || []),
+    [pathExplanation],
+  );
+  const pathEdgeIds = useMemo(
+    () => new Set(pathExplanation?.steps.map((step) => step.edge_id) || []),
+    [pathExplanation],
+  );
   const nodes = useMemo(() => sourceNodes.map((node) => {
     const searchable = `${node.data.label} ${node.data.subtitle} ${node.data.layer}`.toLowerCase();
     const queryMatch = !query || searchable.includes(query.toLowerCase());
@@ -518,10 +542,15 @@ function StackMapView({
     return {
       ...node,
       selected: node.id === selectedId,
-      className: change ? `topology-diff-node diff-${change.change.toLowerCase()}` : node.className,
-      style: { opacity: queryMatch && statusMatch ? 1 : 0.18 },
+      className: pathNodeIds.has(node.id) ? "topology-path-node" : change ? `topology-diff-node diff-${change.change.toLowerCase()}` : node.className,
+      style: { opacity: queryMatch && statusMatch && (!pathExplanation?.found || pathNodeIds.has(node.id)) ? 1 : 0.18 },
     };
-  }), [selectedId, query, filter, sourceNodes, diffByNode]);
+  }), [selectedId, query, filter, sourceNodes, diffByNode, pathExplanation, pathNodeIds]);
+  const edges = useMemo(() => sourceEdges.map((edge) => ({
+    ...edge,
+    className: pathEdgeIds.has(edge.id) ? "topology-path-edge" : edge.className,
+    style: pathExplanation?.found && !pathEdgeIds.has(edge.id) ? { opacity: 0.12 } : edge.style,
+  })), [sourceEdges, pathEdgeIds, pathExplanation]);
 
   const loadComparison = useCallback(async () => {
     if (!robotId || !fromSnapshotId || !toSnapshotId || fromSnapshotId === toSnapshotId) {
@@ -539,6 +568,33 @@ function StackMapView({
       setCompareLoading(false);
     }
   }, [fromSnapshotId, robotId, toSnapshotId]);
+
+  const openPathExplorer = useCallback((fromId = selectedId) => {
+    const fallbackTarget = sourceNodes.find((node) => node.id !== fromId)?.id || fromId;
+    setPathFromId(fromId);
+    setPathToId((current) => current && current !== fromId ? current : fallbackTarget);
+    setPathExplanation(null);
+    setPathMessage("");
+    setCompare(false);
+    setPathOpen(true);
+  }, [selectedId, sourceNodes]);
+
+  const loadPath = useCallback(async () => {
+    if (!robotId || !topology || !pathFromId || !pathToId || pathFromId === pathToId) {
+      setPathMessage("Choose two different topology components.");
+      return;
+    }
+    setPathLoading(true);
+    setPathMessage("");
+    try {
+      setPathExplanation(await roloClient.topologyPath(robotId, pathFromId, pathToId));
+    } catch (error) {
+      setPathExplanation(null);
+      setPathMessage(error instanceof Error ? error.message : "Topology path explanation is unavailable.");
+    } finally {
+      setPathLoading(false);
+    }
+  }, [pathFromId, pathToId, robotId, topology]);
 
   const handleNodeClick: NodeMouseHandler = useCallback((_, node) => setSelectedId(node.id), []);
   const selectedNode = sourceNodes.find((node) => node.id === selectedId) || sourceNodes[0];
@@ -568,8 +624,11 @@ function StackMapView({
             <option value="unobserved">Not observed</option>
           </select>
         </label>
-        <button className={`secondary-button ${compare ? "is-active" : ""}`} disabled={Boolean(topology && (topologySnapshots?.items.length || 0) < 2)} onClick={() => setCompare((value) => !value)} title={topology && (topologySnapshots?.items.length || 0) < 2 ? "Two verified snapshots are required" : undefined}>
+        <button className={`secondary-button ${compare ? "is-active" : ""}`} disabled={Boolean(topology && (topologySnapshots?.items.length || 0) < 2)} onClick={() => { setPathOpen(false); setPathExplanation(null); setCompare((value) => !value); }} title={topology && (topologySnapshots?.items.length || 0) < 2 ? "Two verified snapshots are required" : undefined}>
           <GitBranch size={17} /> Compare snapshot
+        </button>
+        <button className={`secondary-button ${pathOpen ? "is-active" : ""}`} disabled={!topology || sourceNodes.length < 2} onClick={() => openPathExplorer()} title={!topology ? "A live topology read model is required" : undefined}>
+          <Path size={17} /> Explain path
         </button>
       </div>}
 
@@ -604,6 +663,31 @@ function StackMapView({
         </div>
       )}
 
+      {pathOpen && topology && (
+        <div className="path-explain-panel" aria-label="Explain topology path">
+          <div className="snapshot-compare-heading">
+            <div><span>Bounded topology projection</span><strong>Explain component path</strong></div>
+            <button onClick={() => { setPathOpen(false); setPathExplanation(null); }} aria-label="Close path explanation"><X size={16} /></button>
+          </div>
+          <div className="snapshot-selectors">
+            <label><span>From</span><select value={pathFromId} onChange={(event) => { setPathFromId(event.target.value); setPathExplanation(null); }} aria-label="Path source component">{sourceNodes.map((node) => <option key={node.id} value={node.id}>{node.data.label} · {node.data.layer}</option>)}</select></label>
+            <ArrowRight size={16} />
+            <label><span>To</span><select value={pathToId} onChange={(event) => { setPathToId(event.target.value); setPathExplanation(null); }} aria-label="Path target component">{sourceNodes.map((node) => <option key={node.id} value={node.id}>{node.data.label} · {node.data.layer}</option>)}</select></label>
+          </div>
+          <button className="primary-button snapshot-compare-action" disabled={pathLoading || pathFromId === pathToId} onClick={() => void loadPath()}>{pathLoading ? "Explaining…" : "Explain trusted relationships"}</button>
+          {pathMessage && <small role="alert" className="snapshot-compare-message">{pathMessage}</small>}
+          {pathExplanation && <div className="path-explanation-result">
+            <div className={`path-result-heading ${pathExplanation.found ? "is-found" : ""}`}><span><strong>{pathExplanation.found ? `${pathExplanation.hop_count} hop connection` : "No bounded path"}</strong><small>{pathExplanation.summary}</small></span><em>{pathExplanation.integrity_status}</em></div>
+            {pathExplanation.steps.map((step, index) => {
+              const fromNode = pathExplanation.nodes[index];
+              const toNode = pathExplanation.nodes[index + 1];
+              return <div className="path-step" key={step.edge_id}><button onClick={() => setSelectedId(step.to_node_id)}><span>{index + 1}</span><span><strong>{fromNode.label} → {toNode.label}</strong><small>{step.direction === "FORWARD" ? step.relation : `reverse of ${step.relation}`} · {step.state.toLowerCase()}</small></span></button><button disabled={!step.evidence_ids.length} onClick={() => step.evidence_ids[0] && onOpenEvidence(step.evidence_ids[0])} aria-label={`Open evidence for ${step.relation}`}><ShieldCheck size={15} /></button></div>;
+            })}
+            <p>{pathExplanation.limitations[0]}</p>
+          </div>}
+        </div>
+      )}
+
       <div className="map-stage" ref={mapRef}>
         <button className="map-tools-toggle" onClick={() => setToolsOpen((value) => !value)} aria-label="Search and filter topology" title="Search and filter">
           {toolsOpen ? <X size={18} /> : <MagnifyingGlass size={18} />}
@@ -619,7 +703,7 @@ function StackMapView({
         </div>
         <ReactFlow
           nodes={nodes}
-          edges={sourceEdges}
+          edges={edges}
           nodeTypes={nodeTypes}
           onNodeClick={handleNodeClick}
           onInit={setFlowInstance}
@@ -700,7 +784,8 @@ function StackMapView({
 
         <div className="inspector-actions">
           <button className="primary-button" disabled={Boolean(topology && !details.evidenceIds?.length)} onClick={() => onOpenEvidence(topology ? details.evidenceIds?.[0] || "" : EVIDENCE[0])}>Open evidence</button>
-          <button className="secondary-button" disabled={Boolean(topology && (topologySnapshots?.items.length || 0) < 2)} onClick={() => setCompare(true)} title={topology && (topologySnapshots?.items.length || 0) < 2 ? "Two verified snapshots are required" : undefined}>Compare snapshot</button>
+          <button className="secondary-button" disabled={!topology || sourceNodes.length < 2} onClick={() => openPathExplorer(selectedId)}>Explain path from here</button>
+          <button className="secondary-button" disabled={Boolean(topology && (topologySnapshots?.items.length || 0) < 2)} onClick={() => { setPathOpen(false); setPathExplanation(null); setCompare(true); }} title={topology && (topologySnapshots?.items.length || 0) < 2 ? "Two verified snapshots are required" : undefined}>Compare snapshot</button>
         </div>
       </aside>
     </section>
@@ -1099,12 +1184,29 @@ function LiveLifecycleView({
   );
 }
 
-function WikiView({ wiki, onOpenEvidence }: { wiki: RobotWikiSnapshot; onOpenEvidence: OpenEvidence }) {
+function WikiView({
+  wiki,
+  history,
+  onOpenEvidence,
+}: {
+  wiki: RobotWikiSnapshot;
+  history: DiscoverySnapshotCollection;
+  onOpenEvidence: OpenEvidence;
+}) {
   const [selectedHeading, setSelectedHeading] = useState(wiki.sections[0]?.heading || "");
+  const initialDiscoveryId = history.items.find((item) => item.is_latest)?.discovery_id
+    || history.items[0]?.discovery_id
+    || "";
+  const [selectedDiscoveryId, setSelectedDiscoveryId] = useState(initialDiscoveryId);
   useEffect(() => {
     setSelectedHeading(wiki.sections[0]?.heading || "");
   }, [wiki.discovery_id, wiki.sections]);
+  useEffect(() => {
+    setSelectedDiscoveryId(initialDiscoveryId);
+  }, [history.observed_at, initialDiscoveryId]);
   const selectedSection = wiki.sections.find((section) => section.heading === selectedHeading) || wiki.sections[0];
+  const selectedDiscovery = history.items.find((item) => item.discovery_id === selectedDiscoveryId)
+    || history.items[0];
   const narrativeLabel = wiki.content_origin === "GENERATED_MATCH"
     ? "Generated text matches snapshot"
     : wiki.content_origin === "HUMAN_EDITED" ? "Human-maintained text" : "Narrative unavailable";
@@ -1123,6 +1225,35 @@ function WikiView({ wiki, onOpenEvidence }: { wiki: RobotWikiSnapshot; onOpenEvi
           <div><dt>Narrative</dt><dd className={`wiki-integrity-${wiki.content_integrity}`}>{narrativeLabel} · {wiki.content_integrity}</dd></div>
         </dl>
       </div>
+
+      <section className="panel wiki-history-panel">
+        <header>
+          <div><span>Verified discovery history</span><h3>Observation snapshots</h3></div>
+          <small>{history.total} verified · {history.excluded_unverified} excluded</small>
+        </header>
+        {selectedDiscovery ? <div className="wiki-history-layout">
+          <div className="wiki-history-list" role="list" aria-label="Verified discovery snapshots">
+            {history.items.map((item) => (
+              <button key={item.discovery_id} role="listitem" className={item.discovery_id === selectedDiscovery.discovery_id ? "is-active" : ""} onClick={() => setSelectedDiscoveryId(item.discovery_id)}>
+                <Clock size={16} /><span><strong>{new Date(item.created_at).toLocaleString()}</strong><small>{item.discovery_id}</small></span><em className={`wiki-status-${item.status.toLowerCase()}`}>{item.is_latest ? "CURRENT" : item.status}</em>
+              </button>
+            ))}
+          </div>
+          <article className="wiki-history-detail" aria-live="polite">
+            <div className="wiki-history-detail-heading"><div><span>{selectedDiscovery.is_latest ? "Current committed snapshot" : "Verified historical snapshot"}</span><h4>{selectedDiscovery.status}</h4></div><strong>{Math.round(selectedDiscovery.confidence * 100)}% confidence</strong></div>
+            <dl>
+              <div><dt>Probe coverage</dt><dd>{selectedDiscovery.observed_probes} / {selectedDiscovery.probe_total} observed</dd></div>
+              <div><dt>Partial</dt><dd>{selectedDiscovery.partial_probes}</dd></div>
+              <div><dt>Unavailable</dt><dd>{selectedDiscovery.unavailable_probes}</dd></div>
+              <div><dt>Operation candidates</dt><dd>{selectedDiscovery.operation_candidates}</dd></div>
+              <div><dt>Semantic bindings</dt><dd>{selectedDiscovery.semantic_bindings}</dd></div>
+              <div><dt>Warnings</dt><dd>{selectedDiscovery.warning_count}</dd></div>
+            </dl>
+            <p><ShieldCheck size={14} /> Manifest verified · {selectedDiscovery.discovery_mode.replaceAll("_", " ").toLowerCase()}</p>
+          </article>
+        </div> : <div className="wiki-empty-copy">No manifest-verified discovery history is available.</div>}
+        <footer><Info size={15} /><span>{history.limitations.join(" ")}</span></footer>
+      </section>
 
       <div className="wiki-layer-grid">
         {wiki.layers.map((layer) => (
@@ -1325,6 +1456,7 @@ function AppContent() {
   const [capabilityLimitations, setCapabilityLimitations] = useState<string[]>([]);
   const [lifecycleRuns, setLifecycleRuns] = useState<LifecycleRunCollection | null>(null);
   const [wiki, setWiki] = useState<RobotWikiSnapshot | null>(null);
+  const [discoveryHistory, setDiscoveryHistory] = useState<DiscoverySnapshotCollection | null>(null);
   const [wikiRequestRobotId, setWikiRequestRobotId] = useState("");
   const [wikiLoading, setWikiLoading] = useState(false);
   const [wikiMessage, setWikiMessage] = useState("");
@@ -1340,6 +1472,7 @@ function AppContent() {
     setMode("connecting");
     setConnectionMessage("");
     setWiki(null);
+    setDiscoveryHistory(null);
     setWikiRequestRobotId("");
     setWikiLoading(false);
     setWikiMessage("");
@@ -1390,6 +1523,7 @@ function AppContent() {
       setCapabilityLimitations([]);
       setLifecycleRuns(null);
       setWiki(null);
+      setDiscoveryHistory(null);
       setConnectionMessage(error instanceof RoloApiError ? `${error.message}${error.path ? ` (${error.path})` : ""}` : "The rolo control plane could not be read.");
       setMode("unavailable");
     } finally {
@@ -1409,6 +1543,7 @@ function AppContent() {
     setCapabilityLimitations([]);
     setLifecycleRuns(null);
     setWiki(null);
+    setDiscoveryHistory(null);
     setWikiRequestRobotId("");
     setWikiLoading(false);
     setWikiMessage("");
@@ -1423,15 +1558,20 @@ function AppContent() {
 
   useEffect(() => { void connect(); }, [connect]);
   useEffect(() => {
-    if (active !== "wiki" || !robot || wiki || wikiLoading || wikiRequestRobotId === robot.robot_id || !["live", "partial"].includes(mode)) return;
+    if (active !== "wiki" || !robot || (wiki && discoveryHistory) || wikiLoading || wikiRequestRobotId === robot.robot_id || !["live", "partial"].includes(mode)) return;
     let current = true;
     const controller = new AbortController();
     const requestedRobotId = robot.robot_id;
     setWikiLoading(true);
     setWikiRequestRobotId(requestedRobotId);
     setWikiMessage("");
-    void roloClient.wiki(requestedRobotId, { signal: controller.signal }).then((snapshot) => {
-      if (current) setWiki(snapshot);
+    void Promise.all([
+      roloClient.wiki(requestedRobotId, { signal: controller.signal }),
+      roloClient.discoveries(requestedRobotId, { signal: controller.signal }),
+    ]).then(([snapshot, history]) => {
+      if (!current) return;
+      setWiki(snapshot);
+      setDiscoveryHistory(history);
     }).catch((error: unknown) => {
       if (!current) return;
       if (error instanceof RoloApiError && error.status === 404) {
@@ -1446,7 +1586,7 @@ function AppContent() {
       setWikiLoading(false);
       setWikiRequestRobotId((value) => value === requestedRobotId ? "" : value);
     };
-  }, [active, mode, robot, wiki]);
+  }, [active, mode, robot, wiki, discoveryHistory]);
   useEffect(() => {
     if (active !== "fleet" || fleetRequested || (fleet && fleetBlockers) || !["live", "partial"].includes(mode)) return;
     let current = true;
@@ -1523,7 +1663,7 @@ function AppContent() {
           {active === "overview" && <OverviewView robot={robot} pipeline={pipeline} overview={overview} mode={mode} evidenceItems={evidenceItems} onOpenEvidence={openEvidence} onNavigate={setActive} />}
           {active === "capabilities" && (capabilitySource === "demo" ? <DemoCapabilityView onOpenEvidence={setEvidence} /> : capabilitySource === "live" && capabilityList ? <LiveCapabilityView robotId={robot.robot_id} items={capabilityList} limitations={capabilityLimitations} onOpenEvidence={openEvidence} /> : <ReadModelUnavailableView title="Capabilities" description="Live capability coverage needs a versioned rolo capability read model." />)}
           {active === "lifecycle" && (lifecycleSource === "demo" ? <DemoLifecycleView pipeline={pipeline} onOpenEvidence={setEvidence} /> : lifecycleSource === "live" && lifecycleRuns ? <LiveLifecycleView pipeline={pipeline} runs={lifecycleRuns} robotId={robot.robot_id} onOpenEvidence={openEvidence} /> : <ReadModelUnavailableView title="Lifecycle" description="Live lifecycle requires trusted stage and run read models." />)}
-          {active === "wiki" && (mode === "demo" ? <ReadModelUnavailableView title="Robot Wiki" description="The labeled demo fixture does not include discovery Wiki evidence." /> : wiki ? <WikiView wiki={wiki} onOpenEvidence={openEvidence} /> : wikiLoading ? <section className="content-view"><PageTitle title="Robot Wiki" description="Reading the latest manifest-verified discovery snapshot…" /><div className="panel read-model-unavailable" role="status"><Pulse size={26} /><div><strong>Loading Robot Wiki</strong><p>Human narrative and machine evidence are being resolved independently.</p></div></div></section> : <ReadModelUnavailableView title="Robot Wiki" description={wikiMessage || "Open this surface to read a verified discovery Wiki."} />)}
+          {active === "wiki" && (mode === "demo" ? <ReadModelUnavailableView title="Robot Wiki" description="The labeled demo fixture does not include discovery Wiki evidence." /> : wiki && discoveryHistory ? <WikiView wiki={wiki} history={discoveryHistory} onOpenEvidence={openEvidence} /> : wikiLoading ? <section className="content-view"><PageTitle title="Robot Wiki" description="Reading manifest-verified discovery snapshots…" /><div className="panel read-model-unavailable" role="status"><Pulse size={26} /><div><strong>Loading Robot Wiki</strong><p>Current knowledge and verified history are being resolved independently.</p></div></div></section> : <ReadModelUnavailableView title="Robot Wiki" description={wikiMessage || "Open this surface to read a verified discovery Wiki."} />)}
           {active === "evidence" && (evidenceSource === "demo" ? <EvidenceView onOpenEvidence={openEvidence} /> : evidenceSource === "live" ? <EvidenceView live collection={evidenceList} robotId={robot.robot_id} onOpenEvidence={openEvidence} /> : <ReadModelUnavailableView title="Evidence" description="Live evidence resolution needs a versioned rolo evidence read model." />)}
         </>}
       </main>

@@ -7,11 +7,13 @@
 - Fleet readiness and Blocker Inbox aggregated from validated robot overview and pipeline models.
 - Topology-first Stack Map across Hardware, Linux, ROS/Middleware, and Application.
 - Hash-verified gated topology history with snapshot comparison and bounded change details.
+- Bounded topology path explanations with relationship direction and evidence drilldown.
 - Robot Overview focused on trust, blockers, and next action.
 - Capability Explorer for canonical operations, risk, lifecycle, and bindings.
 - Lifecycle gate view for Adapt → Diagnose → Verify.
 - Immutable lifecycle run details with independent gate checks and verified handoffs.
 - Robot Wiki with manifest-verified discovery summaries, advisory insights, and evidence-linked changes.
+- Manifest-verified discovery history with bounded probe coverage and capability-candidate summaries.
 - Evidence ledger with provenance and integrity status.
 - Live rolo API probing with an explicit demo fallback when no robot runtime is reachable.
 

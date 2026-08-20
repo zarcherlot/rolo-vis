@@ -3,6 +3,8 @@ import type {
   CapabilityCollection,
   CapabilityDetail,
   CapabilitySummary,
+  DiscoverySnapshotCollection,
+  DiscoverySnapshotSummary,
   EvidenceAuthority,
   EvidenceCollection,
   EvidenceRecord,
@@ -23,6 +25,7 @@ import type {
   TopologyDiff,
   TopologyEdge,
   TopologyNode,
+  TopologyPathExplanation,
   TopologySnapshotCollection,
   TopologySnapshotSummary,
 } from "./types/rolo";
@@ -361,6 +364,50 @@ function parseTopologyDiff(
   return { ...value, from_snapshot: fromSnapshot, to_snapshot: toSnapshot, node_changes: nodeChanges, edge_changes: edgeChanges } as unknown as TopologyDiff;
 }
 
+function parseTopologyPath(
+  value: unknown,
+  path: string,
+  robotId: string,
+  fromNodeId: string,
+  toNodeId: string,
+): TopologyPathExplanation {
+  requireContract(isRecord(value) && value.schema_version === "rolo-topology-path-explanation/v1", "invalid topology path explanation", path);
+  requireContract(value.robot_id === robotId && typeof value.snapshot_id === "string" && Boolean(value.snapshot_id), "topology path robot or snapshot does not match request", path);
+  requireContract(value.from_node_id === fromNodeId && value.to_node_id === toNodeId, "topology path endpoints do not match request", path);
+  requireContract(typeof value.found === "boolean" && Number.isInteger(value.hop_count) && Number(value.hop_count) >= 0 && Number(value.hop_count) <= 12, "invalid topology path result", path);
+  requireContract(Array.isArray(value.nodes) && value.nodes.length <= 13 && Array.isArray(value.steps) && value.steps.length <= 12, "invalid topology path bounds", path);
+  const pathNodes = value.nodes;
+  const pathSteps = value.steps;
+  const nodeIds = new Set<string>();
+  for (const [index, node] of pathNodes.entries()) {
+    const nodePath = `${path}/nodes/${index}`;
+    requireContract(isRecord(node) && node.schema_version === "rolo-topology-node/v1", "invalid topology path node", nodePath);
+    requireContract(typeof node.node_id === "string" && !nodeIds.has(node.node_id), "invalid or duplicate topology path node", nodePath);
+    nodeIds.add(node.node_id);
+    requireContract(typeof node.kind === "string" && typeof node.label === "string" && typeof node.subtitle === "string", "invalid topology path node presentation", nodePath);
+    requireContract(["Hardware", "Linux", "Middleware", "Application"].includes(String(node.layer)) && ["DECLARED", "OBSERVED", "GATED", "PARTIAL", "FAILED"].includes(String(node.state)), "invalid topology path node state", nodePath);
+    requireContract(isConfidence(node.confidence) && ["validated", "verified"].includes(String(node.integrity_status)), "invalid topology path node trust", nodePath);
+    requireContract(isStringArray(node.evidence_ids) && isSafeAttributes(node.attributes), "invalid topology path node evidence", nodePath);
+  }
+  for (const [index, step] of pathSteps.entries()) {
+    const stepPath = `${path}/steps/${index}`;
+    requireContract(isRecord(step) && step.schema_version === "rolo-topology-path-step/v1" && step.index === index, "invalid topology path step", stepPath);
+    requireContract(typeof step.from_node_id === "string" && typeof step.to_node_id === "string" && nodeIds.has(step.from_node_id) && nodeIds.has(step.to_node_id), "topology path step references an unknown node", stepPath);
+    requireContract(typeof step.edge_id === "string" && typeof step.relation === "string" && ["FORWARD", "REVERSE"].includes(String(step.direction)), "invalid topology path relationship", stepPath);
+    requireContract(["DECLARED", "OBSERVED", "GATED", "PARTIAL", "FAILED"].includes(String(step.state)) && isConfidence(step.confidence), "invalid topology path relationship state", stepPath);
+    requireContract(["validated", "verified"].includes(String(step.integrity_status)) && isStringArray(step.evidence_ids), "invalid topology path relationship evidence", stepPath);
+  }
+  requireContract(value.found ? pathSteps.length === value.hop_count && pathNodes.length === value.hop_count + 1 : pathSteps.length === 0 && pathNodes.length === 0, "inconsistent topology path result", path);
+  if (value.found) {
+    requireContract(isRecord(pathNodes[0]) && pathNodes[0].node_id === fromNodeId && isRecord(pathNodes.at(-1)) && pathNodes.at(-1)?.node_id === toNodeId, "topology path nodes do not bind the requested endpoints", path);
+    requireContract(pathSteps.every((step, index) => isRecord(step) && isRecord(pathNodes[index]) && isRecord(pathNodes[index + 1]) && step.from_node_id === pathNodes[index].node_id && step.to_node_id === pathNodes[index + 1].node_id), "topology path steps are not contiguous", path);
+  }
+  requireContract(typeof value.summary === "string" && isTimestamp(value.observed_at) && ["fresh", "unknown"].includes(String(value.freshness)), "invalid topology path observation metadata", path);
+  requireContract(value.source_kind === "topology_path_projection" && isConfidence(value.confidence) && ["validated", "verified"].includes(String(value.integrity_status)), "invalid topology path trust metadata", path);
+  requireContract(isStringArray(value.limitations) && !containsUnsafeReference(value), "invalid topology path limitations or references", path);
+  return value as unknown as TopologyPathExplanation;
+}
+
 function parseEvidenceRecord(
   value: unknown,
   path: string,
@@ -577,6 +624,53 @@ function parseRobotWiki(value: unknown, path: string, robotId: string): RobotWik
   return value as unknown as RobotWikiSnapshot;
 }
 
+function parseDiscoverySnapshotSummary(
+  value: unknown,
+  path: string,
+  robotId: string,
+): DiscoverySnapshotSummary {
+  requireContract(isRecord(value) && value.schema_version === "rolo-discovery-snapshot-summary/v1", "invalid discovery snapshot summary", path);
+  requireContract(value.robot_id === robotId && typeof value.discovery_id === "string" && /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(value.discovery_id), "invalid discovery snapshot identity", path);
+  requireContract(["SUCCEEDED", "PARTIAL", "UNAVAILABLE", "FAILED"].includes(String(value.status)), "invalid discovery snapshot status", path);
+  requireContract(typeof value.discovery_mode === "string" && /^[A-Za-z0-9._-]{1,48}$/.test(value.discovery_mode), "invalid discovery mode", path);
+  requireContract(isTimestamp(value.created_at) && typeof value.is_latest === "boolean", "invalid discovery snapshot metadata", path);
+  const counts = [
+    value.probe_total,
+    value.observed_probes,
+    value.partial_probes,
+    value.unavailable_probes,
+    value.operation_candidates,
+    value.semantic_bindings,
+    value.warning_count,
+  ];
+  requireContract(counts.every((item) => Number.isInteger(item) && Number(item) >= 0), "invalid discovery snapshot counts", path);
+  requireContract(Number(value.observed_probes) + Number(value.partial_probes) + Number(value.unavailable_probes) === Number(value.probe_total), "inconsistent discovery probe coverage", path);
+  requireContract(isConfidence(value.confidence) && value.integrity_status === "verified" && isStringArray(value.limitations), "invalid discovery snapshot trust metadata", path);
+  requireContract(!containsUnsafeReference(value), "discovery snapshot contains an unsafe reference", path);
+  return value as unknown as DiscoverySnapshotSummary;
+}
+
+function parseDiscoverySnapshotCollection(
+  value: unknown,
+  path: string,
+  robotId: string,
+): DiscoverySnapshotCollection {
+  requireContract(isRecord(value) && value.schema_version === "rolo-discovery-snapshot-collection/v1", "unsupported discovery history schema", path);
+  requireContract(value.robot_id === robotId && Array.isArray(value.items), "discovery history identity does not match request", path);
+  const items = value.items.map((item, index) => parseDiscoverySnapshotSummary(item, `${path}/items/${index}`, robotId));
+  requireContract(new Set(items.map((item) => item.discovery_id)).size === items.length, "duplicate discovery snapshot identity", path);
+  requireContract(items.filter((item) => item.is_latest).length <= 1, "multiple latest discovery snapshots", path);
+  requireContract(Number.isInteger(value.total) && Number(value.total) >= items.length, "invalid discovery history total", path);
+  requireContract(Number.isInteger(value.limit) && Number(value.limit) >= 1 && Number(value.limit) <= 100 && items.length <= Number(value.limit), "invalid discovery history page limit", path);
+  requireContract(Number.isInteger(value.offset) && Number(value.offset) >= 0, "invalid discovery history page offset", path);
+  requireContract(value.next_offset === null || (Number.isInteger(value.next_offset) && Number(value.next_offset) > Number(value.offset)), "invalid discovery history next offset", path);
+  requireContract(Number.isInteger(value.excluded_unverified) && Number(value.excluded_unverified) >= 0, "invalid excluded discovery count", path);
+  requireContract(isTimestamp(value.observed_at) && value.freshness === "unknown", "invalid discovery history observation metadata", path);
+  requireContract(value.source_kind === "verified_discovery_history" && value.integrity_status === "verified" && isStringArray(value.limitations), "invalid discovery history trust metadata", path);
+  requireContract(!containsUnsafeReference(value), "discovery history contains an unsafe reference", path);
+  return { ...value, items } as unknown as DiscoverySnapshotCollection;
+}
+
 function parseFleetRobotSummary(value: unknown, path: string): FleetRobotSummary {
   requireContract(isRecord(value) && value.schema_version === "rolo-fleet-robot-summary/v1", "invalid fleet robot summary", path);
   requireContract(typeof value.robot_id === "string" && Boolean(value.robot_id) && typeof value.adapter === "string", "invalid fleet robot identity", path);
@@ -725,9 +819,31 @@ export class RoloClient {
     );
   }
 
+  async topologyPath(
+    robotId: string,
+    fromNodeId: string,
+    toNodeId: string,
+    options?: RequestInit,
+  ) {
+    const query = new URLSearchParams({ from: fromNodeId, to: toNodeId, max_hops: "8" });
+    const path = `/v1/robots/${encodeURIComponent(robotId)}/topology/path?${query.toString()}`;
+    return parseTopologyPath(
+      await this.request<unknown>(path, options),
+      path,
+      robotId,
+      fromNodeId,
+      toNodeId,
+    );
+  }
+
   async wiki(robotId: string, options?: RequestInit) {
     const path = `/v1/robots/${encodeURIComponent(robotId)}/wiki`;
     return parseRobotWiki(await this.request<unknown>(path, options), path, robotId);
+  }
+
+  async discoveries(robotId: string, options?: RequestInit) {
+    const path = `/v1/robots/${encodeURIComponent(robotId)}/discoveries?limit=100&offset=0`;
+    return parseDiscoverySnapshotCollection(await this.request<unknown>(path, options), path, robotId);
   }
 
   async evidenceCollection(

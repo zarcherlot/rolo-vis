@@ -241,6 +241,39 @@ export interface TopologyDiff {
   limitations: string[];
 }
 
+export interface TopologyPathStep {
+  schema_version: "rolo-topology-path-step/v1";
+  index: number;
+  from_node_id: string;
+  to_node_id: string;
+  edge_id: string;
+  relation: string;
+  direction: "FORWARD" | "REVERSE";
+  state: TopologyState;
+  confidence: number;
+  integrity_status: "validated" | "verified";
+  evidence_ids: string[];
+}
+
+export interface TopologyPathExplanation {
+  schema_version: "rolo-topology-path-explanation/v1";
+  robot_id: string;
+  snapshot_id: string;
+  from_node_id: string;
+  to_node_id: string;
+  found: boolean;
+  hop_count: number;
+  nodes: TopologyNode[];
+  steps: TopologyPathStep[];
+  summary: string;
+  observed_at: string;
+  freshness: "fresh" | "unknown";
+  source_kind: "topology_path_projection";
+  confidence: number;
+  integrity_status: "validated" | "verified";
+  limitations: string[];
+}
+
 export interface CapabilityCollection {
   schema_version: "rolo-capability-collection/v1";
   robot_id: string;
@@ -430,6 +463,42 @@ export interface RobotWikiSnapshot {
   freshness: "unknown";
   source_kind: "verified_discovery_snapshot";
   confidence: number;
+  integrity_status: "verified";
+  limitations: string[];
+}
+
+export interface DiscoverySnapshotSummary {
+  schema_version: "rolo-discovery-snapshot-summary/v1";
+  robot_id: string;
+  discovery_id: string;
+  status: "SUCCEEDED" | "PARTIAL" | "UNAVAILABLE" | "FAILED";
+  discovery_mode: string;
+  created_at: string;
+  is_latest: boolean;
+  probe_total: number;
+  observed_probes: number;
+  partial_probes: number;
+  unavailable_probes: number;
+  operation_candidates: number;
+  semantic_bindings: number;
+  warning_count: number;
+  confidence: number;
+  integrity_status: "verified";
+  limitations: string[];
+}
+
+export interface DiscoverySnapshotCollection {
+  schema_version: "rolo-discovery-snapshot-collection/v1";
+  robot_id: string;
+  items: DiscoverySnapshotSummary[];
+  total: number;
+  limit: number;
+  offset: number;
+  next_offset: number | null;
+  excluded_unverified: number;
+  observed_at: string;
+  freshness: "unknown";
+  source_kind: "verified_discovery_history";
   integrity_status: "verified";
   limitations: string[];
 }
