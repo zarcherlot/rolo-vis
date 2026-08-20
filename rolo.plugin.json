@@ -1,0 +1,30 @@
+{
+  "schema_version": "rolo-plugin/v1",
+  "id": "rolo-vis",
+  "name": "rolo Workbench",
+  "version": "0.1.0",
+  "kind": "web-workbench",
+  "entry": "dist/client/index.html",
+  "capabilities": [
+    "robot.overview.read",
+    "robot.topology.read",
+    "robot.capabilities.read",
+    "robot.lifecycle.read",
+    "robot.evidence.read"
+  ],
+  "api": {
+    "base_path": "/rolo-api",
+    "required_endpoints": [
+      "/health",
+      "/v1/robots",
+      "/v1/robots/{robot_id}/pipeline"
+    ]
+  },
+  "security": {
+    "mode": "read-only",
+    "remote_access": "loopback-or-trusted-reverse-proxy",
+    "allows_arbitrary_commands": false,
+    "allows_secret_payloads": false
+  }
+}
+
