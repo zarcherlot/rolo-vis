@@ -1241,6 +1241,18 @@ test("live Stack Map delegates path explanation to the trusted API", async () =>
   assert.doesNotMatch(stackMap, /breadth.first|shortestPath|new Map\(sourceEdges/);
 });
 
+test("Wiki snapshot detail exposes every selected discovery limitation", async () => {
+  const source = await readFile(new URL("../src/App.tsx", import.meta.url), "utf8");
+  const start = source.indexOf("function WikiView");
+  const end = source.indexOf("function EvidenceRow", start);
+  assert.ok(start >= 0 && end > start);
+  const liveWiki = source.slice(start, end);
+
+  assert.match(liveWiki, /selectedDiscovery\.limitations\.map/);
+  assert.match(liveWiki, /aria-label="Snapshot limitations"/);
+  assert.match(liveWiki, /Diagnostic limitations/);
+});
+
 test("plugin manifest declares every trusted read-model endpoint", async () => {
   const manifest = JSON.parse(await readFile(new URL("../rolo.plugin.json", import.meta.url), "utf8"));
   assert.equal(manifest.version, "0.17.0");

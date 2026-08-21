@@ -53,6 +53,9 @@ import type {
 } from "./demoData";
 import { ROLO_API_FEATURES, RoloApiError, roloClient } from "./roloClient";
 import type {
+  AdaptExecutionClass,
+  AdaptMigrationStatus,
+  AdaptSemanticLayer,
   CapabilityBinding,
   CapabilityDetail,
   CapabilitySummary,
@@ -78,7 +81,10 @@ import type {
 import {
   buildAdaptContextLens,
   filterCapabilitiesToTargetAdapter,
+  filterOperationGovernance,
   getAdaptOperationContext,
+  paginateOperationGovernance,
+  summarizeOperationGovernance,
 } from "./adaptContext";
 import {
   topologyLayerForWiki,
@@ -1112,6 +1118,12 @@ function LiveCapabilityView({
   const [targetSlice, setTargetSlice] = useState<TargetOperationSlice | null>(null);
   const [operationGovernance, setOperationGovernance] = useState<OperationDisposition[]>([]);
   const [adaptTargetFocus, setAdaptTargetFocus] = useState(false);
+  const [adaptView, setAdaptView] = useState<"target" | "governance">("target");
+  const [governanceQuery, setGovernanceQuery] = useState("");
+  const [governanceSemanticLayer, setGovernanceSemanticLayer] = useState<AdaptSemanticLayer | "ALL">("ALL");
+  const [governanceExecutionClass, setGovernanceExecutionClass] = useState<AdaptExecutionClass | "ALL">("ALL");
+  const [governanceMigrationStatus, setGovernanceMigrationStatus] = useState<AdaptMigrationStatus | "ALL">("ALL");
+  const [governancePage, setGovernancePage] = useState(1);
   const adaptRequest = useRef<AbortController | null>(null);
   const [tab, setTab] = useState<"overview" | "contract" | "binding" | "evidence">("overview");
   const coverage = useMemo(() => summarizeCapabilityCoverage(items), [items]);
@@ -1138,6 +1150,27 @@ function LiveCapabilityView({
   const adaptLens = useMemo(
     () => targetSlice ? buildAdaptContextLens(targetSlice, operationGovernance) : null,
     [operationGovernance, targetSlice],
+  );
+  const governanceSummary = useMemo(
+    () => summarizeOperationGovernance(operationGovernance),
+    [operationGovernance],
+  );
+  const filteredGovernance = useMemo(
+    () => filterOperationGovernance(operationGovernance, {
+      query: governanceQuery,
+      semanticLayer: governanceSemanticLayer,
+      executionClass: governanceExecutionClass,
+      migrationStatus: governanceMigrationStatus,
+    }),
+    [governanceExecutionClass, governanceMigrationStatus, governanceQuery, governanceSemanticLayer, operationGovernance],
+  );
+  const governanceResultPage = useMemo(
+    () => paginateOperationGovernance(filteredGovernance, governancePage),
+    [filteredGovernance, governancePage],
+  );
+  const registryOperations = useMemo(
+    () => new Set(items.map((item) => item.operation)),
+    [items],
   );
 
   const loadAdaptContext = useCallback(() => {
@@ -1190,7 +1223,17 @@ function LiveCapabilityView({
     setTargetSlice(null);
     setOperationGovernance([]);
     setAdaptTargetFocus(false);
+    setAdaptView("target");
+    setGovernanceQuery("");
+    setGovernanceSemanticLayer("ALL");
+    setGovernanceExecutionClass("ALL");
+    setGovernanceMigrationStatus("ALL");
+    setGovernancePage(1);
   }, [robotId]);
+
+  useEffect(() => {
+    setGovernancePage(1);
+  }, [governanceExecutionClass, governanceMigrationStatus, governanceQuery, governanceSemanticLayer]);
 
   useEffect(() => {
     if (!visible.some((item) => item.operation === selectedOperation)) {
@@ -1307,21 +1350,55 @@ function LiveCapabilityView({
             <div><span>Product built-in</span><strong>{adaptLens.executionCounts.PRODUCT_BUILTIN}</strong><small>no adapter required</small></div>
             <div><span>Deferred</span><strong>{adaptLens.deferredCount}</strong><small>grouped by reason</small></div>
           </div>
-          <div className="adapt-context-body">
-            <section className="adapt-target-list">
-              <header><div><span>Target adapter operations</span><h4>Current implementation surface</h4></div><div className="adapt-target-actions"><small>{adaptLens.governedTargetCount} / {adaptLens.targetOperations.length} governance records joined</small><button className={`secondary-button ${adaptTargetFocus ? "is-active" : ""}`} disabled={!adaptLens.targetOperations.length} onClick={toggleAdaptTargetFocus}>{adaptTargetFocus ? "Show all capabilities" : "Focus target work"}</button></div></header>
-              {adaptLens.targetOperations.length ? adaptLens.targetOperations.map((item) => <button className={`adapt-target-row ${selectedOperation === item.operation ? "is-selected" : ""}`} key={item.operation} onClick={() => openAdaptOperation(item.operation)}>
-                <span className={`adapt-role role-${item.role.toLowerCase()}`}>{item.role}</span>
-                <span><code>{item.operation}</code><small>{item.governance ? `${item.governance.semantic_layer} · ${item.governance.migration_status}` : "Governance record unavailable"}</small></span>
-                <span><small>Future capability</small><code>{item.governance?.future_capability || "Not mapped"}</code></span>
-                <ArrowRight size={14} />
-              </button>) : <div className="adapt-context-empty"><CheckCircle size={20} /><span><strong>No target-adapter operations</strong><small>The current slice does not request adapter implementation work.</small></span></div>}
-            </section>
-            <aside className="adapt-context-meta">
-              <section><span>Deferred reasons</span>{adaptLens.deferred.length ? adaptLens.deferred.map((item) => <div key={item.reason}><code>{item.reason.replaceAll("_", " ")}</code><strong>{item.count}</strong></div>) : <p>No deferred operations are reported.</p>}</section>
-              <dl><div><dt>Discovery</dt><dd>{targetSlice.discovery_id}</dd></div><div><dt>Slice digest</dt><dd><code>{targetSlice.slice_sha256.slice(0, 12)}…</code></dd></div><div><dt>Registry digest</dt><dd><code>{targetSlice.registry_sha256.slice(0, 12)}…</code></dd></div><div><dt>Governance ledger</dt><dd>{operationGovernance.length ? `${operationGovernance.length} operations` : "Not available"}</dd></div></dl>
-            </aside>
-          </div>
+          <nav className="adapt-view-tabs" aria-label="Adapt context view">
+            <button className={adaptView === "target" ? "is-active" : ""} aria-pressed={adaptView === "target"} onClick={() => setAdaptView("target")}><Target size={14} />Target work <span>{adaptLens.targetOperations.length}</span></button>
+            <button className={adaptView === "governance" ? "is-active" : ""} aria-pressed={adaptView === "governance"} onClick={() => setAdaptView("governance")}><ShieldCheck size={14} />Governance ledger <span>{operationGovernance.length}</span></button>
+          </nav>
+          {adaptView === "target" ? <div className="adapt-context-body">
+              <section className="adapt-target-list">
+                <header><div><span>Target adapter operations</span><h4>Current implementation surface</h4></div><div className="adapt-target-actions"><small>{adaptLens.governedTargetCount} / {adaptLens.targetOperations.length} governance records joined</small><button className={`secondary-button ${adaptTargetFocus ? "is-active" : ""}`} disabled={!adaptLens.targetOperations.length} onClick={toggleAdaptTargetFocus}>{adaptTargetFocus ? "Show all capabilities" : "Focus target work"}</button></div></header>
+                {adaptLens.targetOperations.length ? adaptLens.targetOperations.map((item) => <button className={`adapt-target-row ${selectedOperation === item.operation ? "is-selected" : ""}`} key={item.operation} onClick={() => openAdaptOperation(item.operation)}>
+                  <span className={`adapt-role role-${item.role.toLowerCase()}`}>{item.role}</span>
+                  <span><code>{item.operation}</code><small>{item.governance ? `${item.governance.semantic_layer} · ${item.governance.migration_status}` : "Governance record unavailable"}</small></span>
+                  <span><small>Future capability</small><code>{item.governance?.future_capability || "Not mapped"}</code></span>
+                  <ArrowRight size={14} />
+                </button>) : <div className="adapt-context-empty"><CheckCircle size={20} /><span><strong>No target-adapter operations</strong><small>The current slice does not request adapter implementation work.</small></span></div>}
+              </section>
+              <aside className="adapt-context-meta">
+                <section><span>Deferred reasons</span>{adaptLens.deferred.length ? adaptLens.deferred.map((item) => <div key={item.reason}><code>{item.reason.replaceAll("_", " ")}</code><strong>{item.count}</strong></div>) : <p>No deferred operations are reported.</p>}</section>
+                <dl><div><dt>Discovery</dt><dd>{targetSlice.discovery_id}</dd></div><div><dt>Slice digest</dt><dd><code>{targetSlice.slice_sha256.slice(0, 12)}…</code></dd></div><div><dt>Registry digest</dt><dd><code>{targetSlice.registry_sha256.slice(0, 12)}…</code></dd></div><div><dt>Governance ledger</dt><dd>{operationGovernance.length ? `${operationGovernance.length} operations` : "Not available"}</dd></div></dl>
+              </aside>
+            </div> : <section className="adapt-governance-matrix">
+              <header>
+                <div><span>Operation disposition ledger</span><h4>Cross-layer governance explorer</h4><p>Search migration intent and execution ownership without changing Registry truth.</p></div>
+                <small>{governanceResultPage.total} of {governanceSummary.total} records</small>
+              </header>
+              <div className="adapt-governance-facts" aria-label="Governance ledger summary">
+                <div><span>Execution class</span><p>{Object.entries(governanceSummary.executionClasses).map(([label, count]) => <em key={label}><code>{label.replaceAll("_", " ")}</code><strong>{count}</strong></em>)}</p></div>
+                <div><span>Migration status</span><p>{Object.entries(governanceSummary.migrationStatuses).map(([label, count]) => <em key={label}><code>{label}</code><strong>{count}</strong></em>)}</p></div>
+                <div><span>Semantic layer</span><p>{Object.entries(governanceSummary.semanticLayers).map(([label, count]) => <em key={label}><code>{label.replaceAll("_", " ")}</code><strong>{count}</strong></em>)}</p></div>
+              </div>
+              <div className="adapt-governance-toolbar">
+                <label className="adapt-governance-search"><MagnifyingGlass size={16} /><input aria-label="Search governance operations" value={governanceQuery} onChange={(event) => setGovernanceQuery(event.target.value)} placeholder="Search operation, future capability, or reason" /></label>
+                <label><span>Semantic layer</span><select value={governanceSemanticLayer} onChange={(event) => setGovernanceSemanticLayer(event.target.value as AdaptSemanticLayer | "ALL")}><option value="ALL">All semantic layers</option>{(["product_control", "hardware", "os", "middleware", "application"] as const).map((value) => <option key={value}>{value}</option>)}</select></label>
+                <label><span>Execution class</span><select value={governanceExecutionClass} onChange={(event) => setGovernanceExecutionClass(event.target.value as AdaptExecutionClass | "ALL")}><option value="ALL">All execution classes</option>{(["AGENT_NATIVE", "PRODUCT_BUILTIN", "TARGET_ADAPTER", "PLATFORM_SPECIFIC"] as const).map((value) => <option key={value}>{value}</option>)}</select></label>
+                <label><span>Migration</span><select value={governanceMigrationStatus} onChange={(event) => setGovernanceMigrationStatus(event.target.value as AdaptMigrationStatus | "ALL")}><option value="ALL">All migration states</option>{(["PLANNED", "RETAINED", "DEFERRED"] as const).map((value) => <option key={value}>{value}</option>)}</select></label>
+              </div>
+              <div className="adapt-governance-table">
+                <div className="adapt-governance-heading"><span>Current operation</span><span>Execution</span><span>Migration</span><span>Future capability</span><span>Registry</span></div>
+                {governanceResultPage.items.length ? governanceResultPage.items.map((item) => {
+                  const inRegistry = registryOperations.has(item.current_operation);
+                  return <button key={item.current_operation} disabled={!inRegistry} onClick={() => openAdaptOperation(item.current_operation)}>
+                    <span><code>{item.current_operation}</code><small>{item.current_layer} → {item.semantic_layer}</small></span>
+                    <strong>{item.execution_class.replaceAll("_", " ")}</strong>
+                    <strong>{item.migration_status}</strong>
+                    <span><code>{item.future_capability || "Not mapped"}</code><small>{item.migration_reason}</small></span>
+                    {inRegistry ? <ArrowRight size={14} /> : <small>Not in Registry</small>}
+                  </button>;
+                }) : <div className="adapt-governance-empty"><MagnifyingGlass size={20} /><span><strong>No governance records found</strong><small>Change the query or filters to widen the result set.</small></span></div>}
+              </div>
+              <footer className="adapt-governance-paging"><span>Showing {governanceResultPage.start}–{governanceResultPage.end} of {governanceResultPage.total} · maximum 20 per page</span><div><button className="secondary-button" disabled={governanceResultPage.page <= 1} onClick={() => setGovernancePage(governanceResultPage.page - 1)}>Previous</button><strong>Page {governanceResultPage.page} / {governanceResultPage.pageCount}</strong><button className="secondary-button" disabled={governanceResultPage.page >= governanceResultPage.pageCount} onClick={() => setGovernancePage(governanceResultPage.page + 1)}>Next</button></div></footer>
+            </section>}
         </> : <div className="adapt-context-state is-warning"><WarningCircle size={24} /><span><strong>Adapt context is unavailable</strong><small>{adaptMessage || "The advertised optional read model did not return a target slice."}</small></span>{adaptContextSupported && <button className="secondary-button" onClick={loadAdaptContext}>Retry</button>}</div>}
         {adaptMessage && adaptLens && <div className="adapt-context-warning"><WarningCircle size={15} /><span>{adaptMessage}</span><button className="secondary-button" disabled={adaptLoading} onClick={loadAdaptContext}>Retry optional data</button></div>}
         <footer><Info size={15} /><span>This shadow view narrows agent work. It does not change the 294-operation Registry, capability availability, policy, conformance, or release gates.</span></footer>
@@ -1668,6 +1745,10 @@ function WikiView({
               <div><dt>Semantic bindings</dt><dd>{selectedDiscovery.semantic_bindings}</dd></div>
               <div><dt>Warnings</dt><dd>{selectedDiscovery.warning_count}</dd></div>
             </dl>
+            {selectedDiscovery.limitations.length > 0 && <section className="wiki-discovery-limitations" aria-label="Snapshot limitations">
+              <header><div><WarningCircle size={16} weight="fill" /><span>Diagnostic limitations</span></div><strong>{selectedDiscovery.limitations.length}</strong></header>
+              <ul>{selectedDiscovery.limitations.map((limitation, index) => <li key={`${index}-${limitation}`}>{limitation}</li>)}</ul>
+            </section>}
             <p><ShieldCheck size={14} /> Manifest verified · {selectedDiscovery.discovery_mode.replaceAll("_", " ").toLowerCase()}</p>
           </article>
         </div> : <div className="wiki-empty-copy">No manifest-verified discovery history is available.</div>}

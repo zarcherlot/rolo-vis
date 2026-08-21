@@ -4,7 +4,10 @@ import test from "node:test";
 import {
   buildAdaptContextLens,
   filterCapabilitiesToTargetAdapter,
+  filterOperationGovernance,
   getAdaptOperationContext,
+  paginateOperationGovernance,
+  summarizeOperationGovernance,
 } from "../src/adaptContext.ts";
 
 const SLICE = {
@@ -89,4 +92,74 @@ test("target adapter focus preserves registry order and never invents capabiliti
     ["linux.log.query", "linux.service.inspect"],
   );
   assert.equal(filterCapabilitiesToTargetAdapter(capabilities, null), capabilities);
+});
+
+const GOVERNANCE_LEDGER = [
+  GOVERNANCE[0],
+  {
+    ...GOVERNANCE[0],
+    current_operation: "ros.topic.inspect",
+    current_layer: "ros",
+    semantic_layer: "middleware",
+    execution_class: "PLATFORM_SPECIFIC",
+    future_capability: null,
+    migration_status: "RETAINED",
+    migration_reason: "Middleware-specific semantics remain explicit.",
+  },
+  {
+    ...GOVERNANCE[0],
+    current_operation: "app.navigation.start",
+    current_layer: "app",
+    semantic_layer: "application",
+    execution_class: "AGENT_NATIVE",
+    future_capability: "application.navigation.start",
+    migration_status: "DEFERRED",
+    migration_reason: "Waiting for product contract alignment.",
+  },
+];
+
+test("governance filters combine search, semantic, execution, and migration constraints", () => {
+  const result = filterOperationGovernance(GOVERNANCE_LEDGER, {
+    query: "topic",
+    semanticLayer: "middleware",
+    executionClass: "PLATFORM_SPECIFIC",
+    migrationStatus: "RETAINED",
+  });
+
+  assert.deepEqual(result.map((item) => item.current_operation), ["ros.topic.inspect"]);
+  assert.equal(filterOperationGovernance(GOVERNANCE_LEDGER, {
+    query: "product contract",
+    semanticLayer: "ALL",
+    executionClass: "ALL",
+    migrationStatus: "ALL",
+  })[0].current_operation, "app.navigation.start");
+});
+
+test("governance summary keeps execution, migration, and semantic dimensions separate", () => {
+  const summary = summarizeOperationGovernance(GOVERNANCE_LEDGER);
+
+  assert.equal(summary.total, 3);
+  assert.equal(summary.mappedFutureCapabilities, 2);
+  assert.equal(summary.executionClasses.TARGET_ADAPTER, 1);
+  assert.equal(summary.executionClasses.PLATFORM_SPECIFIC, 1);
+  assert.equal(summary.migrationStatuses.DEFERRED, 1);
+  assert.equal(summary.semanticLayers.middleware, 1);
+});
+
+test("governance pagination never renders beyond the bounded page size", () => {
+  const ledger = Array.from({ length: 45 }, (_, index) => ({
+    ...GOVERNANCE[0],
+    current_operation: `linux.operation.${index + 1}`,
+  }));
+
+  const middle = paginateOperationGovernance(ledger, 2);
+  assert.equal(middle.items.length, 20);
+  assert.deepEqual([middle.start, middle.end, middle.pageCount], [21, 40, 3]);
+
+  const bounded = paginateOperationGovernance(ledger, 99);
+  assert.equal(bounded.page, 3);
+  assert.equal(bounded.items.length, 5);
+
+  const empty = paginateOperationGovernance([], 1);
+  assert.deepEqual([empty.start, empty.end, empty.pageCount], [0, 0, 1]);
 });
