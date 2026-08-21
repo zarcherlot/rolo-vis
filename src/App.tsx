@@ -91,6 +91,15 @@ import {
 import { projectContractSchema } from "./contractSchema";
 import { bindingTrustStatement, summarizeBindingTrust } from "./bindingTrust";
 import { capabilityReadinessSignals } from "./capabilityReadiness";
+import {
+  CAPABILITY_ACCESS,
+  CAPABILITY_CLASSIFICATIONS,
+  CAPABILITY_LIFECYCLES,
+  CAPABILITY_RISKS,
+  activeGovernanceFilterCount,
+  filterCapabilities,
+} from "./capabilityFilters";
+import type { CapabilityFilterState } from "./capabilityFilters";
 import { getOverviewPresentation, getSurfaceSource } from "./workbenchPolicy";
 import type { WorkbenchMode } from "./workbenchPolicy";
 
@@ -1080,18 +1089,28 @@ function LiveCapabilityView({
   const [detail, setDetail] = useState<CapabilityDetail | null>(null);
   const [detailMessage, setDetailMessage] = useState("");
   const [query, setQuery] = useState("");
-  const [layer, setLayer] = useState("All layers");
-  const [availabilityFilter, setAvailabilityFilter] = useState("All availability");
+  const [layer, setLayer] = useState<CapabilityFilterState["layer"]>("ALL");
+  const [availabilityFilter, setAvailabilityFilter] = useState<CapabilityFilterState["availability"]>("ALL");
+  const [riskFilter, setRiskFilter] = useState<CapabilityFilterState["risk"]>("ALL");
+  const [accessFilter, setAccessFilter] = useState<CapabilityFilterState["access"]>("ALL");
+  const [lifecycleFilter, setLifecycleFilter] = useState<CapabilityFilterState["lifecycle"]>("ALL");
+  const [classificationFilter, setClassificationFilter] = useState<CapabilityFilterState["classification"]>("ALL");
+  const [governanceOpen, setGovernanceOpen] = useState(false);
   const [tab, setTab] = useState<"overview" | "contract" | "binding" | "evidence">("overview");
   const coverage = useMemo(() => summarizeCapabilityCoverage(items), [items]);
   const allFamilies = useMemo(() => groupCapabilitiesByFamily(items), [items]);
-  const visible = useMemo(() => items.filter((item) => {
-    const matchesQuery = `${item.operation} ${item.description} ${item.layer}`.toLowerCase().includes(query.toLowerCase());
-    return matchesQuery
-      && (layer === "All layers" || item.layer === layer)
-      && (availabilityFilter === "All availability" || item.availability === availabilityFilter);
-  }), [availabilityFilter, items, layer, query]);
+  const filters = useMemo<CapabilityFilterState>(() => ({
+    query,
+    layer,
+    availability: availabilityFilter,
+    risk: riskFilter,
+    access: accessFilter,
+    lifecycle: lifecycleFilter,
+    classification: classificationFilter,
+  }), [accessFilter, availabilityFilter, classificationFilter, layer, lifecycleFilter, query, riskFilter]);
+  const visible = useMemo(() => filterCapabilities(items, filters), [filters, items]);
   const visibleFamilies = useMemo(() => groupCapabilitiesByFamily(visible), [visible]);
+  const governanceFilterCount = activeGovernanceFilterCount(filters);
 
   useEffect(() => {
     if (!visible.some((item) => item.operation === selectedOperation)) {
@@ -1126,13 +1145,10 @@ function LiveCapabilityView({
     [detailItem, items],
   );
   const selectCoverageLayer = (selectedLayer: typeof CAPABILITY_LAYERS[number]) => {
-    const nextLayer = layer === selectedLayer ? "All layers" : selectedLayer;
+    const nextLayer: CapabilityFilterState["layer"] = layer === selectedLayer ? "ALL" : selectedLayer;
     setLayer(nextLayer);
     setQuery("");
-    const firstMatch = items.find((item) => (
-      (nextLayer === "All layers" || item.layer === nextLayer)
-      && (availabilityFilter === "All availability" || item.availability === availabilityFilter)
-    ));
+    const firstMatch = filterCapabilities(items, { ...filters, query: "", layer: nextLayer })[0];
     if (firstMatch) {
       setSelectedOperation(firstMatch.operation);
       setTab("overview");
@@ -1142,7 +1158,11 @@ function LiveCapabilityView({
     const related = items.find((item) => item.operation === operation);
     if (!related) return;
     setLayer(related.layer);
-    setAvailabilityFilter("All availability");
+    setAvailabilityFilter("ALL");
+    setRiskFilter("ALL");
+    setAccessFilter("ALL");
+    setLifecycleFilter("ALL");
+    setClassificationFilter("ALL");
     setQuery("");
     setSelectedOperation(related.operation);
     setTab("overview");
@@ -1156,7 +1176,7 @@ function LiveCapabilityView({
         action={<div className="coverage-summary"><strong>{coverage.total} operations · {allFamilies.length} families · {coverage.availability.VERIFIED} verified</strong><span><i style={{ width: capabilityCoveragePercent(coverage.availability.VERIFIED, coverage.total) }} /><i style={{ width: capabilityCoveragePercent(coverage.availability.AVAILABLE, coverage.total) }} /><i style={{ width: capabilityCoveragePercent(coverage.availability.UNAVAILABLE, coverage.total) }} /><i style={{ width: capabilityCoveragePercent(coverage.availability.UNKNOWN, coverage.total) }} /></span></div>}
       />
       <section className="panel capability-coverage-map" aria-label="Capability coverage by product layer">
-        <header><div><span>Validated capability summaries</span><h3>Coverage by product layer</h3></div><button className="secondary-button" disabled={layer === "All layers" && availabilityFilter === "All availability"} onClick={() => { setLayer("All layers"); setAvailabilityFilter("All availability"); }}>Clear coverage filters</button></header>
+        <header><div><span>Validated capability summaries</span><h3>Coverage by product layer</h3></div><button className="secondary-button" disabled={layer === "ALL" && availabilityFilter === "ALL"} onClick={() => { setLayer("ALL"); setAvailabilityFilter("ALL"); }}>Clear coverage filters</button></header>
         <div className="capability-coverage-grid">
           {coverage.layers.map((item) => (
             <button key={item.layer} className={layer === item.layer ? "is-active" : ""} onClick={() => selectCoverageLayer(item.layer)} aria-pressed={layer === item.layer}>
@@ -1172,16 +1192,24 @@ function LiveCapabilityView({
         <div className="capability-list panel">
           <div className="capability-toolbar">
             <div className="capability-search search-box"><MagnifyingGlass size={18} /><input aria-label="Search canonical operations" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search operations" /></div>
-            <label className="capability-layer-filter"><span>Layer</span><select value={layer} onChange={(event) => setLayer(event.target.value)}>{["All layers", ...CAPABILITY_LAYERS].map((value) => <option key={value}>{value}</option>)}</select></label>
-            <label className="capability-layer-filter"><span>Availability</span><select value={availabilityFilter} onChange={(event) => setAvailabilityFilter(event.target.value)}>{["All availability", ...CAPABILITY_AVAILABILITY].map((value) => <option key={value}>{value}</option>)}</select></label>
+            <label className="capability-layer-filter"><span>Layer</span><select value={layer} onChange={(event) => setLayer(event.target.value as CapabilityFilterState["layer"])}><option value="ALL">All layers</option>{CAPABILITY_LAYERS.map((value) => <option key={value}>{value}</option>)}</select></label>
+            <label className="capability-layer-filter"><span>Availability</span><select value={availabilityFilter} onChange={(event) => setAvailabilityFilter(event.target.value as CapabilityFilterState["availability"])}><option value="ALL">All availability</option>{CAPABILITY_AVAILABILITY.map((value) => <option key={value}>{value}</option>)}</select></label>
+            <button className={`secondary-button capability-governance-toggle ${governanceFilterCount ? "is-active" : ""}`} aria-expanded={governanceOpen} onClick={() => setGovernanceOpen((value) => !value)}><Funnel size={15} />Governance{governanceFilterCount ? ` · ${governanceFilterCount}` : ""}</button>
           </div>
+          {governanceOpen && <div className="capability-governance-panel">
+            <label><span>Risk</span><select value={riskFilter} onChange={(event) => setRiskFilter(event.target.value as CapabilityFilterState["risk"])}><option value="ALL">All risk</option>{CAPABILITY_RISKS.map((value) => <option key={value}>{value}</option>)}</select></label>
+            <label><span>Access</span><select value={accessFilter} onChange={(event) => setAccessFilter(event.target.value as CapabilityFilterState["access"])}><option value="ALL">All access</option>{CAPABILITY_ACCESS.map((value) => <option key={value}>{value}</option>)}</select></label>
+            <label><span>Lifecycle</span><select value={lifecycleFilter} onChange={(event) => setLifecycleFilter(event.target.value as CapabilityFilterState["lifecycle"])}><option value="ALL">All lifecycle</option>{CAPABILITY_LIFECYCLES.map((value) => <option key={value}>{value}</option>)}</select></label>
+            <label><span>Classification</span><select value={classificationFilter} onChange={(event) => setClassificationFilter(event.target.value as CapabilityFilterState["classification"])}><option value="ALL">All classification</option>{CAPABILITY_CLASSIFICATIONS.map((value) => <option key={value}>{value}</option>)}</select></label>
+            <button className="secondary-button" disabled={!governanceFilterCount} onClick={() => { setRiskFilter("ALL"); setAccessFilter("ALL"); setLifecycleFilter("ALL"); setClassificationFilter("ALL"); }}>Clear governance</button>
+          </div>}
           <div className="layer-summary-row"><span>Operation</span><span>Lifecycle</span><span>Availability</span></div>
           {visibleFamilies.map((family) => (
             <section className="capability-family" key={family.family} aria-label={`${family.family} operation family`}>
               <header><code>{family.family}</code><span>{family.items.length} {family.items.length === 1 ? "operation" : "operations"}</span></header>
               {family.items.map((item) => (
                 <button key={item.operation} className={`operation-row ${selected?.operation === item.operation ? "is-selected" : ""}`} onClick={() => { setSelectedOperation(item.operation); setTab("overview"); }}>
-                  <span className="operation-main"><code>{item.operation}</code><small>{item.layer} · {item.applicability.replace("_", " ")}</small></span>
+                  <span className="operation-main"><code>{item.operation}</code><small>{item.layer} · {item.applicability.replace("_", " ")}</small><small className="operation-governance-line">{item.access} · {item.risk} · {item.data_classification}</small></span>
                   <span className={`mini-chip lifecycle-${item.lifecycle.toLowerCase()}`}>{item.lifecycle}</span>
                   <span className={`mini-chip availability-${item.availability.toLowerCase()}`}>{item.availability}</span>
                   <ArrowRight size={15} />

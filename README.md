@@ -15,6 +15,7 @@
 - Read-only contract schema inspector for required fields, constraints, units, frames, and execution semantics.
 - Binding trust inspector for endpoint authority, provenance, evidence coverage, digests, and limitations.
 - Capability readiness lens that keeps contract, applicability, registration, binding, availability, and verification signals independent.
+- Governance filters for risk, access, lifecycle, and data classification with row-level policy context.
 - Lifecycle gate view for Adapt → Diagnose → Verify.
 - Immutable lifecycle run details with independent gate checks and verified handoffs.
 - Robot Wiki with manifest-verified discovery summaries, advisory insights, and evidence-linked changes.
