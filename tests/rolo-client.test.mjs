@@ -610,6 +610,45 @@ test("RoloClient reads governance metadata without changing Registry capability 
   }
 });
 
+test("RoloClient reads the complete governance ledger only when requested", async () => {
+  const originalFetch = globalThis.fetch;
+  const requests = [];
+  const entries = Array.from({ length: 51 }, (_, index) => ({
+    ...OPERATION_GOVERNANCE_COLLECTION.items[0],
+    current_operation: `linux.test.operation_${String(index).padStart(2, "0")}`,
+    future_capability: `os.test.operation_${String(index).padStart(2, "0")}`,
+  }));
+  globalThis.fetch = async (url) => {
+    requests.push(String(url));
+    const parsed = new URL(String(url));
+    const limit = Number(parsed.searchParams.get("limit"));
+    const offset = Number(parsed.searchParams.get("offset"));
+    return {
+      ok: true,
+      json: async () => ({
+        ...OPERATION_GOVERNANCE_COLLECTION,
+        items: entries.slice(offset, offset + limit),
+        total: entries.length,
+        limit,
+        offset,
+        next_offset: offset + limit < entries.length ? offset + limit : null,
+      }),
+    };
+  };
+
+  try {
+    const result = await new RoloClient("http://rolo.test").operationGovernance();
+    assert.equal(result.items.length, 51);
+    assert.equal(result.items.at(-1).current_operation, "linux.test.operation_50");
+    assert.deepEqual(requests, [
+      "http://rolo.test/v1/operations/governance?limit=50&offset=0",
+      "http://rolo.test/v1/operations/governance?limit=50&offset=50",
+    ]);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("RoloClient keeps the optional Adapt slice out of bootstrap and loads it on demand", async () => {
   const originalFetch = globalThis.fetch;
   const requests = [];

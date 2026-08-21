@@ -51,7 +51,7 @@ import type {
   TopologyNodeData,
   TopologyStatus,
 } from "./demoData";
-import { RoloApiError, roloClient } from "./roloClient";
+import { ROLO_API_FEATURES, RoloApiError, roloClient } from "./roloClient";
 import type {
   CapabilityBinding,
   CapabilityDetail,
@@ -64,15 +64,18 @@ import type {
   FleetCollection,
   LifecycleRunCollection,
   LifecycleRunDetail,
+  OperationDisposition,
   RobotCapability,
   RobotOverview,
   RobotTopology,
   RobotWikiSnapshot,
+  TargetOperationSlice,
   TopologyDiff,
   TopologyPathExplanation,
   TopologySnapshotCollection,
   WikiLayer,
 } from "./types/rolo";
+import { buildAdaptContextLens } from "./adaptContext";
 import {
   topologyLayerForWiki,
   wikiLayerForTopology,
@@ -1079,11 +1082,13 @@ function LiveCapabilityView({
   robotId,
   items,
   limitations,
+  apiFeatures,
   onOpenEvidence,
 }: {
   robotId: string;
   items: CapabilitySummary[];
   limitations: string[];
+  apiFeatures: string[];
   onOpenEvidence: OpenEvidence;
 }) {
   const [selectedOperation, setSelectedOperation] = useState(items[0]?.operation || "");
@@ -1097,6 +1102,12 @@ function LiveCapabilityView({
   const [lifecycleFilter, setLifecycleFilter] = useState<CapabilityFilterState["lifecycle"]>("ALL");
   const [classificationFilter, setClassificationFilter] = useState<CapabilityFilterState["classification"]>("ALL");
   const [governanceOpen, setGovernanceOpen] = useState(false);
+  const [adaptOpen, setAdaptOpen] = useState(false);
+  const [adaptLoading, setAdaptLoading] = useState(false);
+  const [adaptMessage, setAdaptMessage] = useState("");
+  const [targetSlice, setTargetSlice] = useState<TargetOperationSlice | null>(null);
+  const [operationGovernance, setOperationGovernance] = useState<OperationDisposition[]>([]);
+  const adaptRequest = useRef<AbortController | null>(null);
   const [tab, setTab] = useState<"overview" | "contract" | "binding" | "evidence">("overview");
   const coverage = useMemo(() => summarizeCapabilityCoverage(items), [items]);
   const allFamilies = useMemo(() => groupCapabilitiesByFamily(items), [items]);
@@ -1112,6 +1123,64 @@ function LiveCapabilityView({
   const visible = useMemo(() => filterCapabilities(items, filters), [filters, items]);
   const visibleFamilies = useMemo(() => groupCapabilitiesByFamily(visible), [visible]);
   const governanceFilterCount = activeGovernanceFilterCount(filters);
+  const targetSliceSupported = apiFeatures.includes(ROLO_API_FEATURES.targetOperationSlice);
+  const operationGovernanceSupported = apiFeatures.includes(ROLO_API_FEATURES.operationGovernance);
+  const adaptContextSupported = targetSliceSupported;
+  const adaptLens = useMemo(
+    () => targetSlice ? buildAdaptContextLens(targetSlice, operationGovernance) : null,
+    [operationGovernance, targetSlice],
+  );
+
+  const loadAdaptContext = useCallback(() => {
+    adaptRequest.current?.abort();
+    const controller = new AbortController();
+    adaptRequest.current = controller;
+    setAdaptLoading(true);
+    setAdaptMessage("");
+    const sliceRequest = targetSliceSupported
+      ? roloClient.targetOperationSlice(robotId, { signal: controller.signal })
+      : Promise.resolve(null);
+    const governanceRequest = operationGovernanceSupported
+      ? roloClient.operationGovernance({ signal: controller.signal })
+      : Promise.resolve(null);
+    void Promise.allSettled([sliceRequest, governanceRequest]).then(([sliceResult, governanceResult]) => {
+      if (controller.signal.aborted) return;
+      const messages: string[] = [];
+      if (sliceResult.status === "fulfilled") setTargetSlice(sliceResult.value);
+      else messages.push(sliceResult.reason instanceof Error ? sliceResult.reason.message : "Target operation slice is unavailable.");
+      if (governanceResult.status === "fulfilled") setOperationGovernance(governanceResult.value?.items || []);
+      else messages.push(governanceResult.reason instanceof Error ? governanceResult.reason.message : "Operation governance is unavailable.");
+      setAdaptMessage(messages.join(" "));
+    }).finally(() => {
+      if (!controller.signal.aborted) setAdaptLoading(false);
+      if (adaptRequest.current === controller) adaptRequest.current = null;
+    });
+  }, [operationGovernanceSupported, robotId, targetSliceSupported]);
+
+  const closeAdaptContext = () => {
+    adaptRequest.current?.abort();
+    adaptRequest.current = null;
+    setAdaptLoading(false);
+    setAdaptOpen(false);
+  };
+  const toggleAdaptContext = () => {
+    if (adaptOpen) {
+      closeAdaptContext();
+      return;
+    }
+    setAdaptOpen(true);
+    if ((!targetSlice || adaptMessage) && !adaptLoading) loadAdaptContext();
+  };
+
+  useEffect(() => () => adaptRequest.current?.abort(), []);
+  useEffect(() => {
+    adaptRequest.current?.abort();
+    setAdaptOpen(false);
+    setAdaptLoading(false);
+    setAdaptMessage("");
+    setTargetSlice(null);
+    setOperationGovernance([]);
+  }, [robotId]);
 
   useEffect(() => {
     if (!visible.some((item) => item.operation === selectedOperation)) {
@@ -1177,7 +1246,7 @@ function LiveCapabilityView({
         action={<div className="coverage-summary"><strong>{coverage.total} operations · {allFamilies.length} families · {coverage.availability.VERIFIED} verified</strong><span><i style={{ width: capabilityCoveragePercent(coverage.availability.VERIFIED, coverage.total) }} /><i style={{ width: capabilityCoveragePercent(coverage.availability.AVAILABLE, coverage.total) }} /><i style={{ width: capabilityCoveragePercent(coverage.availability.UNAVAILABLE, coverage.total) }} /><i style={{ width: capabilityCoveragePercent(coverage.availability.UNKNOWN, coverage.total) }} /></span></div>}
       />
       <section className="panel capability-coverage-map" aria-label="Capability coverage by product layer">
-        <header><div><span>Validated capability summaries</span><h3>Coverage by product layer</h3></div><button className="secondary-button" disabled={layer === "ALL" && availabilityFilter === "ALL"} onClick={() => { setLayer("ALL"); setAvailabilityFilter("ALL"); }}>Clear coverage filters</button></header>
+        <header><div><span>Validated capability summaries</span><h3>Coverage by product layer</h3></div><div className="capability-coverage-actions">{adaptContextSupported && <button className={`secondary-button ${adaptOpen ? "is-active" : ""}`} aria-expanded={adaptOpen} onClick={toggleAdaptContext}><Target size={15} />Adapt context</button>}<button className="secondary-button" disabled={layer === "ALL" && availabilityFilter === "ALL"} onClick={() => { setLayer("ALL"); setAvailabilityFilter("ALL"); }}>Clear coverage filters</button></div></header>
         <div className="capability-coverage-grid">
           {coverage.layers.map((item) => (
             <button key={item.layer} className={layer === item.layer ? "is-active" : ""} onClick={() => selectCoverageLayer(item.layer)} aria-pressed={layer === item.layer}>
@@ -1189,6 +1258,34 @@ function LiveCapabilityView({
         </div>
         <footer><Info size={15} /><span>Verified, available, unavailable, and unknown remain separate trust states. Coverage does not imply task or physical outcome success.</span></footer>
       </section>
+      {adaptOpen && <section className="panel adapt-context-lens" aria-label="Adapt target operation context" aria-live="polite">
+        <header><div><span>Shadow planning read model</span><h3>Adapt context lens</h3><p>Bounded target work for this robot, separated from Registry capability availability.</p></div><div><small>On demand · read only</small><button className="icon-button" aria-label="Close Adapt context" onClick={closeAdaptContext}><X size={16} /></button></div></header>
+        {adaptLoading ? <div className="adapt-context-state"><Pulse size={24} /><span><strong>Resolving bounded workset</strong><small>The optional Adapt read models are loaded outside workbench bootstrap.</small></span></div> : adaptLens && targetSlice ? <>
+          <div className="adapt-context-summary">
+            <div><span>Current workset</span><strong>{adaptLens.worksetCount}</strong><small>primary + dependency</small></div>
+            <div><span>Target adapter</span><strong>{adaptLens.executionCounts.TARGET_ADAPTER}</strong><small>implementation surface</small></div>
+            <div><span>Agent native</span><strong>{adaptLens.executionCounts.AGENT_NATIVE}</strong><small>evidence and discovery</small></div>
+            <div><span>Product built-in</span><strong>{adaptLens.executionCounts.PRODUCT_BUILTIN}</strong><small>no adapter required</small></div>
+            <div><span>Deferred</span><strong>{adaptLens.deferredCount}</strong><small>grouped by reason</small></div>
+          </div>
+          <div className="adapt-context-body">
+            <section className="adapt-target-list">
+              <header><div><span>Target adapter operations</span><h4>Current implementation surface</h4></div><small>{adaptLens.governedTargetCount} / {adaptLens.targetOperations.length} governance records joined</small></header>
+              {adaptLens.targetOperations.length ? adaptLens.targetOperations.map((item) => <div className="adapt-target-row" key={item.operation}>
+                <span className={`adapt-role role-${item.role.toLowerCase()}`}>{item.role}</span>
+                <span><code>{item.operation}</code><small>{item.governance ? `${item.governance.semantic_layer} · ${item.governance.migration_status}` : "Governance record unavailable"}</small></span>
+                <span><small>Future capability</small><code>{item.governance?.future_capability || "Not mapped"}</code></span>
+              </div>) : <div className="adapt-context-empty"><CheckCircle size={20} /><span><strong>No target-adapter operations</strong><small>The current slice does not request adapter implementation work.</small></span></div>}
+            </section>
+            <aside className="adapt-context-meta">
+              <section><span>Deferred reasons</span>{adaptLens.deferred.length ? adaptLens.deferred.map((item) => <div key={item.reason}><code>{item.reason.replaceAll("_", " ")}</code><strong>{item.count}</strong></div>) : <p>No deferred operations are reported.</p>}</section>
+              <dl><div><dt>Discovery</dt><dd>{targetSlice.discovery_id}</dd></div><div><dt>Slice digest</dt><dd><code>{targetSlice.slice_sha256.slice(0, 12)}…</code></dd></div><div><dt>Registry digest</dt><dd><code>{targetSlice.registry_sha256.slice(0, 12)}…</code></dd></div><div><dt>Governance ledger</dt><dd>{operationGovernance.length ? `${operationGovernance.length} operations` : "Not available"}</dd></div></dl>
+            </aside>
+          </div>
+        </> : <div className="adapt-context-state is-warning"><WarningCircle size={24} /><span><strong>Adapt context is unavailable</strong><small>{adaptMessage || "The advertised optional read model did not return a target slice."}</small></span>{adaptContextSupported && <button className="secondary-button" onClick={loadAdaptContext}>Retry</button>}</div>}
+        {adaptMessage && adaptLens && <div className="adapt-context-warning"><WarningCircle size={15} /><span>{adaptMessage}</span><button className="secondary-button" disabled={adaptLoading} onClick={loadAdaptContext}>Retry optional data</button></div>}
+        <footer><Info size={15} /><span>This shadow view narrows agent work. It does not change the 294-operation Registry, capability availability, policy, conformance, or release gates.</span></footer>
+      </section>}
       <div className="capability-layout">
         <div className="capability-list panel">
           <div className="capability-toolbar">
@@ -1730,6 +1827,7 @@ function AppContent() {
   const [evidenceList, setEvidenceList] = useState<EvidenceCollection | null>(null);
   const [capabilityList, setCapabilityList] = useState<CapabilitySummary[] | null>(null);
   const [capabilityLimitations, setCapabilityLimitations] = useState<string[]>([]);
+  const [apiFeatures, setApiFeatures] = useState<string[]>([]);
   const [lifecycleRuns, setLifecycleRuns] = useState<LifecycleRunCollection | null>(null);
   const [wiki, setWiki] = useState<RobotWikiSnapshot | null>(null);
   const [discoveryHistory, setDiscoveryHistory] = useState<DiscoverySnapshotCollection | null>(null);
@@ -1771,6 +1869,7 @@ function AppContent() {
       setEvidenceList(result.evidence);
       setCapabilityList(result.capabilities);
       setCapabilityLimitations(result.capabilityLimitations);
+      setApiFeatures(result.health.api_features);
       setLifecycleRuns(result.runs);
       if (result.pipeline?.stages?.length) {
         setPipeline(result.pipeline.stages.map((stage) => ({
@@ -1799,6 +1898,7 @@ function AppContent() {
       setEvidenceList(null);
       setCapabilityList(null);
       setCapabilityLimitations([]);
+      setApiFeatures([]);
       setLifecycleRuns(null);
       setWiki(null);
       setDiscoveryHistory(null);
@@ -1821,6 +1921,7 @@ function AppContent() {
     setEvidenceList(null);
     setCapabilityList(null);
     setCapabilityLimitations([]);
+    setApiFeatures([]);
     setLifecycleRuns(null);
     setWiki(null);
     setDiscoveryHistory(null);
@@ -1961,7 +2062,7 @@ function AppContent() {
           {active === "stack" && (stackSource === "demo" ? <StackMapView focusLayer={stackContextFocus} onOpenWikiLayer={openWikiLayer} onOpenEvidence={openEvidence} /> : stackSource === "live" ? <StackMapView topology={topology} topologySnapshots={topologySnapshots} robotId={robot.robot_id} focusLayer={stackContextFocus} onOpenWikiLayer={openWikiLayer} onOpenEvidence={openEvidence} /> : <ReadModelUnavailableView title="Stack Map" description="Live topology needs a versioned rolo topology read model." />)}
           {active === "fleet" && (mode === "demo" ? <ReadModelUnavailableView title="Fleet" description="The labeled demo fixture represents one robot and does not include a fleet aggregate." /> : fleet && fleetBlockers ? <FleetView fleet={fleet} blockers={fleetBlockers} onSelectRobot={selectFleetRobot} onOpenEvidence={openEvidence} /> : fleetLoading ? <section className="content-view"><PageTitle title="Fleet" description="Aggregating validated robot overviews and pipeline blockers…" /><div className="panel read-model-unavailable" role="status"><Pulse size={26} /><div><strong>Loading Fleet</strong><p>No runtime telemetry is inferred while this read model is loading.</p></div></div></section> : <ReadModelUnavailableView title="Fleet" description={fleetMessage || "Open this surface to read the validated Fleet aggregate."} />)}
           {active === "overview" && <OverviewView robot={robot} pipeline={pipeline} overview={overview} mode={mode} evidenceItems={evidenceItems} onOpenEvidence={openEvidence} onNavigate={navigate} />}
-          {active === "capabilities" && (capabilitySource === "demo" ? <DemoCapabilityView onOpenEvidence={setEvidence} /> : capabilitySource === "live" && capabilityList ? <LiveCapabilityView robotId={robot.robot_id} items={capabilityList} limitations={capabilityLimitations} onOpenEvidence={openEvidence} /> : <ReadModelUnavailableView title="Capabilities" description="Live capability coverage needs a versioned rolo capability read model." />)}
+          {active === "capabilities" && (capabilitySource === "demo" ? <DemoCapabilityView onOpenEvidence={setEvidence} /> : capabilitySource === "live" && capabilityList ? <LiveCapabilityView robotId={robot.robot_id} items={capabilityList} limitations={capabilityLimitations} apiFeatures={apiFeatures} onOpenEvidence={openEvidence} /> : <ReadModelUnavailableView title="Capabilities" description="Live capability coverage needs a versioned rolo capability read model." />)}
           {active === "lifecycle" && (lifecycleSource === "demo" ? <DemoLifecycleView pipeline={pipeline} onOpenEvidence={setEvidence} /> : lifecycleSource === "live" && lifecycleRuns ? <LiveLifecycleView pipeline={pipeline} runs={lifecycleRuns} robotId={robot.robot_id} onOpenEvidence={openEvidence} /> : <ReadModelUnavailableView title="Lifecycle" description="Live lifecycle requires trusted stage and run read models." />)}
           {active === "wiki" && (mode === "demo" ? <ReadModelUnavailableView title="Robot Wiki" description="The labeled demo fixture does not include discovery Wiki evidence." /> : wiki && discoveryHistory ? <WikiView wiki={wiki} history={discoveryHistory} focusLayer={wikiContextFocus} onOpenStackLayer={openStackLayer} onClearFocus={() => setWikiContextFocus(null)} onOpenEvidence={openEvidence} /> : wikiLoading ? <section className="content-view"><PageTitle title="Robot Wiki" description="Reading manifest-verified discovery snapshots…" /><div className="panel read-model-unavailable" role="status"><Pulse size={26} /><div><strong>Loading Robot Wiki</strong><p>Current knowledge and verified history are being resolved independently.</p></div></div></section> : <ReadModelUnavailableView title="Robot Wiki" description={wikiMessage || "Open this surface to read a verified discovery Wiki."} />)}
           {active === "evidence" && (evidenceSource === "demo" ? <EvidenceView onOpenEvidence={openEvidence} /> : evidenceSource === "live" ? <EvidenceView live collection={evidenceList} robotId={robot.robot_id} onOpenEvidence={openEvidence} /> : <ReadModelUnavailableView title="Evidence" description="Live evidence resolution needs a versioned rolo evidence read model." />)}

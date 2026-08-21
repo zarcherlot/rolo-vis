@@ -991,6 +991,25 @@ export class RoloClient {
     );
   }
 
+  async operationGovernance(options?: RequestInit) {
+    const pageSize = 50;
+    const first = await this.operationGovernancePage(options, { limit: pageSize, offset: 0 });
+    const items = [...first.items];
+    let nextOffset = first.next_offset;
+    requireContract(nextOffset === null || nextOffset === items.length, "operation governance pagination is not contiguous", "/v1/operations/governance");
+    while (nextOffset !== null) {
+      const page = await this.operationGovernancePage(options, { limit: pageSize, offset: nextOffset });
+      requireContract(page.total === first.total, "operation governance total changed during pagination", "/v1/operations/governance");
+      requireContract(page.source_kind === first.source_kind && page.influences_registry === first.influences_registry, "operation governance authority changed during pagination", "/v1/operations/governance");
+      items.push(...page.items);
+      nextOffset = page.next_offset;
+      requireContract(nextOffset === null || nextOffset === items.length, "operation governance pagination is not contiguous", "/v1/operations/governance");
+    }
+    requireContract(items.length === first.total, "operation governance pages do not cover the advertised total", "/v1/operations/governance");
+    requireContract(new Set(items.map((item) => item.current_operation)).size === items.length, "operation governance pages contain duplicate operations", "/v1/operations/governance");
+    return { items, limitations: first.limitations };
+  }
+
   async targetOperationSlice(robotId: string, options?: RequestInit) {
     const path = `/v1/robots/${encodeURIComponent(robotId)}/adapt/operation-slice`;
     return parseTargetOperationSlice(

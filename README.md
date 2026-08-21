@@ -15,6 +15,7 @@
 - Read-only contract schema inspector for required fields, constraints, units, frames, and execution semantics.
 - Binding trust inspector for endpoint authority, provenance, evidence coverage, digests, and limitations.
 - Capability readiness lens that keeps contract, applicability, registration, binding, availability, and verification signals independent.
+- Feature-negotiated Adapt context lens for on-demand target-operation slices, execution classes, deferred reasons, and external governance mappings.
 - Governance filters for risk, access, lifecycle, and data classification with row-level policy context.
 - Lifecycle gate view for Adapt → Diagnose → Verify.
 - Lifecycle assessment matrix for current stage status, blockers, prerequisites, artifacts, owners, and supported runs.
