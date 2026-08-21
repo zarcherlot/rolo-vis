@@ -53,6 +53,7 @@ import type {
 } from "./demoData";
 import { ROLO_API_FEATURES, RoloApiError, roloClient } from "./roloClient";
 import type {
+  AdaptBaselineStatus,
   AdaptExecutionClass,
   AdaptMigrationStatus,
   AdaptSemanticLayer,
@@ -72,6 +73,8 @@ import type {
   RobotOverview,
   RobotTopology,
   RobotWikiSnapshot,
+  SliceActivationOutcome,
+  SliceRunDetail,
   SliceStabilityReport,
   TargetOperationSlice,
   TopologyDiff,
@@ -115,6 +118,7 @@ import {
 } from "./capabilityFilters";
 import type { CapabilityFilterState } from "./capabilityFilters";
 import { summarizeLifecycleAssessment } from "./lifecycleAssessment";
+import { filterSliceObservations } from "./sliceStability";
 import { getOverviewPresentation, getSurfaceSource } from "./workbenchPolicy";
 import type { WorkbenchMode } from "./workbenchPolicy";
 
@@ -1090,16 +1094,71 @@ function CapabilityReadinessPanel({
 }
 
 function SliceStabilityView({
+  robotId,
   report,
+  baseline,
   supported,
+  baselineSupported,
+  detailSupported,
   loading,
   onRetry,
 }: {
+  robotId: string;
   report: SliceStabilityReport | null;
+  baseline: AdaptBaselineStatus | null;
   supported: boolean;
+  baselineSupported: boolean;
+  detailSupported: boolean;
   loading: boolean;
   onRetry: () => void;
 }) {
+  const [outcomeFilter, setOutcomeFilter] = useState<SliceActivationOutcome | "ALL">("ALL");
+  const [diagnosticsOnly, setDiagnosticsOnly] = useState(false);
+  const [selectedRunId, setSelectedRunId] = useState("");
+  const [runDetail, setRunDetail] = useState<SliceRunDetail | null>(null);
+  const [runDetailMessage, setRunDetailMessage] = useState("");
+  const [runDetailLoading, setRunDetailLoading] = useState(false);
+  const detailRequest = useRef<AbortController | null>(null);
+  const filteredObservations = useMemo(
+    () => filterSliceObservations(report?.observations || [], {
+      outcome: outcomeFilter,
+      diagnosticsOnly,
+    }),
+    [diagnosticsOnly, outcomeFilter, report?.observations],
+  );
+  const recent = filteredObservations.slice(0, 8);
+
+  useEffect(() => {
+    detailRequest.current?.abort();
+    setSelectedRunId("");
+    setRunDetail(null);
+    setRunDetailMessage("");
+    setRunDetailLoading(false);
+  }, [report, robotId]);
+  useEffect(() => () => detailRequest.current?.abort(), []);
+
+  const openRunDetail = (runId: string) => {
+    if (!detailSupported) return;
+    detailRequest.current?.abort();
+    const controller = new AbortController();
+    detailRequest.current = controller;
+    setSelectedRunId(runId);
+    setRunDetail(null);
+    setRunDetailMessage("");
+    setRunDetailLoading(true);
+    void roloClient.sliceRunDetail(robotId, runId, { signal: controller.signal })
+      .then((value) => {
+        if (!controller.signal.aborted) setRunDetail(value);
+      })
+      .catch((error) => {
+        if (!controller.signal.aborted) setRunDetailMessage(error instanceof Error ? error.message : "Slice run detail is unavailable.");
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setRunDetailLoading(false);
+        if (detailRequest.current === controller) detailRequest.current = null;
+      });
+  };
+
   if (!supported) return <div className="adapt-context-state"><Info size={24} /><span><strong>Stability evidence is not advertised</strong><small>This rolo baseline does not expose the optional Slice stability contract.</small></span></div>;
   if (!report) return <div className="adapt-context-state is-warning"><WarningCircle size={24} /><span><strong>Stability evidence is unavailable</strong><small>No validated Slice observation report was returned.</small></span><button className="secondary-button" disabled={loading} onClick={onRetry}>Retry</button></div>;
 
@@ -1108,13 +1167,16 @@ function SliceStabilityView({
     : report.recommendation === "HOLD"
       ? "Stop expanding Canary scope and inspect the blocking runs below. Existing configuration is unchanged."
       : "Keep the current Shadow / Canary scope until the successful sample threshold is met.";
-  const recent = report.observations.slice(0, 8);
   return <section className="adapt-stability-view" aria-label="Slice stability and Canary observations">
     <header className={`adapt-stability-recommendation is-${report.recommendation.toLowerCase().replaceAll("_", "-")}`}>
       {report.recommendation === "READY_FOR_REVIEW" ? <CheckCircle size={22} weight="fill" /> : report.recommendation === "HOLD" ? <WarningCircle size={22} weight="fill" /> : <Pulse size={22} />}
       <span><small>Stability recommendation</small><strong>{report.recommendation.replaceAll("_", " ")}</strong><p>{recommendationCopy}</p></span>
       <em>{report.successful_canary_count} / {report.min_successful_canary_runs} successful Canary runs</em>
     </header>
+    {baselineSupported && <section className={`adapt-baseline-status is-${baseline?.status.toLowerCase() || "unavailable"}`} aria-label="Protected Adapt baseline status">
+      <div>{baseline?.status === "MATCHED" ? <ShieldCheck size={19} weight="fill" /> : <WarningCircle size={19} weight="fill" />}<span><small>Protected product baseline</small><strong>{baseline?.status || "UNAVAILABLE"}</strong><p>{baseline?.limitations[0] || "The optional baseline status did not resolve."}</p></span></div>
+      {baseline && <dl><div><dt>Operations</dt><dd>{baseline.current.operation_count}</dd></div><div><dt>Dispositions</dt><dd>{baseline.current.disposition_count}</dd></div><div><dt>Registry</dt><dd><code>{baseline.current.registry_sha256.slice(0, 12)}…</code></dd></div><div><dt>Changed fields</dt><dd>{baseline.changed_fields.length ? baseline.changed_fields.join(", ") : "None"}</dd></div></dl>}
+    </section>}
     <div className="adapt-stability-summary">
       <div><span>Observed runs</span><strong>{report.observation_count}</strong><small>latest {report.max_runs} maximum</small></div>
       <div><span>Selected Canary</span><strong>{report.selected_canary_count}</strong><small>{report.activated_count} activated</small></div>
@@ -1125,12 +1187,31 @@ function SliceStabilityView({
     </div>
     <div className="adapt-stability-body">
       <section className="adapt-stability-runs">
-        <header><div><span>Immutable run evidence</span><h4>Recent Slice decisions</h4></div><small>{recent.length} shown · newest first</small></header>
+        <header><div><span>Immutable run evidence</span><h4>Recent Slice decisions</h4></div><small>{recent.length} of {filteredObservations.length} shown · newest first</small></header>
+        {report.observation_count > 0 && <div className="adapt-stability-filters">
+          <label><span>Outcome</span><select aria-label="Filter Slice outcomes" value={outcomeFilter} onChange={(event) => setOutcomeFilter(event.target.value as SliceActivationOutcome | "ALL")}><option value="ALL">All outcomes</option><option value="SHADOW_ONLY">Shadow only</option><option value="NOT_SELECTED">Not selected</option><option value="ACTIVATED">Activated</option><option value="FALLBACK">Fallback</option></select></label>
+          <button className={`secondary-button ${diagnosticsOnly ? "is-active" : ""}`} aria-pressed={diagnosticsOnly} onClick={() => setDiagnosticsOnly((value) => !value)}><WarningCircle size={14} />Diagnostics only</button>
+        </div>}
         {recent.length ? recent.map((observation) => <article key={observation.run_id} className={`adapt-stability-run is-${observation.outcome.toLowerCase().replaceAll("_", "-")}`}>
           <div><code>{observation.run_id}</code><small>{observation.mode} · {observation.outcome.replaceAll("_", " ")}</small></div>
           <dl><div><dt>Agent</dt><dd>{observation.agent_run_status || "Not recorded"}</dd></div><div><dt>Gate</dt><dd>{observation.gate_status || "Not recorded"}</dd></div><div><dt>Context effect</dt><dd>{observation.affects_agent_context ? "Active" : "None"}</dd></div><div><dt>Reduction</dt><dd>{Math.round(observation.effective_context_reduction_ratio * 100)}%</dd></div></dl>
+          {detailSupported && <button className="icon-button" aria-label={`Inspect Slice decision ${observation.run_id}`} onClick={() => openRunDetail(observation.run_id)}><ArrowRight size={14} /></button>}
           {(observation.fallback_reason || observation.alert_codes.length > 0) && <p><WarningCircle size={13} />{observation.fallback_reason || observation.alert_codes.join(" · ")}</p>}
-        </article>) : <div className="adapt-context-empty"><Clock size={20} /><span><strong>No Slice decisions observed</strong><small>Legacy runs without a Slice decision are intentionally excluded. The current recommendation remains sample-limited.</small></span></div>}
+        </article>) : <div className="adapt-context-empty"><Clock size={20} /><span><strong>{report.observation_count ? "No runs match the current filters" : "No Slice decisions observed"}</strong><small>{report.observation_count ? "Clear the outcome or diagnostic filter to widen the observation set." : "Legacy runs without a Slice decision are intentionally excluded. The current recommendation remains sample-limited."}</small></span></div>}
+        {(selectedRunId || runDetailMessage) && <section className="adapt-slice-run-detail" aria-label="Slice activation decision detail">
+          <header><div><span>Decision authority explanation</span><h4>{selectedRunId}</h4></div><button className="icon-button" aria-label="Close Slice run detail" onClick={() => { detailRequest.current?.abort(); setSelectedRunId(""); setRunDetail(null); setRunDetailMessage(""); setRunDetailLoading(false); }}><X size={15} /></button></header>
+          {runDetailLoading ? <div className="adapt-context-state"><Pulse size={20} /><span><strong>Validating immutable decision</strong><small>Joining activation, Shadow divergence, and bounded run metrics.</small></span></div> : runDetail ? <>
+            <div className="adapt-slice-decision-summary"><div><span>Mode / outcome</span><strong>{runDetail.activation.mode} · {runDetail.activation.outcome.replaceAll("_", " ")}</strong></div><div><span>Selected by</span><strong>{runDetail.activation.selected_by.join(" · ") || "Not selected"}</strong></div><div><span>Context operation limit</span><strong>{runDetail.activation.max_context_operations}</strong></div><div><span>Affects Agent context</span><strong>{runDetail.activation.affects_agent_context ? "Yes" : "No"}</strong></div></div>
+            <div className="adapt-slice-authority-grid">
+              <section><span>Authoritative / release operations</span><strong>{runDetail.activation.release_authority_operations.length}</strong><p>{runDetail.activation.release_authority_operations.map((operation) => <code key={operation}>{operation}</code>)}</p></section>
+              <section><span>Requested context operations</span><strong>{runDetail.activation.requested_context_operations.length}</strong><p>{runDetail.activation.requested_context_operations.map((operation) => <code key={operation}>{operation}</code>)}</p></section>
+              <section><span>Effective context operations</span><strong>{runDetail.activation.effective_context_operations.length}</strong><p>{runDetail.activation.effective_context_operations.map((operation) => <code key={operation}>{operation}</code>)}</p></section>
+            </div>
+            {runDetail.activation.alerts.length > 0 && <section className="adapt-slice-alerts"><span>Activation diagnostics</span>{runDetail.activation.alerts.map((alert) => <article key={alert.code} className={`is-${alert.severity.toLowerCase()}`}><header><code>{alert.code}</code><strong>{alert.severity}</strong></header><p>{alert.message}</p>{alert.operations.length > 0 && <small>{alert.operations.join(" · ")}</small>}</article>)}</section>}
+            <section className="adapt-shadow-divergence"><header><div><span>Shadow divergence</span><strong>{runDetail.shadow ? "Validated" : "Legacy run · not recorded"}</strong></div><small>Comparison only · never release authority</small></header>{runDetail.shadow && <dl><div><dt>Eligible outside Shadow</dt><dd>{runDetail.shadow.eligible_not_in_shadow.length}</dd><p>{runDetail.shadow.eligible_not_in_shadow.map((operation) => <code key={operation}>{operation}</code>)}</p></div><div><dt>Shadow outside eligibility</dt><dd>{runDetail.shadow.shadow_not_in_eligible.length}</dd><p>{runDetail.shadow.shadow_not_in_eligible.map((operation) => <code key={operation}>{operation}</code>)}</p></div></dl>}</section>
+            <footer><ShieldCheck size={14} /><span>{runDetail.limitations.join(" ")}</span></footer>
+          </> : <div className="adapt-context-state is-warning"><WarningCircle size={20} /><span><strong>Slice decision detail is unavailable</strong><small>{runDetailMessage}</small></span></div>}
+        </section>}
       </section>
       <aside className="adapt-stability-reasons">
         <span>Recommendation evidence</span>
@@ -1172,6 +1253,7 @@ function LiveCapabilityView({
   const [adaptMessage, setAdaptMessage] = useState("");
   const [targetSlice, setTargetSlice] = useState<TargetOperationSlice | null>(null);
   const [sliceStability, setSliceStability] = useState<SliceStabilityReport | null>(null);
+  const [adaptBaseline, setAdaptBaseline] = useState<AdaptBaselineStatus | null>(null);
   const [operationGovernance, setOperationGovernance] = useState<OperationDisposition[]>([]);
   const [adaptTargetFocus, setAdaptTargetFocus] = useState(false);
   const [adaptView, setAdaptView] = useState<"target" | "governance" | "stability">("target");
@@ -1203,6 +1285,8 @@ function LiveCapabilityView({
   const targetSliceSupported = apiFeatures.includes(ROLO_API_FEATURES.targetOperationSlice);
   const operationGovernanceSupported = apiFeatures.includes(ROLO_API_FEATURES.operationGovernance);
   const sliceStabilitySupported = apiFeatures.includes(ROLO_API_FEATURES.sliceStability);
+  const adaptBaselineSupported = apiFeatures.includes(ROLO_API_FEATURES.adaptBaselineStatus);
+  const sliceRunDetailSupported = apiFeatures.includes(ROLO_API_FEATURES.sliceRunDetail);
   const adaptContextSupported = targetSliceSupported;
   const adaptLens = useMemo(
     () => targetSlice ? buildAdaptContextLens(targetSlice, operationGovernance) : null,
@@ -1245,7 +1329,10 @@ function LiveCapabilityView({
     const stabilityRequest = sliceStabilitySupported
       ? roloClient.sliceStability(robotId, { signal: controller.signal })
       : Promise.resolve(null);
-    void Promise.allSettled([sliceRequest, governanceRequest, stabilityRequest]).then(([sliceResult, governanceResult, stabilityResult]) => {
+    const baselineRequest = adaptBaselineSupported
+      ? roloClient.adaptBaseline({ signal: controller.signal })
+      : Promise.resolve(null);
+    void Promise.allSettled([sliceRequest, governanceRequest, stabilityRequest, baselineRequest]).then(([sliceResult, governanceResult, stabilityResult, baselineResult]) => {
       if (controller.signal.aborted) return;
       const messages: string[] = [];
       if (sliceResult.status === "fulfilled") setTargetSlice(sliceResult.value);
@@ -1254,12 +1341,14 @@ function LiveCapabilityView({
       else messages.push(governanceResult.reason instanceof Error ? governanceResult.reason.message : "Operation governance is unavailable.");
       if (stabilityResult.status === "fulfilled") setSliceStability(stabilityResult.value);
       else messages.push(stabilityResult.reason instanceof Error ? stabilityResult.reason.message : "Slice stability evidence is unavailable.");
+      if (baselineResult.status === "fulfilled") setAdaptBaseline(baselineResult.value);
+      else messages.push(baselineResult.reason instanceof Error ? baselineResult.reason.message : "Adapt protected baseline is unavailable.");
       setAdaptMessage(messages.join(" "));
     }).finally(() => {
       if (!controller.signal.aborted) setAdaptLoading(false);
       if (adaptRequest.current === controller) adaptRequest.current = null;
     });
-  }, [operationGovernanceSupported, robotId, sliceStabilitySupported, targetSliceSupported]);
+  }, [adaptBaselineSupported, operationGovernanceSupported, robotId, sliceStabilitySupported, targetSliceSupported]);
 
   const closeAdaptContext = () => {
     adaptRequest.current?.abort();
@@ -1284,6 +1373,7 @@ function LiveCapabilityView({
     setAdaptMessage("");
     setTargetSlice(null);
     setSliceStability(null);
+    setAdaptBaseline(null);
     setOperationGovernance([]);
     setAdaptTargetFocus(false);
     setAdaptView("target");
@@ -1432,7 +1522,7 @@ function LiveCapabilityView({
                 <section><span>Deferred reasons</span>{adaptLens.deferred.length ? adaptLens.deferred.map((item) => <div key={item.reason}><code>{item.reason.replaceAll("_", " ")}</code><strong>{item.count}</strong></div>) : <p>No deferred operations are reported.</p>}</section>
                 <dl><div><dt>Discovery</dt><dd>{targetSlice.discovery_id}</dd></div><div><dt>Slice digest</dt><dd><code>{targetSlice.slice_sha256.slice(0, 12)}…</code></dd></div><div><dt>Registry digest</dt><dd><code>{targetSlice.registry_sha256.slice(0, 12)}…</code></dd></div><div><dt>Governance ledger</dt><dd>{operationGovernance.length ? `${operationGovernance.length} operations` : "Not available"}</dd></div></dl>
               </aside>
-            </div> : adaptView === "stability" ? <SliceStabilityView report={sliceStability} supported={sliceStabilitySupported} loading={adaptLoading} onRetry={loadAdaptContext} /> : <section className="adapt-governance-matrix">
+            </div> : adaptView === "stability" ? <SliceStabilityView robotId={robotId} report={sliceStability} baseline={adaptBaseline} supported={sliceStabilitySupported} baselineSupported={adaptBaselineSupported} detailSupported={sliceRunDetailSupported} loading={adaptLoading} onRetry={loadAdaptContext} /> : <section className="adapt-governance-matrix">
               <header>
                 <div><span>Operation disposition ledger</span><h4>Cross-layer governance explorer</h4><p>Search migration intent and execution ownership without changing Registry truth.</p></div>
                 <small>{governanceResultPage.total} of {governanceSummary.total} records</small>

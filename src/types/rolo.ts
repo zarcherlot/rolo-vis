@@ -102,6 +102,78 @@ export interface SliceStabilityReport {
   influences_release: false;
 }
 
+export interface AdaptBaselineSnapshot {
+  schema_version: "robot-adapt-baseline-snapshot/v1";
+  operation_count: number;
+  disposition_count: number;
+  contract_catalog_sha256: string;
+  registry_sha256: string;
+  operation_identity_sha256: string;
+}
+
+export interface AdaptBaselineStatus {
+  schema_version: "rolo-adapt-baseline-status/v1";
+  status: "MATCHED" | "DRIFTED";
+  pinned: AdaptBaselineSnapshot;
+  current: AdaptBaselineSnapshot;
+  changed_fields: string[];
+  source_kind: "protected_product_baseline";
+  influences_release: false;
+  limitations: string[];
+}
+
+export interface SliceActivationAlert {
+  code: string;
+  severity: "WARNING" | "BLOCKING";
+  message: string;
+  operations: string[];
+}
+
+export interface SliceActivationDecision {
+  schema_version: "robot-target-operation-slice-activation/v1";
+  robot_id: string;
+  run_id: string | null;
+  slice_sha256: string;
+  mode: "SHADOW" | "CANARY";
+  selected: boolean;
+  selected_by: string[];
+  outcome: SliceActivationOutcome;
+  authoritative_eligible_operations: string[];
+  requested_context_operations: string[];
+  effective_context_operations: string[];
+  release_authority_operations: string[];
+  max_context_operations: number;
+  alerts: SliceActivationAlert[];
+  fallback_reason: string | null;
+  affects_agent_context: boolean;
+  influences_release: false;
+}
+
+export interface TargetOperationSliceShadowReport {
+  schema_version: "robot-target-operation-slice-shadow/v1";
+  robot_id: string;
+  discovery_id: string;
+  slice_sha256: string;
+  authoritative_eligible_operations: string[];
+  shadow_target_adapter_operations: string[];
+  eligible_not_in_shadow: string[];
+  shadow_not_in_eligible: string[];
+  influences_release: false;
+}
+
+export interface SliceRunDetail {
+  schema_version: "rolo-adapt-slice-run-detail/v1";
+  robot_id: string;
+  run_id: string;
+  observation: SliceRunObservation;
+  activation: SliceActivationDecision;
+  shadow: TargetOperationSliceShadowReport | null;
+  source_kind: "immutable_adapt_run_artifacts";
+  integrity_status: "validated";
+  influences_release: false;
+  limitations: string[];
+}
+
 export interface RobotCapability {
   schema_version: string;
   robot_id: string;

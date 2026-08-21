@@ -80,6 +80,77 @@ const SLICE_STABILITY = {
   influences_release: false,
 };
 
+const ADAPT_BASELINE = {
+  schema_version: "rolo-adapt-baseline-status/v1",
+  status: "MATCHED",
+  pinned: {
+    schema_version: "robot-adapt-baseline-snapshot/v1",
+    operation_count: 294,
+    disposition_count: 294,
+    contract_catalog_sha256: "1".repeat(64),
+    registry_sha256: "2".repeat(64),
+    operation_identity_sha256: "3".repeat(64),
+  },
+  current: {
+    schema_version: "robot-adapt-baseline-snapshot/v1",
+    operation_count: 294,
+    disposition_count: 294,
+    contract_catalog_sha256: "1".repeat(64),
+    registry_sha256: "2".repeat(64),
+    operation_identity_sha256: "3".repeat(64),
+  },
+  changed_fields: [],
+  source_kind: "protected_product_baseline",
+  influences_release: false,
+  limitations: ["Product baseline only."],
+};
+
+const SLICE_RUN_DETAIL = {
+  schema_version: "rolo-adapt-slice-run-detail/v1",
+  robot_id: "AMR-07",
+  run_id: "run-20260821-001",
+  observation: SLICE_STABILITY.observations[0],
+  activation: {
+    schema_version: "robot-target-operation-slice-activation/v1",
+    robot_id: "AMR-07",
+    run_id: "run-20260821-001",
+    slice_sha256: "b".repeat(64),
+    mode: "CANARY",
+    selected: true,
+    selected_by: ["run_id"],
+    outcome: "ACTIVATED",
+    authoritative_eligible_operations: ["app.agent-native", "app.target"],
+    requested_context_operations: ["app.target"],
+    effective_context_operations: ["app.target"],
+    release_authority_operations: ["app.agent-native", "app.target"],
+    max_context_operations: 20,
+    alerts: [{
+      code: "ELIGIBLE_NOT_IN_SLICE",
+      severity: "WARNING",
+      message: "One eligible operation is outside the Slice.",
+      operations: ["app.agent-native"],
+    }],
+    fallback_reason: null,
+    affects_agent_context: true,
+    influences_release: false,
+  },
+  shadow: {
+    schema_version: "robot-target-operation-slice-shadow/v1",
+    robot_id: "AMR-07",
+    discovery_id: "discovery-1",
+    slice_sha256: "b".repeat(64),
+    authoritative_eligible_operations: ["app.agent-native", "app.target"],
+    shadow_target_adapter_operations: ["app.target"],
+    eligible_not_in_shadow: ["app.agent-native"],
+    shadow_not_in_eligible: [],
+    influences_release: false,
+  },
+  source_kind: "immutable_adapt_run_artifacts",
+  integrity_status: "validated",
+  influences_release: false,
+  limitations: ["Agent context only."],
+};
+
 const OPERATION_GOVERNANCE_COLLECTION = {
   schema_version: "rolo-operation-governance-collection/v1",
   items: [{
@@ -780,6 +851,71 @@ test("RoloClient rejects Slice stability that claims release authority", async (
   }
 });
 
+test("RoloClient validates the protected Adapt baseline independently of robot state", async () => {
+  const originalFetch = globalThis.fetch;
+  const requests = [];
+  globalThis.fetch = async (url) => {
+    requests.push(url);
+    return { ok: true, json: async () => ADAPT_BASELINE };
+  };
+
+  try {
+    const baseline = await new RoloClient("http://rolo.test").adaptBaseline();
+    assert.equal(baseline.status, "MATCHED");
+    assert.equal(baseline.current.operation_count, 294);
+    assert.deepEqual(requests, ["http://rolo.test/v1/adapt/baseline"]);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("RoloClient joins one immutable Slice decision with its Shadow divergence", async () => {
+  const originalFetch = globalThis.fetch;
+  const requests = [];
+  globalThis.fetch = async (url) => {
+    requests.push(url);
+    return { ok: true, json: async () => SLICE_RUN_DETAIL };
+  };
+
+  try {
+    const detail = await new RoloClient("http://rolo.test").sliceRunDetail(
+      "AMR-07",
+      "run-20260821-001",
+    );
+    assert.equal(detail.activation.affects_agent_context, true);
+    assert.deepEqual(detail.activation.release_authority_operations, ["app.agent-native", "app.target"]);
+    assert.deepEqual(detail.shadow.eligible_not_in_shadow, ["app.agent-native"]);
+    assert.deepEqual(requests, [
+      "http://rolo.test/v1/robots/AMR-07/adapt/slice-runs/run-20260821-001",
+    ]);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("RoloClient rejects a Slice decision that changes release authority", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => ({
+    ok: true,
+    json: async () => ({
+      ...SLICE_RUN_DETAIL,
+      activation: {
+        ...SLICE_RUN_DETAIL.activation,
+        release_authority_operations: ["app.target"],
+      },
+    }),
+  });
+
+  try {
+    await assert.rejects(
+      () => new RoloClient("http://rolo.test").sliceRunDetail("AMR-07", "run-20260821-001"),
+      RoloContractError,
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("RoloClient reports a partial connection when overview is not available", async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async (url) => {
@@ -1335,6 +1471,20 @@ test("Wiki snapshot detail exposes every selected discovery limitation", async (
   assert.match(liveWiki, /selectedDiscovery\.limitations\.map/);
   assert.match(liveWiki, /aria-label="Snapshot limitations"/);
   assert.match(liveWiki, /Diagnostic limitations/);
+});
+
+test("Adapt Stability keeps baseline, filtering, and run authority drilldown separate", async () => {
+  const source = await readFile(new URL("../src/App.tsx", import.meta.url), "utf8");
+  const start = source.indexOf("function SliceStabilityView");
+  const end = source.indexOf("function LiveCapabilityView", start);
+  assert.ok(start >= 0 && end > start);
+  const stability = source.slice(start, end);
+
+  assert.match(stability, /Protected product baseline|adaptBaseline/);
+  assert.match(stability, /filterSliceObservations|Diagnostics only/);
+  assert.match(stability, /roloClient\.sliceRunDetail/);
+  assert.match(stability, /Authoritative \/ release operations/);
+  assert.match(stability, /Comparison only · never release authority/);
 });
 
 test("plugin manifest declares every trusted read-model endpoint", async () => {

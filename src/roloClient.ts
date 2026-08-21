@@ -1,4 +1,6 @@
 import type {
+  AdaptBaselineSnapshot,
+  AdaptBaselineStatus,
   BootstrapResult,
   CapabilityCollection,
   CapabilityDetail,
@@ -23,10 +25,13 @@ import type {
   RobotOverview,
   RobotTopology,
   RobotWikiSnapshot,
+  SliceActivationDecision,
+  SliceRunDetail,
   SliceRunObservation,
   SliceStabilityReport,
   StageAssessment,
   TargetOperationSlice,
+  TargetOperationSliceShadowReport,
   TopologyDiff,
   TopologyEdge,
   TopologyNode,
@@ -38,7 +43,9 @@ import type {
 const DEFAULT_BASE = "/rolo-api";
 
 export const ROLO_API_FEATURES = {
+  adaptBaselineStatus: "adapt.baseline-status/v1",
   operationGovernance: "adapt.operation-governance/v1",
+  sliceRunDetail: "adapt.slice-run-detail/v1",
   sliceStability: "adapt.slice-stability/v1",
   targetOperationSlice: "adapt.target-operation-slice/v1",
 } as const;
@@ -250,6 +257,84 @@ function parseSliceStabilityReport(value: unknown, path: string, robotId: string
   requireContract(isStringArray(value.recommendation_reasons), "invalid Slice recommendation reasons", path);
   requireContract(value.influences_release === false, "Slice stability must not influence release", path);
   return { ...value, observations } as unknown as SliceStabilityReport;
+}
+
+function parseAdaptBaselineSnapshot(value: unknown, path: string): AdaptBaselineSnapshot {
+  requireContract(isRecord(value), "Adapt baseline snapshot must be an object", path);
+  requireContract(value.schema_version === "robot-adapt-baseline-snapshot/v1", "unsupported Adapt baseline snapshot schema", path);
+  requireContract(Number.isInteger(value.operation_count) && Number(value.operation_count) > 0, "invalid Adapt baseline operation count", path);
+  requireContract(Number.isInteger(value.disposition_count) && Number(value.disposition_count) > 0, "invalid Adapt baseline disposition count", path);
+  for (const key of ["contract_catalog_sha256", "registry_sha256", "operation_identity_sha256"] as const) {
+    requireContract(/^[0-9a-f]{64}$/.test(String(value[key])), `invalid Adapt baseline ${key}`, path);
+  }
+  return value as unknown as AdaptBaselineSnapshot;
+}
+
+function parseAdaptBaselineStatus(value: unknown, path: string): AdaptBaselineStatus {
+  requireContract(isRecord(value), "Adapt baseline status must be an object", path);
+  requireContract(value.schema_version === "rolo-adapt-baseline-status/v1", "unsupported Adapt baseline status schema", path);
+  const pinned = parseAdaptBaselineSnapshot(value.pinned, `${path}/pinned`);
+  const current = parseAdaptBaselineSnapshot(value.current, `${path}/current`);
+  requireContract(["MATCHED", "DRIFTED"].includes(String(value.status)), "invalid Adapt baseline status", path);
+  requireContract(isStringArray(value.changed_fields), "invalid Adapt baseline changed fields", path);
+  const expected = ["operation_count", "disposition_count", "contract_catalog_sha256", "registry_sha256", "operation_identity_sha256"]
+    .filter((key) => pinned[key as keyof AdaptBaselineSnapshot] !== current[key as keyof AdaptBaselineSnapshot])
+    .sort();
+  requireContract(JSON.stringify(value.changed_fields) === JSON.stringify(expected), "inconsistent Adapt baseline drift", path);
+  requireContract(value.status === (expected.length ? "DRIFTED" : "MATCHED"), "inconsistent Adapt baseline status", path);
+  requireContract(value.source_kind === "protected_product_baseline" && value.influences_release === false, "invalid Adapt baseline authority", path);
+  requireContract(isStringArray(value.limitations), "invalid Adapt baseline limitations", path);
+  return { ...value, pinned, current } as unknown as AdaptBaselineStatus;
+}
+
+function parseSliceActivationDecision(value: unknown, path: string, robotId: string, runId: string): SliceActivationDecision {
+  requireContract(isRecord(value), "Slice activation decision must be an object", path);
+  requireContract(value.schema_version === "robot-target-operation-slice-activation/v1", "unsupported Slice activation schema", path);
+  requireContract(value.robot_id === robotId && (value.run_id === null || value.run_id === runId), "Slice activation identity does not match", path);
+  requireContract(/^[0-9a-f]{64}$/.test(String(value.slice_sha256)), "invalid Slice activation digest", path);
+  requireContract(["SHADOW", "CANARY"].includes(String(value.mode)) && ["SHADOW_ONLY", "NOT_SELECTED", "ACTIVATED", "FALLBACK"].includes(String(value.outcome)), "invalid Slice activation state", path);
+  requireContract(typeof value.selected === "boolean" && typeof value.affects_agent_context === "boolean", "invalid Slice activation selection", path);
+  for (const key of ["selected_by", "authoritative_eligible_operations", "requested_context_operations", "effective_context_operations", "release_authority_operations"] as const) {
+    requireContract(isStringArray(value[key]), `invalid Slice activation ${key}`, path);
+  }
+  requireContract(JSON.stringify(value.release_authority_operations) === JSON.stringify(value.authoritative_eligible_operations), "Slice activation changed release authority", path);
+  requireContract(Number.isInteger(value.max_context_operations) && Number(value.max_context_operations) > 0, "invalid Slice context operation limit", path);
+  requireContract(Array.isArray(value.alerts), "invalid Slice activation alerts", path);
+  for (const [index, alert] of value.alerts.entries()) {
+    const alertPath = `${path}/alerts/${index}`;
+    requireContract(isRecord(alert), "Slice activation alert must be an object", alertPath);
+    requireContract(typeof alert.code === "string" && alert.code.length > 0, "missing Slice alert code", alertPath);
+    requireContract(["WARNING", "BLOCKING"].includes(String(alert.severity)) && typeof alert.message === "string", "invalid Slice alert severity or message", alertPath);
+    requireContract(isStringArray(alert.operations), "invalid Slice alert operations", alertPath);
+  }
+  requireContract(value.fallback_reason === null || typeof value.fallback_reason === "string", "invalid Slice fallback reason", path);
+  requireContract(value.influences_release === false, "Slice activation must not influence release", path);
+  return value as unknown as SliceActivationDecision;
+}
+
+function parseSliceShadow(value: unknown, path: string, robotId: string, sliceDigest: string): TargetOperationSliceShadowReport {
+  requireContract(isRecord(value), "Slice shadow report must be an object", path);
+  requireContract(value.schema_version === "robot-target-operation-slice-shadow/v1", "unsupported Slice shadow schema", path);
+  requireContract(value.robot_id === robotId && typeof value.discovery_id === "string", "Slice shadow identity does not match", path);
+  requireContract(value.slice_sha256 === sliceDigest, "Slice shadow digest does not match activation", path);
+  for (const key of ["authoritative_eligible_operations", "shadow_target_adapter_operations", "eligible_not_in_shadow", "shadow_not_in_eligible"] as const) {
+    requireContract(isStringArray(value[key]), `invalid Slice shadow ${key}`, path);
+  }
+  requireContract(value.influences_release === false, "Slice shadow must not influence release", path);
+  return value as unknown as TargetOperationSliceShadowReport;
+}
+
+function parseSliceRunDetail(value: unknown, path: string, robotId: string, runId: string): SliceRunDetail {
+  requireContract(isRecord(value), "Slice run detail must be an object", path);
+  requireContract(value.schema_version === "rolo-adapt-slice-run-detail/v1", "unsupported Slice run detail schema", path);
+  requireContract(value.robot_id === robotId && value.run_id === runId, "Slice run detail identity does not match", path);
+  const observation = parseSliceRunObservation(value.observation, `${path}/observation`);
+  requireContract(observation.run_id === runId, "Slice observation run identity does not match", path);
+  const activation = parseSliceActivationDecision(value.activation, `${path}/activation`, robotId, runId);
+  const shadow = value.shadow === null ? null : parseSliceShadow(value.shadow, `${path}/shadow`, robotId, activation.slice_sha256);
+  requireContract(value.source_kind === "immutable_adapt_run_artifacts" && value.integrity_status === "validated", "invalid Slice run evidence source", path);
+  requireContract(value.influences_release === false && isStringArray(value.limitations), "invalid Slice run authority or limitations", path);
+  return { ...value, observation, activation, shadow } as unknown as SliceRunDetail;
 }
 
 function parseRobotCapabilities(value: unknown, path: string): RobotCapability[] {
@@ -1080,6 +1165,21 @@ export class RoloClient {
       await this.request<unknown>(path, options),
       path,
       robotId,
+    );
+  }
+
+  async adaptBaseline(options?: RequestInit) {
+    const path = "/v1/adapt/baseline";
+    return parseAdaptBaselineStatus(await this.request<unknown>(path, options), path);
+  }
+
+  async sliceRunDetail(robotId: string, runId: string, options?: RequestInit) {
+    const path = `/v1/robots/${encodeURIComponent(robotId)}/adapt/slice-runs/${encodeURIComponent(runId)}`;
+    return parseSliceRunDetail(
+      await this.request<unknown>(path, options),
+      path,
+      robotId,
+      runId,
     );
   }
 
