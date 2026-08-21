@@ -83,6 +83,10 @@ import {
   capabilityCoveragePercent,
   summarizeCapabilityCoverage,
 } from "./capabilityCoverage";
+import {
+  capabilityRelations as getCapabilityRelations,
+  groupCapabilitiesByFamily,
+} from "./capabilityRelations";
 import { getOverviewPresentation, getSurfaceSource } from "./workbenchPolicy";
 import type { WorkbenchMode } from "./workbenchPolicy";
 
@@ -961,12 +965,14 @@ function LiveCapabilityView({
   const [availabilityFilter, setAvailabilityFilter] = useState("All availability");
   const [tab, setTab] = useState<"overview" | "contract" | "binding" | "evidence">("overview");
   const coverage = useMemo(() => summarizeCapabilityCoverage(items), [items]);
+  const allFamilies = useMemo(() => groupCapabilitiesByFamily(items), [items]);
   const visible = useMemo(() => items.filter((item) => {
     const matchesQuery = `${item.operation} ${item.description} ${item.layer}`.toLowerCase().includes(query.toLowerCase());
     return matchesQuery
       && (layer === "All layers" || item.layer === layer)
       && (availabilityFilter === "All availability" || item.availability === availabilityFilter);
   }), [availabilityFilter, items, layer, query]);
+  const visibleFamilies = useMemo(() => groupCapabilitiesByFamily(visible), [visible]);
 
   useEffect(() => {
     if (!visible.some((item) => item.operation === selectedOperation)) {
@@ -996,6 +1002,10 @@ function LiveCapabilityView({
 
   const selected = items.find((item) => item.operation === selectedOperation);
   const detailItem = detail?.capability || selected;
+  const relations = useMemo(
+    () => detailItem ? getCapabilityRelations(detailItem, items) : [],
+    [detailItem, items],
+  );
   const selectCoverageLayer = (selectedLayer: typeof CAPABILITY_LAYERS[number]) => {
     const nextLayer = layer === selectedLayer ? "All layers" : selectedLayer;
     setLayer(nextLayer);
@@ -1009,13 +1019,22 @@ function LiveCapabilityView({
       setTab("overview");
     }
   };
+  const openRelatedOperation = (operation: string) => {
+    const related = items.find((item) => item.operation === operation);
+    if (!related) return;
+    setLayer(related.layer);
+    setAvailabilityFilter("All availability");
+    setQuery("");
+    setSelectedOperation(related.operation);
+    setTab("overview");
+  };
 
   return (
     <section className="content-view capabilities-view">
       <PageTitle
         title="Capabilities"
         description="Canonical contracts joined with current robot applicability, bindings, and evidence."
-        action={<div className="coverage-summary"><strong>{coverage.total} canonical operations · {coverage.availability.VERIFIED} verified</strong><span><i style={{ width: capabilityCoveragePercent(coverage.availability.VERIFIED, coverage.total) }} /><i style={{ width: capabilityCoveragePercent(coverage.availability.AVAILABLE, coverage.total) }} /><i style={{ width: capabilityCoveragePercent(coverage.availability.UNAVAILABLE, coverage.total) }} /><i style={{ width: capabilityCoveragePercent(coverage.availability.UNKNOWN, coverage.total) }} /></span></div>}
+        action={<div className="coverage-summary"><strong>{coverage.total} operations · {allFamilies.length} families · {coverage.availability.VERIFIED} verified</strong><span><i style={{ width: capabilityCoveragePercent(coverage.availability.VERIFIED, coverage.total) }} /><i style={{ width: capabilityCoveragePercent(coverage.availability.AVAILABLE, coverage.total) }} /><i style={{ width: capabilityCoveragePercent(coverage.availability.UNAVAILABLE, coverage.total) }} /><i style={{ width: capabilityCoveragePercent(coverage.availability.UNKNOWN, coverage.total) }} /></span></div>}
       />
       <section className="panel capability-coverage-map" aria-label="Capability coverage by product layer">
         <header><div><span>Validated capability summaries</span><h3>Coverage by product layer</h3></div><button className="secondary-button" disabled={layer === "All layers" && availabilityFilter === "All availability"} onClick={() => { setLayer("All layers"); setAvailabilityFilter("All availability"); }}>Clear coverage filters</button></header>
@@ -1038,13 +1057,18 @@ function LiveCapabilityView({
             <label className="capability-layer-filter"><span>Availability</span><select value={availabilityFilter} onChange={(event) => setAvailabilityFilter(event.target.value)}>{["All availability", ...CAPABILITY_AVAILABILITY].map((value) => <option key={value}>{value}</option>)}</select></label>
           </div>
           <div className="layer-summary-row"><span>Operation</span><span>Lifecycle</span><span>Availability</span></div>
-          {visible.map((item) => (
-            <button key={item.operation} className={`operation-row ${selected?.operation === item.operation ? "is-selected" : ""}`} onClick={() => { setSelectedOperation(item.operation); setTab("overview"); }}>
-              <span className="operation-main"><code>{item.operation}</code><small>{item.layer} · {item.applicability.replace("_", " ")}</small></span>
-              <span className={`mini-chip lifecycle-${item.lifecycle.toLowerCase()}`}>{item.lifecycle}</span>
-              <span className={`mini-chip availability-${item.availability.toLowerCase()}`}>{item.availability}</span>
-              <ArrowRight size={15} />
-            </button>
+          {visibleFamilies.map((family) => (
+            <section className="capability-family" key={family.family} aria-label={`${family.family} operation family`}>
+              <header><code>{family.family}</code><span>{family.items.length} {family.items.length === 1 ? "operation" : "operations"}</span></header>
+              {family.items.map((item) => (
+                <button key={item.operation} className={`operation-row ${selected?.operation === item.operation ? "is-selected" : ""}`} onClick={() => { setSelectedOperation(item.operation); setTab("overview"); }}>
+                  <span className="operation-main"><code>{item.operation}</code><small>{item.layer} · {item.applicability.replace("_", " ")}</small></span>
+                  <span className={`mini-chip lifecycle-${item.lifecycle.toLowerCase()}`}>{item.lifecycle}</span>
+                  <span className={`mini-chip availability-${item.availability.toLowerCase()}`}>{item.availability}</span>
+                  <ArrowRight size={15} />
+                </button>
+              ))}
+            </section>
           ))}
           {!visible.length && <div className="empty-state"><MagnifyingGlass size={28} /><strong>No operations found</strong><span>Change the query, layer, or availability filter.</span></div>}
         </div>
@@ -1070,6 +1094,16 @@ function LiveCapabilityView({
                 <div><span>Registration</span><strong>{detailItem.registration.replace("_", " ")}</strong></div>
                 <div><span>Contract</span><strong>v{detailItem.contract_version}</strong></div>
                 <div><span>Last verified</span><strong>{detailItem.last_verified_at ? new Date(detailItem.last_verified_at).toLocaleString() : "Not verified"}</strong></div>
+              </div>
+              <div className="capability-relations">
+                <header><div><span>Declared operation links</span><h4>Related operations</h4></div><small>{relations.length ? `${relations.length} canonical ${relations.length === 1 ? "link" : "links"}` : "No links declared"}</small></header>
+                {relations.length ? relations.map((relation) => (
+                  <button key={`${relation.kind}-${relation.operation}`} disabled={!relation.capability} onClick={() => openRelatedOperation(relation.operation)}>
+                    <span className={`relation-kind relation-${relation.kind}`}>{relation.kind}</span>
+                    <code>{relation.operation}</code>
+                    {relation.capability ? <ArrowRight size={14} /> : <small>Not in registry</small>}
+                  </button>
+                )) : <p>No paired, replacement, or compensation operation is declared for this contract.</p>}
               </div>
               <div className="trust-chain"><h4>Current trust statement</h4>
                 <div><span><CheckCircle size={18} weight="fill" /></span><strong>Canonical contract validated</strong><small>{detailItem.contract_digest.slice(0, 12)}…</small></div>

@@ -1088,7 +1088,7 @@ test("live Stack Map delegates path explanation to the trusted API", async () =>
 
 test("plugin manifest declares every trusted read-model endpoint", async () => {
   const manifest = JSON.parse(await readFile(new URL("../rolo.plugin.json", import.meta.url), "utf8"));
-  assert.equal(manifest.version, "0.11.0");
+  assert.equal(manifest.version, "0.12.0");
   assert.deepEqual(
     new Set(manifest.api.required_endpoints),
     new Set([
