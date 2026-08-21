@@ -10,6 +10,7 @@
 - Bounded topology path explanations with relationship direction and evidence drilldown.
 - Robot Overview focused on trust, blockers, and next action.
 - Capability Explorer for canonical operations, risk, lifecycle, and bindings.
+- Capability coverage map by product layer with distinct verified, available, unavailable, and unknown trust states.
 - Lifecycle gate view for Adapt → Diagnose → Verify.
 - Immutable lifecycle run details with independent gate checks and verified handoffs.
 - Robot Wiki with manifest-verified discovery summaries, advisory insights, and evidence-linked changes.

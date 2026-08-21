@@ -77,6 +77,12 @@ import {
   wikiLayerForTopology,
 } from "./contextLink";
 import type { ContextWikiLayer, TopologyDisplayLayer } from "./contextLink";
+import {
+  CAPABILITY_AVAILABILITY,
+  CAPABILITY_LAYERS,
+  capabilityCoveragePercent,
+  summarizeCapabilityCoverage,
+} from "./capabilityCoverage";
 import { getOverviewPresentation, getSurfaceSource } from "./workbenchPolicy";
 import type { WorkbenchMode } from "./workbenchPolicy";
 
@@ -952,13 +958,21 @@ function LiveCapabilityView({
   const [detailMessage, setDetailMessage] = useState("");
   const [query, setQuery] = useState("");
   const [layer, setLayer] = useState("All layers");
+  const [availabilityFilter, setAvailabilityFilter] = useState("All availability");
   const [tab, setTab] = useState<"overview" | "contract" | "binding" | "evidence">("overview");
+  const coverage = useMemo(() => summarizeCapabilityCoverage(items), [items]);
+  const visible = useMemo(() => items.filter((item) => {
+    const matchesQuery = `${item.operation} ${item.description} ${item.layer}`.toLowerCase().includes(query.toLowerCase());
+    return matchesQuery
+      && (layer === "All layers" || item.layer === layer)
+      && (availabilityFilter === "All availability" || item.availability === availabilityFilter);
+  }), [availabilityFilter, items, layer, query]);
 
   useEffect(() => {
-    if (!items.some((item) => item.operation === selectedOperation)) {
-      setSelectedOperation(items[0]?.operation || "");
+    if (!visible.some((item) => item.operation === selectedOperation)) {
+      setSelectedOperation(visible[0]?.operation || "");
     }
-  }, [items, selectedOperation]);
+  }, [selectedOperation, visible]);
 
   useEffect(() => {
     if (!selectedOperation) {
@@ -980,30 +994,48 @@ function LiveCapabilityView({
     return () => controller.abort();
   }, [robotId, selectedOperation]);
 
-  const visible = items.filter((item) => {
-    const matchesQuery = `${item.operation} ${item.description} ${item.layer}`.toLowerCase().includes(query.toLowerCase());
-    return matchesQuery && (layer === "All layers" || item.layer === layer);
-  });
-  const selected = items.find((item) => item.operation === selectedOperation) || items[0];
-  const counts = items.reduce<Record<string, number>>((result, item) => {
-    result[item.availability] = (result[item.availability] || 0) + 1;
-    return result;
-  }, {});
-  const width = (status: string) => `${items.length ? ((counts[status] || 0) / items.length) * 100 : 0}%`;
+  const selected = items.find((item) => item.operation === selectedOperation);
   const detailItem = detail?.capability || selected;
+  const selectCoverageLayer = (selectedLayer: typeof CAPABILITY_LAYERS[number]) => {
+    const nextLayer = layer === selectedLayer ? "All layers" : selectedLayer;
+    setLayer(nextLayer);
+    setQuery("");
+    const firstMatch = items.find((item) => (
+      (nextLayer === "All layers" || item.layer === nextLayer)
+      && (availabilityFilter === "All availability" || item.availability === availabilityFilter)
+    ));
+    if (firstMatch) {
+      setSelectedOperation(firstMatch.operation);
+      setTab("overview");
+    }
+  };
 
   return (
     <section className="content-view capabilities-view">
       <PageTitle
         title="Capabilities"
         description="Canonical contracts joined with current robot applicability, bindings, and evidence."
-        action={<div className="coverage-summary"><strong>{items.length} canonical operations · {counts.VERIFIED || 0} verified</strong><span><i style={{ width: width("VERIFIED") }} /><i style={{ width: width("AVAILABLE") }} /><i style={{ width: width("UNAVAILABLE") }} /><i style={{ width: width("UNKNOWN") }} /></span></div>}
+        action={<div className="coverage-summary"><strong>{coverage.total} canonical operations · {coverage.availability.VERIFIED} verified</strong><span><i style={{ width: capabilityCoveragePercent(coverage.availability.VERIFIED, coverage.total) }} /><i style={{ width: capabilityCoveragePercent(coverage.availability.AVAILABLE, coverage.total) }} /><i style={{ width: capabilityCoveragePercent(coverage.availability.UNAVAILABLE, coverage.total) }} /><i style={{ width: capabilityCoveragePercent(coverage.availability.UNKNOWN, coverage.total) }} /></span></div>}
       />
+      <section className="panel capability-coverage-map" aria-label="Capability coverage by product layer">
+        <header><div><span>Validated capability summaries</span><h3>Coverage by product layer</h3></div><button className="secondary-button" disabled={layer === "All layers" && availabilityFilter === "All availability"} onClick={() => { setLayer("All layers"); setAvailabilityFilter("All availability"); }}>Clear coverage filters</button></header>
+        <div className="capability-coverage-grid">
+          {coverage.layers.map((item) => (
+            <button key={item.layer} className={layer === item.layer ? "is-active" : ""} onClick={() => selectCoverageLayer(item.layer)} aria-pressed={layer === item.layer}>
+              <span className="coverage-card-heading"><strong>{item.layer}</strong><em>{item.total} operations</em></span>
+              <span className="coverage-layer-bar" aria-label={`${item.layer}: ${item.availability.VERIFIED} verified, ${item.availability.AVAILABLE} available, ${item.availability.UNAVAILABLE} unavailable, ${item.availability.UNKNOWN} unknown`}><i className="is-verified" style={{ width: capabilityCoveragePercent(item.availability.VERIFIED, item.total) }} /><i className="is-available" style={{ width: capabilityCoveragePercent(item.availability.AVAILABLE, item.total) }} /><i className="is-unavailable" style={{ width: capabilityCoveragePercent(item.availability.UNAVAILABLE, item.total) }} /><i className="is-unknown" style={{ width: capabilityCoveragePercent(item.availability.UNKNOWN, item.total) }} /></span>
+              <dl><div><dt>Applicable</dt><dd>{item.applicable}</dd></div><div><dt>Bindings</dt><dd>{item.withBindings}</dd></div><div><dt>Released</dt><dd>{item.released}</dd></div><div><dt>R2 / R3</dt><dd>{item.elevatedRisk}</dd></div></dl>
+            </button>
+          ))}
+        </div>
+        <footer><Info size={15} /><span>Verified, available, unavailable, and unknown remain separate trust states. Coverage does not imply task or physical outcome success.</span></footer>
+      </section>
       <div className="capability-layout">
         <div className="capability-list panel">
           <div className="capability-toolbar">
             <div className="capability-search search-box"><MagnifyingGlass size={18} /><input aria-label="Search canonical operations" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search operations" /></div>
-            <label className="capability-layer-filter"><span>Layer</span><select value={layer} onChange={(event) => setLayer(event.target.value)}>{["All layers", "Hardware", "Linux", "Middleware", "Application"].map((value) => <option key={value}>{value}</option>)}</select></label>
+            <label className="capability-layer-filter"><span>Layer</span><select value={layer} onChange={(event) => setLayer(event.target.value)}>{["All layers", ...CAPABILITY_LAYERS].map((value) => <option key={value}>{value}</option>)}</select></label>
+            <label className="capability-layer-filter"><span>Availability</span><select value={availabilityFilter} onChange={(event) => setAvailabilityFilter(event.target.value)}>{["All availability", ...CAPABILITY_AVAILABILITY].map((value) => <option key={value}>{value}</option>)}</select></label>
           </div>
           <div className="layer-summary-row"><span>Operation</span><span>Lifecycle</span><span>Availability</span></div>
           {visible.map((item) => (
@@ -1014,7 +1046,7 @@ function LiveCapabilityView({
               <ArrowRight size={15} />
             </button>
           ))}
-          {!visible.length && <div className="empty-state"><MagnifyingGlass size={28} /><strong>No operations found</strong><span>Change the query or layer filter.</span></div>}
+          {!visible.length && <div className="empty-state"><MagnifyingGlass size={28} /><strong>No operations found</strong><span>Change the query, layer, or availability filter.</span></div>}
         </div>
         <div className="capability-detail panel" aria-live="polite">
           {!detailItem ? <div className="empty-state"><Info size={28} /><strong>No capability records</strong><span>The API returned an empty product registry.</span></div> : <>
