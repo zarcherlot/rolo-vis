@@ -90,6 +90,7 @@ import {
 } from "./capabilityRelations";
 import { projectContractSchema } from "./contractSchema";
 import { bindingTrustStatement, summarizeBindingTrust } from "./bindingTrust";
+import { capabilityReadinessSignals } from "./capabilityReadiness";
 import { getOverviewPresentation, getSurfaceSource } from "./workbenchPolicy";
 import type { WorkbenchMode } from "./workbenchPolicy";
 
@@ -1039,6 +1040,31 @@ function BindingTrustPanel({
   );
 }
 
+function CapabilityReadinessPanel({
+  capability,
+  bindings,
+}: {
+  capability: CapabilitySummary;
+  bindings: CapabilityBinding[];
+}) {
+  const signals = useMemo(
+    () => capabilityReadinessSignals(capability, bindings),
+    [bindings, capability],
+  );
+  return (
+    <section className="capability-readiness-panel">
+      <header><div><span>Independent read-model signals</span><h4>Capability readiness lens</h4></div><small>{signals.filter((signal) => signal.state === "established").length} of {signals.length} established</small></header>
+      <div className="capability-readiness-signals">
+        {signals.map((signal, index) => {
+          const SignalIcon = signal.state === "established" ? CheckCircle : signal.state === "missing" ? X : signal.state === "partial" ? WarningCircle : Info;
+          return <div className={`readiness-signal readiness-${signal.state}`} key={signal.id}><span className="readiness-index">{index + 1}</span><SignalIcon size={17} weight={signal.state === "established" ? "fill" : "regular"} /><span><strong>{signal.label}</strong><small>{signal.statement}</small></span><em>{signal.value}</em></div>;
+        })}
+      </div>
+      <footer><Info size={15} /><span>Signals are independent read-model facts, not a causal workflow. AVAILABLE, endpoint presence, and gated acknowledgement do not prove task or physical outcome success.</span></footer>
+    </section>
+  );
+}
+
 function LiveCapabilityView({
   robotId,
   items,
@@ -1198,10 +1224,7 @@ function LiveCapabilityView({
                   </button>
                 )) : <p>No paired, replacement, or compensation operation is declared for this contract.</p>}
               </div>
-              <div className="trust-chain"><h4>Current trust statement</h4>
-                <div><span><CheckCircle size={18} weight="fill" /></span><strong>Canonical contract validated</strong><small>{detailItem.contract_digest.slice(0, 12)}…</small></div>
-                <div><span className={detailItem.integrity_status === "verified" ? "" : "trust-unknown"}><ShieldCheck size={18} weight="fill" /></span><strong>{detailItem.integrity_status === "verified" ? "Gated release binding" : "No gated release proof"}</strong><small>{detailItem.binding_count} bindings</small></div>
-              </div>
+              {detail && <CapabilityReadinessPanel capability={detail.capability} bindings={detail.bindings} />}
               {(detailItem.limitations.length || limitations.length) > 0 && <div className="capability-limitations"><strong>Known limits</strong>{[...new Set([...detailItem.limitations, ...limitations])].map((value) => <p key={value}>{value}</p>)}</div>}
             </>}
             {tab === "contract" && detail && <div className="capability-contract-view">
