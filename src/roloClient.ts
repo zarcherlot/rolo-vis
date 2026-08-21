@@ -16,12 +16,15 @@ import type {
   LifecycleRunCollection,
   LifecycleRunDetail,
   LifecycleRunSummary,
+  OperationGovernanceCollection,
+  OperationDisposition,
   PipelineAssessment,
   RobotCapability,
   RobotOverview,
   RobotTopology,
   RobotWikiSnapshot,
   StageAssessment,
+  TargetOperationSlice,
   TopologyDiff,
   TopologyEdge,
   TopologyNode,
@@ -31,6 +34,15 @@ import type {
 } from "./types/rolo";
 
 const DEFAULT_BASE = "/rolo-api";
+
+export const ROLO_API_FEATURES = {
+  operationGovernance: "adapt.operation-governance/v1",
+  targetOperationSlice: "adapt.target-operation-slice/v1",
+} as const;
+
+export function supportsApiFeature(health: HealthResponse, feature: string): boolean {
+  return health.api_features.includes(feature);
+}
 
 export class RoloApiError extends Error {
   status: number | null;
@@ -75,6 +87,12 @@ function isStringArray(value: unknown): value is string[] {
 
 function isStringRecord(value: unknown): value is Record<string, string> {
   return isRecord(value) && Object.values(value).every((item) => typeof item === "string");
+}
+
+function isNonNegativeIntegerRecord(value: unknown): value is Record<string, number> {
+  return isRecord(value) && Object.values(value).every(
+    (item) => Number.isInteger(item) && Number(item) >= 0,
+  );
 }
 
 function isTimestamp(value: unknown): value is string {
@@ -131,8 +149,52 @@ function parseHealthResponse(value: unknown, path: string): HealthResponse {
   requireContract(Number.isInteger(value.robots) && Number(value.robots) >= 0, "invalid registered robot count", path);
   requireContract(typeof value.robot_use_backend === "string", "missing robot-use backend", path);
   requireContract(typeof value.openai_key_configured === "boolean", "invalid OpenAI key status", path);
+  requireContract(value.api_features === undefined || isStringArray(value.api_features), "invalid API feature catalog", path);
   requireContract(isTimestamp(value.timestamp), "invalid health observation time", path);
-  return value as unknown as HealthResponse;
+  return { ...value, api_features: value.api_features || [] } as unknown as HealthResponse;
+}
+
+function parseOperationDisposition(value: unknown, path: string): OperationDisposition {
+  requireContract(isRecord(value), "operation disposition must be an object", path);
+  requireContract(typeof value.current_operation === "string" && value.current_operation.length > 0, "missing current operation", path);
+  requireContract(["control", "hw", "linux", "middleware", "ros", "app"].includes(String(value.current_layer)), "invalid current operation layer", path);
+  requireContract(["product_control", "hardware", "os", "middleware", "application"].includes(String(value.semantic_layer)), "invalid semantic layer", path);
+  requireContract(["AGENT_NATIVE", "PRODUCT_BUILTIN", "TARGET_ADAPTER", "PLATFORM_SPECIFIC"].includes(String(value.execution_class)), "invalid execution class", path);
+  requireContract(typeof value.portable_semantics === "boolean", "invalid portable semantics flag", path);
+  requireContract(value.future_capability === null || typeof value.future_capability === "string", "invalid future capability", path);
+  requireContract(["PLANNED", "RETAINED", "DEFERRED"].includes(String(value.migration_status)), "invalid migration status", path);
+  requireContract(typeof value.migration_reason === "string" && value.current_registry_action === "KEEP", "invalid migration metadata", path);
+  return value as unknown as OperationDisposition;
+}
+
+function parseOperationGovernanceCollection(
+  value: unknown,
+  path: string,
+  expectedPage: { limit: number; offset: number },
+): OperationGovernanceCollection {
+  requireContract(isRecord(value), "operation governance collection must be an object", path);
+  requireContract(value.schema_version === "rolo-operation-governance-collection/v1", "unsupported operation governance schema", path);
+  requireContract(Array.isArray(value.items), "invalid operation governance items", path);
+  const items = value.items.map((item, index) => parseOperationDisposition(item, `${path}/items/${index}`));
+  requireContract(new Set(items.map((item) => item.current_operation)).size === items.length, "operation governance page contains duplicate operations", path);
+  requireContract(Number.isInteger(value.total) && Number(value.total) >= items.length, "invalid operation governance total", path);
+  requireContract(value.limit === expectedPage.limit && value.offset === expectedPage.offset && items.length <= expectedPage.limit, "operation governance collection does not match the requested page", path);
+  requireContract(value.next_offset === null || (Number.isInteger(value.next_offset) && Number(value.next_offset) > Number(value.offset) && Number(value.next_offset) <= Number(value.total)), "invalid operation governance next offset", path);
+  requireContract(value.source_kind === "operation_disposition_ledger" && value.influences_registry === false, "invalid operation governance authority", path);
+  requireContract(isStringArray(value.limitations), "invalid operation governance limitations", path);
+  return { ...value, items } as unknown as OperationGovernanceCollection;
+}
+
+function parseTargetOperationSlice(value: unknown, path: string, robotId: string): TargetOperationSlice {
+  requireContract(isRecord(value), "target operation slice must be an object", path);
+  requireContract(value.schema_version === "robot-target-operation-slice/v1", "unsupported target operation slice schema", path);
+  requireContract(value.robot_id === robotId && typeof value.discovery_id === "string", "target operation slice identity does not match", path);
+  requireContract(/^[0-9a-f]{64}$/.test(String(value.registry_sha256)) && /^[0-9a-f]{64}$/.test(String(value.slice_sha256)), "invalid target operation slice digest", path);
+  for (const key of ["primary_operations", "dependency_operations", "agent_native_operations", "builtin_operations", "target_adapter_operations", "platform_specific_operations"] as const) {
+    requireContract(isStringArray(value[key]), `invalid target operation slice ${key}`, path);
+  }
+  requireContract(isNonNegativeIntegerRecord(value.deferred_summary), "invalid target operation deferred summary", path);
+  return value as unknown as TargetOperationSlice;
 }
 
 function parseRobotCapabilities(value: unknown, path: string): RobotCapability[] {
@@ -913,6 +975,29 @@ export class RoloClient {
   async run(robotId: string, runId: string, options?: RequestInit) {
     const path = `/v1/robots/${encodeURIComponent(robotId)}/runs/${encodeURIComponent(runId)}`;
     return parseLifecycleRunDetail(await this.request<unknown>(path, options), path, robotId, runId);
+  }
+
+  async operationGovernancePage(
+    options?: RequestInit,
+    page: { limit?: number; offset?: number } = {},
+  ) {
+    const limit = page.limit ?? 50;
+    const offset = page.offset ?? 0;
+    const path = `/v1/operations/governance?limit=${limit}&offset=${offset}`;
+    return parseOperationGovernanceCollection(
+      await this.request<unknown>(path, options),
+      path,
+      { limit, offset },
+    );
+  }
+
+  async targetOperationSlice(robotId: string, options?: RequestInit) {
+    const path = `/v1/robots/${encodeURIComponent(robotId)}/adapt/operation-slice`;
+    return parseTargetOperationSlice(
+      await this.request<unknown>(path, options),
+      path,
+      robotId,
+    );
   }
 
   async bootstrap(options: RequestInit = {}, requestedRobotId?: string): Promise<BootstrapResult> {

@@ -3,7 +3,13 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 import { TOPOLOGY_EDGES, TOPOLOGY_NODES } from "../src/demoData.ts";
-import { RoloApiError, RoloClient, RoloContractError } from "../src/roloClient.ts";
+import {
+  ROLO_API_FEATURES,
+  RoloApiError,
+  RoloClient,
+  RoloContractError,
+  supportsApiFeature,
+} from "../src/roloClient.ts";
 import { getOverviewPresentation, getSurfaceSource } from "../src/workbenchPolicy.ts";
 
 const HEALTH = {
@@ -14,6 +20,43 @@ const HEALTH = {
   robot_use_backend: "offline",
   openai_key_configured: false,
   timestamp: "2026-08-20T00:00:00Z",
+};
+
+const TARGET_OPERATION_SLICE = {
+  schema_version: "robot-target-operation-slice/v1",
+  robot_id: "AMR-07",
+  discovery_id: "discovery-1",
+  registry_sha256: "a".repeat(64),
+  slice_sha256: "b".repeat(64),
+  primary_operations: ["app.navigation.start"],
+  dependency_operations: ["app.navigation.cancel"],
+  agent_native_operations: ["app.navigation.start"],
+  builtin_operations: ["app.navigation.cancel"],
+  target_adapter_operations: [],
+  platform_specific_operations: [],
+  deferred_summary: { NO_ROUTE: 2 },
+};
+
+const OPERATION_GOVERNANCE_COLLECTION = {
+  schema_version: "rolo-operation-governance-collection/v1",
+  items: [{
+    current_operation: "linux.service.inspect",
+    current_layer: "linux",
+    semantic_layer: "os",
+    execution_class: "TARGET_ADAPTER",
+    portable_semantics: true,
+    future_capability: "os.workload.inspect",
+    migration_status: "PLANNED",
+    migration_reason: "Portable workload inspection is planned.",
+    current_registry_action: "KEEP",
+  }],
+  total: 1,
+  limit: 1,
+  offset: 0,
+  next_offset: null,
+  source_kind: "operation_disposition_ledger",
+  influences_registry: false,
+  limitations: ["External governance metadata only."],
 };
 
 const ROBOT = {
@@ -517,6 +560,7 @@ test("RoloClient bootstraps the read-only control-plane surface", async () => {
   try {
     const result = await new RoloClient("http://rolo.test/").bootstrap();
     assert.equal(result.health.status, "HEALTHY");
+    assert.deepEqual(result.health.api_features, []);
     assert.equal(result.robots[0].robot_id, "AMR-07");
     assert.equal(result.mode, "live");
     assert.equal(result.overview.schema_version, "rolo-robot-overview/v2");
@@ -536,6 +580,78 @@ test("RoloClient bootstraps the read-only control-plane surface", async () => {
       "http://rolo.test/v1/robots/AMR-07/capabilities?limit=100&offset=0",
       "http://rolo.test/v1/robots/AMR-07/runs?limit=50&offset=0",
     ]);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("RoloClient reads governance metadata without changing Registry capability data", async () => {
+  const originalFetch = globalThis.fetch;
+  let requestedUrl = "";
+  globalThis.fetch = async (url) => {
+    requestedUrl = url;
+    return { ok: true, json: async () => OPERATION_GOVERNANCE_COLLECTION };
+  };
+
+  try {
+    const result = await new RoloClient("http://rolo.test").operationGovernancePage(
+      undefined,
+      { limit: 1, offset: 0 },
+    );
+    assert.equal(
+      requestedUrl,
+      "http://rolo.test/v1/operations/governance?limit=1&offset=0",
+    );
+    assert.equal(result.items[0].semantic_layer, "os");
+    assert.equal(result.items[0].current_registry_action, "KEEP");
+    assert.equal(result.influences_registry, false);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("RoloClient keeps the optional Adapt slice out of bootstrap and loads it on demand", async () => {
+  const originalFetch = globalThis.fetch;
+  const requests = [];
+  globalThis.fetch = async (url) => {
+    requests.push(url);
+    const payload = url.endsWith("/health")
+      ? { ...HEALTH, api_features: ["adapt.target-operation-slice/v1"] }
+      : url.endsWith("/v1/robots")
+        ? [ROBOT]
+        : url.endsWith("/overview")
+          ? OVERVIEW
+          : url.endsWith("/topology/snapshots")
+            ? TOPOLOGY_SNAPSHOTS
+            : url.endsWith("/topology")
+              ? TOPOLOGY
+              : url.endsWith("/adapt/operation-slice")
+                ? TARGET_OPERATION_SLICE
+                : url.includes("/runs?limit=")
+                  ? RUN_COLLECTION
+                  : url.includes("/capabilities?limit=")
+                    ? CAPABILITY_COLLECTION
+                    : EVIDENCE_COLLECTION;
+    return { ok: true, json: async () => payload };
+  };
+
+  try {
+    const client = new RoloClient("http://rolo.test");
+    const result = await client.bootstrap();
+    assert.deepEqual(result.health.api_features, ["adapt.target-operation-slice/v1"]);
+    assert.equal(
+      supportsApiFeature(result.health, ROLO_API_FEATURES.targetOperationSlice),
+      true,
+    );
+    assert.equal(requests.includes(
+      "http://rolo.test/v1/robots/AMR-07/adapt/operation-slice",
+    ), false);
+
+    const slice = await client.targetOperationSlice("AMR-07");
+    assert.equal(slice.slice_sha256, "b".repeat(64));
+    assert.equal(requests.at(-1),
+      "http://rolo.test/v1/robots/AMR-07/adapt/operation-slice",
+    );
   } finally {
     globalThis.fetch = originalFetch;
   }

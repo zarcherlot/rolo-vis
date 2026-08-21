@@ -7,7 +7,51 @@ export interface HealthResponse {
   robots: number;
   robot_use_backend: string;
   openai_key_configured: boolean;
+  api_features: string[];
   timestamp: string;
+}
+
+export type AdaptSemanticLayer = "product_control" | "hardware" | "os" | "middleware" | "application";
+export type AdaptExecutionClass = "AGENT_NATIVE" | "PRODUCT_BUILTIN" | "TARGET_ADAPTER" | "PLATFORM_SPECIFIC";
+export type AdaptMigrationStatus = "PLANNED" | "RETAINED" | "DEFERRED";
+
+export interface OperationDisposition {
+  current_operation: string;
+  current_layer: "control" | "hw" | "linux" | "middleware" | "ros" | "app";
+  semantic_layer: AdaptSemanticLayer;
+  execution_class: AdaptExecutionClass;
+  portable_semantics: boolean;
+  future_capability: string | null;
+  migration_status: AdaptMigrationStatus;
+  migration_reason: string;
+  current_registry_action: "KEEP";
+}
+
+export interface OperationGovernanceCollection {
+  schema_version: "rolo-operation-governance-collection/v1";
+  items: OperationDisposition[];
+  total: number;
+  limit: number;
+  offset: number;
+  next_offset: number | null;
+  source_kind: "operation_disposition_ledger";
+  influences_registry: false;
+  limitations: string[];
+}
+
+export interface TargetOperationSlice {
+  schema_version: "robot-target-operation-slice/v1";
+  robot_id: string;
+  discovery_id: string;
+  registry_sha256: string;
+  slice_sha256: string;
+  primary_operations: string[];
+  dependency_operations: string[];
+  agent_native_operations: string[];
+  builtin_operations: string[];
+  target_adapter_operations: string[];
+  platform_specific_operations: string[];
+  deferred_summary: Record<string, number>;
 }
 
 export interface RobotCapability {
