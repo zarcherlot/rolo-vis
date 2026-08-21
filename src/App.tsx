@@ -70,7 +70,13 @@ import type {
   TopologyDiff,
   TopologyPathExplanation,
   TopologySnapshotCollection,
+  WikiLayer,
 } from "./types/rolo";
+import {
+  topologyLayerForWiki,
+  wikiLayerForTopology,
+} from "./contextLink";
+import type { ContextWikiLayer, TopologyDisplayLayer } from "./contextLink";
 import { getOverviewPresentation, getSurfaceSource } from "./workbenchPolicy";
 import type { WorkbenchMode } from "./workbenchPolicy";
 
@@ -78,6 +84,7 @@ type NavId = "fleet" | "overview" | "stack" | "capabilities" | "lifecycle" | "wi
 type ViewRobot = DemoRobot | (RobotCapability & { status: "online" });
 type RobotOption = DemoRobot | RobotCapability;
 type OpenEvidence = (item: EvidenceItem | string) => void;
+type StackContextFocus = { layer: ContextWikiLayer; requestId: number };
 
 const NAV_ITEMS: Array<{ id: NavId; label: string; icon: typeof House }> = [
   { id: "fleet", label: "Fleet", icon: Robot },
@@ -447,11 +454,15 @@ function FleetView({
 
 function StackMapView({
   onOpenEvidence,
+  onOpenWikiLayer,
+  focusLayer,
   topology,
   topologySnapshots,
   robotId,
 }: {
   onOpenEvidence: OpenEvidence;
+  onOpenWikiLayer?: (layer: ContextWikiLayer) => void;
+  focusLayer?: StackContextFocus | null;
   topology?: RobotTopology | null;
   topologySnapshots?: TopologySnapshotCollection | null;
   robotId?: string;
@@ -480,6 +491,7 @@ function StackMapView({
   const [pathMessage, setPathMessage] = useState("");
   const [pathLoading, setPathLoading] = useState(false);
   const [toolsOpen, setToolsOpen] = useState(false);
+  const [focusedLayer, setFocusedLayer] = useState<TopologyDisplayLayer | null>(null);
   const [flowInstance, setFlowInstance] = useState<ReactFlowInstance | null>(null);
   const mapRef = useRef<HTMLDivElement | null>(null);
 
@@ -522,6 +534,20 @@ function StackMapView({
     return () => observer.disconnect();
   }, [flowInstance]);
 
+  useEffect(() => {
+    if (!focusLayer) return;
+    const displayLayer = topologyLayerForWiki(focusLayer.layer);
+    if (!displayLayer) return;
+    const matches = sourceNodes.filter((node) => node.data.layer === displayLayer);
+    setFocusedLayer(displayLayer);
+    setQuery("");
+    setFilter("all");
+    if (matches[0]) setSelectedId(matches[0].id);
+    if (flowInstance && matches.length) {
+      window.requestAnimationFrame(() => flowInstance.fitView({ nodes: matches, padding: 0.28, duration: 240 }));
+    }
+  }, [flowInstance, focusLayer, sourceNodes]);
+
   const diffByNode = useMemo(
     () => new Map(topologyDiff?.node_changes.map((item) => [item.node_id, item]) || []),
     [topologyDiff],
@@ -538,14 +564,15 @@ function StackMapView({
     const searchable = `${node.data.label} ${node.data.subtitle} ${node.data.layer}`.toLowerCase();
     const queryMatch = !query || searchable.includes(query.toLowerCase());
     const statusMatch = filter === "all" || node.data.status === filter;
+    const contextMatch = !focusedLayer || node.data.layer === focusedLayer;
     const change = diffByNode.get(node.id);
     return {
       ...node,
       selected: node.id === selectedId,
       className: pathNodeIds.has(node.id) ? "topology-path-node" : change ? `topology-diff-node diff-${change.change.toLowerCase()}` : node.className,
-      style: { opacity: queryMatch && statusMatch && (!pathExplanation?.found || pathNodeIds.has(node.id)) ? 1 : 0.18 },
+      style: { opacity: queryMatch && statusMatch && contextMatch && (!pathExplanation?.found || pathNodeIds.has(node.id)) ? 1 : 0.18 },
     };
-  }), [selectedId, query, filter, sourceNodes, diffByNode, pathExplanation, pathNodeIds]);
+  }), [selectedId, query, filter, focusedLayer, sourceNodes, diffByNode, pathExplanation, pathNodeIds]);
   const edges = useMemo(() => sourceEdges.map((edge) => ({
     ...edge,
     className: pathEdgeIds.has(edge.id) ? "topology-path-edge" : edge.className,
@@ -604,6 +631,7 @@ function StackMapView({
   const details = selectedNode.data;
   const connected = sourceEdges.filter((edge) => edge.source === selectedId || edge.target === selectedId);
   const selectedChange = diffByNode.get(selectedId);
+  const selectedWikiLayer = wikiLayerForTopology(details.layer);
   const SelectedIcon = nodeIcons[details.icon] || Cube;
 
   return (
@@ -689,6 +717,7 @@ function StackMapView({
       )}
 
       <div className="map-stage" ref={mapRef}>
+        {focusedLayer && <div className="map-context-banner"><BookOpenText size={16} /><span><strong>Wiki context</strong><small>{focusedLayer} lane · {sourceNodes.filter((node) => node.data.layer === focusedLayer).length} topology nodes</small></span><button onClick={() => setFocusedLayer(null)} aria-label="Clear Wiki layer focus"><X size={15} /></button></div>}
         <button className="map-tools-toggle" onClick={() => setToolsOpen((value) => !value)} aria-label="Search and filter topology" title="Search and filter">
           {toolsOpen ? <X size={18} /> : <MagnifyingGlass size={18} />}
         </button>
@@ -784,6 +813,7 @@ function StackMapView({
 
         <div className="inspector-actions">
           <button className="primary-button" disabled={Boolean(topology && !details.evidenceIds?.length)} onClick={() => onOpenEvidence(topology ? details.evidenceIds?.[0] || "" : EVIDENCE[0])}>Open evidence</button>
+          {selectedWikiLayer && onOpenWikiLayer && <button className="secondary-button" onClick={() => onOpenWikiLayer(selectedWikiLayer)}><BookOpenText size={15} /> Open related Wiki layer</button>}
           <button className="secondary-button" disabled={!topology || sourceNodes.length < 2} onClick={() => openPathExplorer(selectedId)}>Explain path from here</button>
           <button className="secondary-button" disabled={Boolean(topology && (topologySnapshots?.items.length || 0) < 2)} onClick={() => { setPathOpen(false); setPathExplanation(null); setCompare(true); }} title={topology && (topologySnapshots?.items.length || 0) < 2 ? "Two verified snapshots are required" : undefined}>Compare snapshot</button>
         </div>
@@ -1187,10 +1217,16 @@ function LiveLifecycleView({
 function WikiView({
   wiki,
   history,
+  focusLayer,
+  onOpenStackLayer,
+  onClearFocus,
   onOpenEvidence,
 }: {
   wiki: RobotWikiSnapshot;
   history: DiscoverySnapshotCollection;
+  focusLayer?: WikiLayer | null;
+  onOpenStackLayer: (layer: ContextWikiLayer) => void;
+  onClearFocus: () => void;
   onOpenEvidence: OpenEvidence;
 }) {
   const [selectedHeading, setSelectedHeading] = useState(wiki.sections[0]?.heading || "");
@@ -1255,14 +1291,17 @@ function WikiView({
         <footer><Info size={15} /><span>{history.limitations.join(" ")}</span></footer>
       </section>
 
+      {focusLayer && <div className="wiki-context-banner panel"><GitBranch size={17} /><span><strong>Stack Map context</strong><small>{focusLayer} knowledge layer · layer-level navigation only</small></span><button onClick={onClearFocus} aria-label="Clear Stack Map context"><X size={15} /></button></div>}
       <div className="wiki-layer-grid">
-        {wiki.layers.map((layer) => (
-          <article className="panel wiki-layer-card" key={layer.layer}>
+        {wiki.layers.map((layer) => {
+          const topologyLayer = topologyLayerForWiki(layer.layer);
+          return <article className={`panel wiki-layer-card ${focusLayer === layer.layer ? "is-context-focus" : ""}`} key={layer.layer}>
             <header><span>{layer.layer}</span><strong className={`wiki-status-${layer.status.toLowerCase()}`}>{layer.status}</strong></header>
             <p>{layer.summary}</p>
             <dl>{Object.entries(layer.facts).map(([key, value]) => <div key={key}><dt>{key.replaceAll("_", " ")}</dt><dd>{String(value)}</dd></div>)}</dl>
-          </article>
-        ))}
+            {topologyLayer ? <button className="wiki-layer-link" onClick={() => onOpenStackLayer(layer.layer as ContextWikiLayer)}><GitBranch size={14} /> Locate related topology lane <ArrowRight size={13} /></button> : <span className="wiki-layer-link is-unavailable"><Info size={14} /> No dedicated topology lane</span>}
+          </article>;
+        })}
       </div>
 
       <div className="wiki-layout">
@@ -1444,6 +1483,8 @@ function EvidenceDrawer({ evidence, onClose }: { evidence: EvidenceItem | null; 
 
 function AppContent() {
   const [active, setActive] = useState<NavId>("stack");
+  const [stackContextFocus, setStackContextFocus] = useState<StackContextFocus | null>(null);
+  const [wikiContextFocus, setWikiContextFocus] = useState<WikiLayer | null>(null);
   const [mode, setMode] = useState<WorkbenchMode>("connecting");
   const [robots, setRobots] = useState<RobotOption[]>([]);
   const [robot, setRobot] = useState<ViewRobot | null>(null);
@@ -1470,6 +1511,8 @@ function AppContent() {
 
   const connect = useCallback(async (requestedRobotId?: string) => {
     setMode("connecting");
+    setStackContextFocus(null);
+    setWikiContextFocus(null);
     setConnectionMessage("");
     setWiki(null);
     setDiscoveryHistory(null);
@@ -1532,6 +1575,8 @@ function AppContent() {
   }, []);
 
   const useDemo = useCallback(() => {
+    setStackContextFocus(null);
+    setWikiContextFocus(null);
     setRobot(DEMO_ROBOT);
     setRobots([DEMO_ROBOT]);
     setPipeline(DEMO_PIPELINE);
@@ -1639,9 +1684,29 @@ function AppContent() {
     }
   }, []);
   const selectFleetRobot = useCallback((robotId: string) => {
+    setStackContextFocus(null);
+    setWikiContextFocus(null);
     setActive("overview");
     void connect(robotId);
   }, [connect]);
+  const navigate = useCallback((view: NavId) => {
+    setStackContextFocus(null);
+    setWikiContextFocus(null);
+    setActive(view);
+  }, []);
+  const openStackLayer = useCallback((layer: ContextWikiLayer) => {
+    setWikiContextFocus(null);
+    setStackContextFocus((current) => ({
+      layer,
+      requestId: (current?.requestId || 0) + 1,
+    }));
+    setActive("stack");
+  }, []);
+  const openWikiLayer = useCallback((layer: ContextWikiLayer) => {
+    setStackContextFocus(null);
+    setWikiContextFocus(layer);
+    setActive("wiki");
+  }, []);
 
   const activeLabel = NAV_ITEMS.find((item) => item.id === active)?.label || "Stack Map";
   const evidenceItems = useMemo(
@@ -1654,16 +1719,16 @@ function AppContent() {
   const capabilitySource = getSurfaceSource(mode, "capabilities", { capabilities: Boolean(capabilityList) });
   return (
     <div className="app-shell">
-      <Sidebar active={active} onChange={setActive} />
+      <Sidebar active={active} onChange={navigate} />
       <Topbar robot={robot} robots={robots} activeLabel={activeLabel} mode={mode} snapshot={overview?.observed_at} onRetry={() => connect(robot?.robot_id)} onRobotChange={connect} />
       <main className="app-main">
         {(["connecting", "unavailable"].includes(mode) || !robot) ? <ConnectionStateView mode={mode} message={connectionMessage} onRetry={() => connect()} onUseDemo={useDemo} /> : <>
-          {active === "stack" && (stackSource === "demo" ? <StackMapView onOpenEvidence={openEvidence} /> : stackSource === "live" ? <StackMapView topology={topology} topologySnapshots={topologySnapshots} robotId={robot.robot_id} onOpenEvidence={openEvidence} /> : <ReadModelUnavailableView title="Stack Map" description="Live topology needs a versioned rolo topology read model." />)}
+          {active === "stack" && (stackSource === "demo" ? <StackMapView focusLayer={stackContextFocus} onOpenWikiLayer={openWikiLayer} onOpenEvidence={openEvidence} /> : stackSource === "live" ? <StackMapView topology={topology} topologySnapshots={topologySnapshots} robotId={robot.robot_id} focusLayer={stackContextFocus} onOpenWikiLayer={openWikiLayer} onOpenEvidence={openEvidence} /> : <ReadModelUnavailableView title="Stack Map" description="Live topology needs a versioned rolo topology read model." />)}
           {active === "fleet" && (mode === "demo" ? <ReadModelUnavailableView title="Fleet" description="The labeled demo fixture represents one robot and does not include a fleet aggregate." /> : fleet && fleetBlockers ? <FleetView fleet={fleet} blockers={fleetBlockers} onSelectRobot={selectFleetRobot} onOpenEvidence={openEvidence} /> : fleetLoading ? <section className="content-view"><PageTitle title="Fleet" description="Aggregating validated robot overviews and pipeline blockers…" /><div className="panel read-model-unavailable" role="status"><Pulse size={26} /><div><strong>Loading Fleet</strong><p>No runtime telemetry is inferred while this read model is loading.</p></div></div></section> : <ReadModelUnavailableView title="Fleet" description={fleetMessage || "Open this surface to read the validated Fleet aggregate."} />)}
-          {active === "overview" && <OverviewView robot={robot} pipeline={pipeline} overview={overview} mode={mode} evidenceItems={evidenceItems} onOpenEvidence={openEvidence} onNavigate={setActive} />}
+          {active === "overview" && <OverviewView robot={robot} pipeline={pipeline} overview={overview} mode={mode} evidenceItems={evidenceItems} onOpenEvidence={openEvidence} onNavigate={navigate} />}
           {active === "capabilities" && (capabilitySource === "demo" ? <DemoCapabilityView onOpenEvidence={setEvidence} /> : capabilitySource === "live" && capabilityList ? <LiveCapabilityView robotId={robot.robot_id} items={capabilityList} limitations={capabilityLimitations} onOpenEvidence={openEvidence} /> : <ReadModelUnavailableView title="Capabilities" description="Live capability coverage needs a versioned rolo capability read model." />)}
           {active === "lifecycle" && (lifecycleSource === "demo" ? <DemoLifecycleView pipeline={pipeline} onOpenEvidence={setEvidence} /> : lifecycleSource === "live" && lifecycleRuns ? <LiveLifecycleView pipeline={pipeline} runs={lifecycleRuns} robotId={robot.robot_id} onOpenEvidence={openEvidence} /> : <ReadModelUnavailableView title="Lifecycle" description="Live lifecycle requires trusted stage and run read models." />)}
-          {active === "wiki" && (mode === "demo" ? <ReadModelUnavailableView title="Robot Wiki" description="The labeled demo fixture does not include discovery Wiki evidence." /> : wiki && discoveryHistory ? <WikiView wiki={wiki} history={discoveryHistory} onOpenEvidence={openEvidence} /> : wikiLoading ? <section className="content-view"><PageTitle title="Robot Wiki" description="Reading manifest-verified discovery snapshots…" /><div className="panel read-model-unavailable" role="status"><Pulse size={26} /><div><strong>Loading Robot Wiki</strong><p>Current knowledge and verified history are being resolved independently.</p></div></div></section> : <ReadModelUnavailableView title="Robot Wiki" description={wikiMessage || "Open this surface to read a verified discovery Wiki."} />)}
+          {active === "wiki" && (mode === "demo" ? <ReadModelUnavailableView title="Robot Wiki" description="The labeled demo fixture does not include discovery Wiki evidence." /> : wiki && discoveryHistory ? <WikiView wiki={wiki} history={discoveryHistory} focusLayer={wikiContextFocus} onOpenStackLayer={openStackLayer} onClearFocus={() => setWikiContextFocus(null)} onOpenEvidence={openEvidence} /> : wikiLoading ? <section className="content-view"><PageTitle title="Robot Wiki" description="Reading manifest-verified discovery snapshots…" /><div className="panel read-model-unavailable" role="status"><Pulse size={26} /><div><strong>Loading Robot Wiki</strong><p>Current knowledge and verified history are being resolved independently.</p></div></div></section> : <ReadModelUnavailableView title="Robot Wiki" description={wikiMessage || "Open this surface to read a verified discovery Wiki."} />)}
           {active === "evidence" && (evidenceSource === "demo" ? <EvidenceView onOpenEvidence={openEvidence} /> : evidenceSource === "live" ? <EvidenceView live collection={evidenceList} robotId={robot.robot_id} onOpenEvidence={openEvidence} /> : <ReadModelUnavailableView title="Evidence" description="Live evidence resolution needs a versioned rolo evidence read model." />)}
         </>}
       </main>

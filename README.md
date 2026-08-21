@@ -14,6 +14,7 @@
 - Immutable lifecycle run details with independent gate checks and verified handoffs.
 - Robot Wiki with manifest-verified discovery summaries, advisory insights, and evidence-linked changes.
 - Manifest-verified discovery history with bounded probe coverage and capability-candidate summaries.
+- Bidirectional Wiki and Stack Map layer context without inferred entity relationships.
 - Evidence ledger with provenance and integrity status.
 - Live rolo API probing with an explicit demo fallback when no robot runtime is reachable.
 
