@@ -17,6 +17,7 @@
 - Capability readiness lens that keeps contract, applicability, registration, binding, availability, and verification signals independent.
 - Governance filters for risk, access, lifecycle, and data classification with row-level policy context.
 - Lifecycle gate view for Adapt → Diagnose → Verify.
+- Lifecycle assessment matrix for current stage status, blockers, prerequisites, artifacts, owners, and supported runs.
 - Immutable lifecycle run details with independent gate checks and verified handoffs.
 - Robot Wiki with manifest-verified discovery summaries, advisory insights, and evidence-linked changes.
 - Manifest-verified discovery history with bounded probe coverage and capability-candidate summaries.

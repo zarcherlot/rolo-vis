@@ -100,6 +100,7 @@ import {
   filterCapabilities,
 } from "./capabilityFilters";
 import type { CapabilityFilterState } from "./capabilityFilters";
+import { summarizeLifecycleAssessment } from "./lifecycleAssessment";
 import { getOverviewPresentation, getSurfaceSource } from "./workbenchPolicy";
 import type { WorkbenchMode } from "./workbenchPolicy";
 
@@ -1340,6 +1341,10 @@ function LiveLifecycleView({
   const [selectedRunId, setSelectedRunId] = useState("");
   const [runDetail, setRunDetail] = useState<LifecycleRunDetail | null>(null);
   const [runMessage, setRunMessage] = useState("");
+  const assessment = useMemo(
+    () => summarizeLifecycleAssessment(pipeline, runs.items),
+    [pipeline, runs.items],
+  );
   const selected = pipeline.find((item) => item.stage === active) || pipeline[0];
   const stageRuns = runs.items.filter((item) => item.stage === active);
 
@@ -1385,13 +1390,19 @@ function LiveLifecycleView({
   return (
     <section className="content-view">
       <PageTitle title="Lifecycle" description="Read-only pipeline facts; a stage status is not physical outcome evidence." />
-      <div className="lifecycle-tabs" role="tablist">
-        {pipeline.map((item, index) => (
-          <button key={item.stage} className={active === item.stage ? "is-active" : ""} onClick={() => setActive(item.stage)}>
-            <span>{index + 1}</span><strong>{item.stage}</strong><small>{item.status.replaceAll("_", " ")}</small>
-          </button>
-        ))}
-      </div>
+      <section className="panel lifecycle-assessment-matrix">
+        <header><div><span>Current assessment snapshot</span><h3>Lifecycle stage matrix</h3></div><dl><div><dt>Stages</dt><dd>{assessment.stages}</dd></div><div><dt>Blocked</dt><dd>{assessment.blocked}</dd></div><div><dt>Degraded</dt><dd>{assessment.degraded}</dd></div><div><dt>Blockers</dt><dd>{assessment.blockers}</dd></div><div><dt>Supported runs</dt><dd>{assessment.supportedRuns}</dd></div></dl></header>
+        <div className="lifecycle-assessment-grid" role="tablist" aria-label="Lifecycle stage assessments">
+          {assessment.rows.map((row, index) => (
+            <button key={row.stage} role="tab" aria-selected={active === row.stage} className={active === row.stage ? "is-active" : ""} onClick={() => setActive(row.stage)}>
+              <span className="assessment-stage-heading"><em>{index + 1}</em><strong>{row.stage}</strong><small className={`stage-status status-${row.status.toLowerCase().replaceAll("_", "-")}`}>{row.status.replaceAll("_", " ")}</small></span>
+              <dl><div><dt>Blockers</dt><dd>{row.blockers}</dd></div><div><dt>Prerequisites</dt><dd>{row.prerequisites}</dd></div><div><dt>Artifacts</dt><dd>{row.artifacts}</dd></div><div><dt>Runs</dt><dd>{row.supportedRuns}</dd></div></dl>
+              <span className="assessment-stage-meta"><small>{row.owner.replaceAll("_", " ")}</small><em>{row.optional ? "Optional" : "Required"}</em></span>
+            </button>
+          ))}
+        </div>
+        <footer><Info size={15} /><span>Rows are independent current assessments. Stage order does not establish a verified handoff, historical run, or physical outcome.</span></footer>
+      </section>
       <div className="lifecycle-detail-grid">
         <div className="panel stage-detail-panel">
           <div className="stage-detail-header"><div><span>Stage {pipeline.findIndex((item) => item.stage === active) + 1}</span><h3>{selected.stage}</h3></div><span className={`stage-status status-${selected.status.toLowerCase().replaceAll("_", "-")}`}>{selected.status.replaceAll("_", " ")}</span></div>
