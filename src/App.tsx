@@ -72,6 +72,7 @@ import type {
   RobotOverview,
   RobotTopology,
   RobotWikiSnapshot,
+  SliceStabilityReport,
   TargetOperationSlice,
   TopologyDiff,
   TopologyPathExplanation,
@@ -1088,6 +1089,60 @@ function CapabilityReadinessPanel({
   );
 }
 
+function SliceStabilityView({
+  report,
+  supported,
+  loading,
+  onRetry,
+}: {
+  report: SliceStabilityReport | null;
+  supported: boolean;
+  loading: boolean;
+  onRetry: () => void;
+}) {
+  if (!supported) return <div className="adapt-context-state"><Info size={24} /><span><strong>Stability evidence is not advertised</strong><small>This rolo baseline does not expose the optional Slice stability contract.</small></span></div>;
+  if (!report) return <div className="adapt-context-state is-warning"><WarningCircle size={24} /><span><strong>Stability evidence is unavailable</strong><small>No validated Slice observation report was returned.</small></span><button className="secondary-button" disabled={loading} onClick={onRetry}>Retry</button></div>;
+
+  const recommendationCopy = report.recommendation === "READY_FOR_REVIEW"
+    ? "The observed Canary window is ready for a human review. No rollout change is automatic."
+    : report.recommendation === "HOLD"
+      ? "Stop expanding Canary scope and inspect the blocking runs below. Existing configuration is unchanged."
+      : "Keep the current Shadow / Canary scope until the successful sample threshold is met.";
+  const recent = report.observations.slice(0, 8);
+  return <section className="adapt-stability-view" aria-label="Slice stability and Canary observations">
+    <header className={`adapt-stability-recommendation is-${report.recommendation.toLowerCase().replaceAll("_", "-")}`}>
+      {report.recommendation === "READY_FOR_REVIEW" ? <CheckCircle size={22} weight="fill" /> : report.recommendation === "HOLD" ? <WarningCircle size={22} weight="fill" /> : <Pulse size={22} />}
+      <span><small>Stability recommendation</small><strong>{report.recommendation.replaceAll("_", " ")}</strong><p>{recommendationCopy}</p></span>
+      <em>{report.successful_canary_count} / {report.min_successful_canary_runs} successful Canary runs</em>
+    </header>
+    <div className="adapt-stability-summary">
+      <div><span>Observed runs</span><strong>{report.observation_count}</strong><small>latest {report.max_runs} maximum</small></div>
+      <div><span>Selected Canary</span><strong>{report.selected_canary_count}</strong><small>{report.activated_count} activated</small></div>
+      <div><span>Fallbacks</span><strong>{report.fallback_count}</strong><small>automatic context fallback</small></div>
+      <div><span>Agent / gate failures</span><strong>{report.agent_failed_count + report.gate_failed_count}</strong><small>{report.agent_failed_count} agent · {report.gate_failed_count} gate</small></div>
+      <div><span>Context budget</span><strong>{report.context_budget_exceeded_count}</strong><small>runs over budget</small></div>
+      <div><span>Effective reduction</span><strong>{Math.round(report.average_effective_context_reduction_ratio * 100)}%</strong><small>{Math.round(report.average_potential_context_reduction_ratio * 100)}% potential average</small></div>
+    </div>
+    <div className="adapt-stability-body">
+      <section className="adapt-stability-runs">
+        <header><div><span>Immutable run evidence</span><h4>Recent Slice decisions</h4></div><small>{recent.length} shown · newest first</small></header>
+        {recent.length ? recent.map((observation) => <article key={observation.run_id} className={`adapt-stability-run is-${observation.outcome.toLowerCase().replaceAll("_", "-")}`}>
+          <div><code>{observation.run_id}</code><small>{observation.mode} · {observation.outcome.replaceAll("_", " ")}</small></div>
+          <dl><div><dt>Agent</dt><dd>{observation.agent_run_status || "Not recorded"}</dd></div><div><dt>Gate</dt><dd>{observation.gate_status || "Not recorded"}</dd></div><div><dt>Context effect</dt><dd>{observation.affects_agent_context ? "Active" : "None"}</dd></div><div><dt>Reduction</dt><dd>{Math.round(observation.effective_context_reduction_ratio * 100)}%</dd></div></dl>
+          {(observation.fallback_reason || observation.alert_codes.length > 0) && <p><WarningCircle size={13} />{observation.fallback_reason || observation.alert_codes.join(" · ")}</p>}
+        </article>) : <div className="adapt-context-empty"><Clock size={20} /><span><strong>No Slice decisions observed</strong><small>Legacy runs without a Slice decision are intentionally excluded. The current recommendation remains sample-limited.</small></span></div>}
+      </section>
+      <aside className="adapt-stability-reasons">
+        <span>Recommendation evidence</span>
+        {report.recommendation_reasons.map((reason) => <p key={reason}><i />{reason.replaceAll("_", " ").toLowerCase()}</p>)}
+        <dl><div><dt>Shadow only</dt><dd>{report.outcome_counts.SHADOW_ONLY || 0}</dd></div><div><dt>Not selected</dt><dd>{report.outcome_counts.NOT_SELECTED || 0}</dd></div><div><dt>Activated</dt><dd>{report.outcome_counts.ACTIVATED || 0}</dd></div><div><dt>Fallback</dt><dd>{report.outcome_counts.FALLBACK || 0}</dd></div></dl>
+        {Object.keys(report.alert_counts).length > 0 && <section><span>Observed alerts</span>{Object.entries(report.alert_counts).map(([code, count]) => <p key={code}><code>{code}</code><strong>{count}</strong></p>)}</section>}
+      </aside>
+    </div>
+    <footer><ShieldCheck size={15} /><span>Read-only recommendation · influences release: no. Registry, Bundle, Catalog, allowlists, and activation mode remain under separate authority.</span></footer>
+  </section>;
+}
+
 function LiveCapabilityView({
   robotId,
   items,
@@ -1116,9 +1171,10 @@ function LiveCapabilityView({
   const [adaptLoading, setAdaptLoading] = useState(false);
   const [adaptMessage, setAdaptMessage] = useState("");
   const [targetSlice, setTargetSlice] = useState<TargetOperationSlice | null>(null);
+  const [sliceStability, setSliceStability] = useState<SliceStabilityReport | null>(null);
   const [operationGovernance, setOperationGovernance] = useState<OperationDisposition[]>([]);
   const [adaptTargetFocus, setAdaptTargetFocus] = useState(false);
-  const [adaptView, setAdaptView] = useState<"target" | "governance">("target");
+  const [adaptView, setAdaptView] = useState<"target" | "governance" | "stability">("target");
   const [governanceQuery, setGovernanceQuery] = useState("");
   const [governanceSemanticLayer, setGovernanceSemanticLayer] = useState<AdaptSemanticLayer | "ALL">("ALL");
   const [governanceExecutionClass, setGovernanceExecutionClass] = useState<AdaptExecutionClass | "ALL">("ALL");
@@ -1146,6 +1202,7 @@ function LiveCapabilityView({
   const governanceFilterCount = activeGovernanceFilterCount(filters);
   const targetSliceSupported = apiFeatures.includes(ROLO_API_FEATURES.targetOperationSlice);
   const operationGovernanceSupported = apiFeatures.includes(ROLO_API_FEATURES.operationGovernance);
+  const sliceStabilitySupported = apiFeatures.includes(ROLO_API_FEATURES.sliceStability);
   const adaptContextSupported = targetSliceSupported;
   const adaptLens = useMemo(
     () => targetSlice ? buildAdaptContextLens(targetSlice, operationGovernance) : null,
@@ -1185,19 +1242,24 @@ function LiveCapabilityView({
     const governanceRequest = operationGovernanceSupported
       ? roloClient.operationGovernance({ signal: controller.signal })
       : Promise.resolve(null);
-    void Promise.allSettled([sliceRequest, governanceRequest]).then(([sliceResult, governanceResult]) => {
+    const stabilityRequest = sliceStabilitySupported
+      ? roloClient.sliceStability(robotId, { signal: controller.signal })
+      : Promise.resolve(null);
+    void Promise.allSettled([sliceRequest, governanceRequest, stabilityRequest]).then(([sliceResult, governanceResult, stabilityResult]) => {
       if (controller.signal.aborted) return;
       const messages: string[] = [];
       if (sliceResult.status === "fulfilled") setTargetSlice(sliceResult.value);
       else messages.push(sliceResult.reason instanceof Error ? sliceResult.reason.message : "Target operation slice is unavailable.");
       if (governanceResult.status === "fulfilled") setOperationGovernance(governanceResult.value?.items || []);
       else messages.push(governanceResult.reason instanceof Error ? governanceResult.reason.message : "Operation governance is unavailable.");
+      if (stabilityResult.status === "fulfilled") setSliceStability(stabilityResult.value);
+      else messages.push(stabilityResult.reason instanceof Error ? stabilityResult.reason.message : "Slice stability evidence is unavailable.");
       setAdaptMessage(messages.join(" "));
     }).finally(() => {
       if (!controller.signal.aborted) setAdaptLoading(false);
       if (adaptRequest.current === controller) adaptRequest.current = null;
     });
-  }, [operationGovernanceSupported, robotId, targetSliceSupported]);
+  }, [operationGovernanceSupported, robotId, sliceStabilitySupported, targetSliceSupported]);
 
   const closeAdaptContext = () => {
     adaptRequest.current?.abort();
@@ -1221,6 +1283,7 @@ function LiveCapabilityView({
     setAdaptLoading(false);
     setAdaptMessage("");
     setTargetSlice(null);
+    setSliceStability(null);
     setOperationGovernance([]);
     setAdaptTargetFocus(false);
     setAdaptView("target");
@@ -1352,6 +1415,7 @@ function LiveCapabilityView({
           </div>
           <nav className="adapt-view-tabs" aria-label="Adapt context view">
             <button className={adaptView === "target" ? "is-active" : ""} aria-pressed={adaptView === "target"} onClick={() => setAdaptView("target")}><Target size={14} />Target work <span>{adaptLens.targetOperations.length}</span></button>
+            {sliceStabilitySupported && <button className={adaptView === "stability" ? "is-active" : ""} aria-pressed={adaptView === "stability"} onClick={() => setAdaptView("stability")}><Broadcast size={14} />Stability <span>{sliceStability?.observation_count || 0}</span></button>}
             <button className={adaptView === "governance" ? "is-active" : ""} aria-pressed={adaptView === "governance"} onClick={() => setAdaptView("governance")}><ShieldCheck size={14} />Governance ledger <span>{operationGovernance.length}</span></button>
           </nav>
           {adaptView === "target" ? <div className="adapt-context-body">
@@ -1368,7 +1432,7 @@ function LiveCapabilityView({
                 <section><span>Deferred reasons</span>{adaptLens.deferred.length ? adaptLens.deferred.map((item) => <div key={item.reason}><code>{item.reason.replaceAll("_", " ")}</code><strong>{item.count}</strong></div>) : <p>No deferred operations are reported.</p>}</section>
                 <dl><div><dt>Discovery</dt><dd>{targetSlice.discovery_id}</dd></div><div><dt>Slice digest</dt><dd><code>{targetSlice.slice_sha256.slice(0, 12)}…</code></dd></div><div><dt>Registry digest</dt><dd><code>{targetSlice.registry_sha256.slice(0, 12)}…</code></dd></div><div><dt>Governance ledger</dt><dd>{operationGovernance.length ? `${operationGovernance.length} operations` : "Not available"}</dd></div></dl>
               </aside>
-            </div> : <section className="adapt-governance-matrix">
+            </div> : adaptView === "stability" ? <SliceStabilityView report={sliceStability} supported={sliceStabilitySupported} loading={adaptLoading} onRetry={loadAdaptContext} /> : <section className="adapt-governance-matrix">
               <header>
                 <div><span>Operation disposition ledger</span><h4>Cross-layer governance explorer</h4><p>Search migration intent and execution ownership without changing Registry truth.</p></div>
                 <small>{governanceResultPage.total} of {governanceSummary.total} records</small>

@@ -54,6 +54,54 @@ export interface TargetOperationSlice {
   deferred_summary: Record<string, number>;
 }
 
+export type SliceActivationOutcome = "SHADOW_ONLY" | "NOT_SELECTED" | "ACTIVATED" | "FALLBACK";
+export type SliceStabilityRecommendation = "INSUFFICIENT_DATA" | "HOLD" | "READY_FOR_REVIEW";
+
+export interface SliceRunObservation {
+  run_id: string;
+  decision_ref: string;
+  mode: "SHADOW" | "CANARY";
+  outcome: SliceActivationOutcome;
+  selected: boolean;
+  affects_agent_context: boolean;
+  agent_run_status: string | null;
+  gate_status: string | null;
+  authoritative_operation_count: number;
+  requested_operation_count: number;
+  effective_operation_count: number;
+  potential_context_reduction_ratio: number;
+  effective_context_reduction_ratio: number;
+  prompt_token_estimate: number | null;
+  boot_context_token_estimate: number | null;
+  boot_context_budget_tokens: number | null;
+  context_budget_exceeded: boolean;
+  alert_codes: string[];
+  fallback_reason: string | null;
+}
+
+export interface SliceStabilityReport {
+  schema_version: "robot-target-operation-slice-stability/v1";
+  robot_id: string;
+  max_runs: number;
+  min_successful_canary_runs: number;
+  observation_count: number;
+  selected_canary_count: number;
+  activated_count: number;
+  fallback_count: number;
+  successful_canary_count: number;
+  agent_failed_count: number;
+  gate_failed_count: number;
+  context_budget_exceeded_count: number;
+  average_potential_context_reduction_ratio: number;
+  average_effective_context_reduction_ratio: number;
+  outcome_counts: Record<string, number>;
+  alert_counts: Record<string, number>;
+  recommendation: SliceStabilityRecommendation;
+  recommendation_reasons: string[];
+  observations: SliceRunObservation[];
+  influences_release: false;
+}
+
 export interface RobotCapability {
   schema_version: string;
   robot_id: string;

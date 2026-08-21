@@ -37,6 +37,49 @@ const TARGET_OPERATION_SLICE = {
   deferred_summary: { NO_ROUTE: 2 },
 };
 
+const SLICE_STABILITY = {
+  schema_version: "robot-target-operation-slice-stability/v1",
+  robot_id: "AMR-07",
+  max_runs: 50,
+  min_successful_canary_runs: 10,
+  observation_count: 1,
+  selected_canary_count: 1,
+  activated_count: 1,
+  fallback_count: 0,
+  successful_canary_count: 1,
+  agent_failed_count: 0,
+  gate_failed_count: 0,
+  context_budget_exceeded_count: 0,
+  average_potential_context_reduction_ratio: 0.5,
+  average_effective_context_reduction_ratio: 0.5,
+  outcome_counts: { ACTIVATED: 1 },
+  alert_counts: { ELIGIBLE_NOT_IN_SLICE: 1 },
+  recommendation: "INSUFFICIENT_DATA",
+  recommendation_reasons: ["MINIMUM_SUCCESSFUL_CANARY_RUNS_NOT_MET"],
+  observations: [{
+    run_id: "run-20260821-001",
+    decision_ref: "artifact://adapt/AMR-07/runs/run-20260821-001/slice-activation-decision.json",
+    mode: "CANARY",
+    outcome: "ACTIVATED",
+    selected: true,
+    affects_agent_context: true,
+    agent_run_status: "SUCCEEDED",
+    gate_status: "PASSED",
+    authoritative_operation_count: 20,
+    requested_operation_count: 10,
+    effective_operation_count: 10,
+    potential_context_reduction_ratio: 0.5,
+    effective_context_reduction_ratio: 0.5,
+    prompt_token_estimate: 2000,
+    boot_context_token_estimate: 4000,
+    boot_context_budget_tokens: 8000,
+    context_budget_exceeded: false,
+    alert_codes: ["ELIGIBLE_NOT_IN_SLICE"],
+    fallback_reason: null,
+  }],
+  influences_release: false,
+};
+
 const OPERATION_GOVERNANCE_COLLECTION = {
   schema_version: "rolo-operation-governance-collection/v1",
   items: [{
@@ -690,6 +733,47 @@ test("RoloClient keeps the optional Adapt slice out of bootstrap and loads it on
     assert.equal(slice.slice_sha256, "b".repeat(64));
     assert.equal(requests.at(-1),
       "http://rolo.test/v1/robots/AMR-07/adapt/operation-slice",
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("RoloClient loads and validates Slice stability only on demand", async () => {
+  const originalFetch = globalThis.fetch;
+  const requests = [];
+  globalThis.fetch = async (url) => {
+    requests.push(url);
+    return { ok: true, json: async () => SLICE_STABILITY };
+  };
+
+  try {
+    const report = await new RoloClient("http://rolo.test").sliceStability("AMR-07");
+    assert.equal(report.recommendation, "INSUFFICIENT_DATA");
+    assert.equal(
+      report.observations[0].decision_ref,
+      "artifact://adapt/AMR-07/runs/run-20260821-001/slice-activation-decision.json",
+    );
+    assert.equal(report.influences_release, false);
+    assert.deepEqual(requests, [
+      "http://rolo.test/v1/robots/AMR-07/adapt/slice-stability",
+    ]);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("RoloClient rejects Slice stability that claims release authority", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => ({
+    ok: true,
+    json: async () => ({ ...SLICE_STABILITY, influences_release: true }),
+  });
+
+  try {
+    await assert.rejects(
+      () => new RoloClient("http://rolo.test").sliceStability("AMR-07"),
+      RoloContractError,
     );
   } finally {
     globalThis.fetch = originalFetch;

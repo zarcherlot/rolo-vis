@@ -23,6 +23,8 @@ import type {
   RobotOverview,
   RobotTopology,
   RobotWikiSnapshot,
+  SliceRunObservation,
+  SliceStabilityReport,
   StageAssessment,
   TargetOperationSlice,
   TopologyDiff,
@@ -37,6 +39,7 @@ const DEFAULT_BASE = "/rolo-api";
 
 export const ROLO_API_FEATURES = {
   operationGovernance: "adapt.operation-governance/v1",
+  sliceStability: "adapt.slice-stability/v1",
   targetOperationSlice: "adapt.target-operation-slice/v1",
 } as const;
 
@@ -195,6 +198,58 @@ function parseTargetOperationSlice(value: unknown, path: string, robotId: string
   }
   requireContract(isNonNegativeIntegerRecord(value.deferred_summary), "invalid target operation deferred summary", path);
   return value as unknown as TargetOperationSlice;
+}
+
+function parseSliceRunObservation(value: unknown, path: string): SliceRunObservation {
+  requireContract(isRecord(value), "Slice run observation must be an object", path);
+  requireContract(typeof value.run_id === "string" && value.run_id.length > 0, "missing Slice run identity", path);
+  requireContract(
+    typeof value.decision_ref === "string"
+      && /^artifact:\/\/adapt\/[^/]+\/runs\/[^/]+\/slice-activation-decision\.json$/.test(value.decision_ref),
+    "invalid Slice decision reference",
+    path,
+  );
+  requireContract(["SHADOW", "CANARY"].includes(String(value.mode)), "invalid Slice activation mode", path);
+  requireContract(["SHADOW_ONLY", "NOT_SELECTED", "ACTIVATED", "FALLBACK"].includes(String(value.outcome)), "invalid Slice activation outcome", path);
+  requireContract(typeof value.selected === "boolean" && typeof value.affects_agent_context === "boolean", "invalid Slice selection state", path);
+  requireContract(value.agent_run_status === null || typeof value.agent_run_status === "string", "invalid Slice agent status", path);
+  requireContract(value.gate_status === null || typeof value.gate_status === "string", "invalid Slice gate status", path);
+  for (const key of ["authoritative_operation_count", "requested_operation_count", "effective_operation_count"] as const) {
+    requireContract(Number.isInteger(value[key]) && Number(value[key]) >= 0, `invalid Slice ${key}`, path);
+  }
+  for (const key of ["potential_context_reduction_ratio", "effective_context_reduction_ratio"] as const) {
+    requireContract(typeof value[key] === "number" && value[key] >= 0 && value[key] <= 1, `invalid Slice ${key}`, path);
+  }
+  for (const key of ["prompt_token_estimate", "boot_context_token_estimate"] as const) {
+    requireContract(value[key] === null || (Number.isInteger(value[key]) && Number(value[key]) >= 0), `invalid Slice ${key}`, path);
+  }
+  requireContract(value.boot_context_budget_tokens === null || (Number.isInteger(value.boot_context_budget_tokens) && Number(value.boot_context_budget_tokens) > 0), "invalid Slice context budget", path);
+  requireContract(typeof value.context_budget_exceeded === "boolean" && isStringArray(value.alert_codes), "invalid Slice alerts or budget state", path);
+  requireContract(value.fallback_reason === null || typeof value.fallback_reason === "string", "invalid Slice fallback reason", path);
+  return { ...value, decision_ref: safeReferenceHint(value.decision_ref) } as unknown as SliceRunObservation;
+}
+
+function parseSliceStabilityReport(value: unknown, path: string, robotId: string): SliceStabilityReport {
+  requireContract(isRecord(value), "Slice stability report must be an object", path);
+  requireContract(value.schema_version === "robot-target-operation-slice-stability/v1", "unsupported Slice stability schema", path);
+  requireContract(value.robot_id === robotId, "Slice stability robot identity does not match", path);
+  requireContract(Number.isInteger(value.max_runs) && Number(value.max_runs) > 0 && Number(value.max_runs) <= 100, "invalid Slice observation window", path);
+  requireContract(Number.isInteger(value.min_successful_canary_runs) && Number(value.min_successful_canary_runs) > 0 && Number(value.min_successful_canary_runs) <= 100, "invalid Slice Canary threshold", path);
+  requireContract(Array.isArray(value.observations), "invalid Slice observations", path);
+  const observations = value.observations.map((item, index) => parseSliceRunObservation(item, `${path}/observations/${index}`));
+  for (const key of ["observation_count", "selected_canary_count", "activated_count", "fallback_count", "successful_canary_count", "agent_failed_count", "gate_failed_count", "context_budget_exceeded_count"] as const) {
+    requireContract(Number.isInteger(value[key]) && Number(value[key]) >= 0, `invalid Slice ${key}`, path);
+  }
+  requireContract(value.observation_count === observations.length, "Slice observation summary is inconsistent", path);
+  requireContract(new Set(observations.map((item) => item.run_id)).size === observations.length, "duplicate Slice run observations", path);
+  for (const key of ["average_potential_context_reduction_ratio", "average_effective_context_reduction_ratio"] as const) {
+    requireContract(typeof value[key] === "number" && value[key] >= 0 && value[key] <= 1, `invalid Slice ${key}`, path);
+  }
+  requireContract(isNonNegativeIntegerRecord(value.outcome_counts) && isNonNegativeIntegerRecord(value.alert_counts), "invalid Slice aggregate counts", path);
+  requireContract(["INSUFFICIENT_DATA", "HOLD", "READY_FOR_REVIEW"].includes(String(value.recommendation)), "invalid Slice stability recommendation", path);
+  requireContract(isStringArray(value.recommendation_reasons), "invalid Slice recommendation reasons", path);
+  requireContract(value.influences_release === false, "Slice stability must not influence release", path);
+  return { ...value, observations } as unknown as SliceStabilityReport;
 }
 
 function parseRobotCapabilities(value: unknown, path: string): RobotCapability[] {
@@ -1013,6 +1068,15 @@ export class RoloClient {
   async targetOperationSlice(robotId: string, options?: RequestInit) {
     const path = `/v1/robots/${encodeURIComponent(robotId)}/adapt/operation-slice`;
     return parseTargetOperationSlice(
+      await this.request<unknown>(path, options),
+      path,
+      robotId,
+    );
+  }
+
+  async sliceStability(robotId: string, options?: RequestInit) {
+    const path = `/v1/robots/${encodeURIComponent(robotId)}/adapt/slice-stability`;
+    return parseSliceStabilityReport(
       await this.request<unknown>(path, options),
       path,
       robotId,
