@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { buildAdaptContextLens } from "../src/adaptContext.ts";
+import {
+  buildAdaptContextLens,
+  filterCapabilitiesToTargetAdapter,
+  getAdaptOperationContext,
+} from "../src/adaptContext.ts";
 
 const SLICE = {
   schema_version: "robot-target-operation-slice/v1",
@@ -56,4 +60,33 @@ test("Adapt context orders deferred reasons and excludes zero-count entries", ()
     { reason: "TARGET_ROUTE_NOT_OBSERVED", count: 3 },
     { reason: "NO_PORTABLE_SEMANTICS", count: 1 },
   ]);
+});
+
+test("operation context joins slice role without promoting governance to availability", () => {
+  const context = getAdaptOperationContext("linux.service.inspect", SLICE, GOVERNANCE);
+
+  assert.equal(context.inCurrentSlice, true);
+  assert.equal(context.role, "PRIMARY");
+  assert.equal(context.executionClass, "TARGET_ADAPTER");
+  assert.equal(context.governance.future_capability, "os.workload.inspect");
+  assert.equal(context.classificationConsistent, true);
+
+  const outside = getAdaptOperationContext("linux.time.status", SLICE, GOVERNANCE);
+  assert.equal(outside.inCurrentSlice, false);
+  assert.equal(outside.role, null);
+  assert.equal(outside.executionClass, null);
+});
+
+test("target adapter focus preserves registry order and never invents capabilities", () => {
+  const capabilities = [
+    { operation: "linux.log.query" },
+    { operation: "linux.time.status" },
+    { operation: "linux.service.inspect" },
+  ];
+
+  assert.deepEqual(
+    filterCapabilitiesToTargetAdapter(capabilities, SLICE).map((item) => item.operation),
+    ["linux.log.query", "linux.service.inspect"],
+  );
+  assert.equal(filterCapabilitiesToTargetAdapter(capabilities, null), capabilities);
 });

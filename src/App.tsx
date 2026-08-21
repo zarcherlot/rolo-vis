@@ -75,7 +75,11 @@ import type {
   TopologySnapshotCollection,
   WikiLayer,
 } from "./types/rolo";
-import { buildAdaptContextLens } from "./adaptContext";
+import {
+  buildAdaptContextLens,
+  filterCapabilitiesToTargetAdapter,
+  getAdaptOperationContext,
+} from "./adaptContext";
 import {
   topologyLayerForWiki,
   wikiLayerForTopology,
@@ -1107,6 +1111,7 @@ function LiveCapabilityView({
   const [adaptMessage, setAdaptMessage] = useState("");
   const [targetSlice, setTargetSlice] = useState<TargetOperationSlice | null>(null);
   const [operationGovernance, setOperationGovernance] = useState<OperationDisposition[]>([]);
+  const [adaptTargetFocus, setAdaptTargetFocus] = useState(false);
   const adaptRequest = useRef<AbortController | null>(null);
   const [tab, setTab] = useState<"overview" | "contract" | "binding" | "evidence">("overview");
   const coverage = useMemo(() => summarizeCapabilityCoverage(items), [items]);
@@ -1120,7 +1125,11 @@ function LiveCapabilityView({
     lifecycle: lifecycleFilter,
     classification: classificationFilter,
   }), [accessFilter, availabilityFilter, classificationFilter, layer, lifecycleFilter, query, riskFilter]);
-  const visible = useMemo(() => filterCapabilities(items, filters), [filters, items]);
+  const filteredCapabilities = useMemo(() => filterCapabilities(items, filters), [filters, items]);
+  const visible = useMemo(
+    () => adaptTargetFocus ? filterCapabilitiesToTargetAdapter(filteredCapabilities, targetSlice) : filteredCapabilities,
+    [adaptTargetFocus, filteredCapabilities, targetSlice],
+  );
   const visibleFamilies = useMemo(() => groupCapabilitiesByFamily(visible), [visible]);
   const governanceFilterCount = activeGovernanceFilterCount(filters);
   const targetSliceSupported = apiFeatures.includes(ROLO_API_FEATURES.targetOperationSlice);
@@ -1180,6 +1189,7 @@ function LiveCapabilityView({
     setAdaptMessage("");
     setTargetSlice(null);
     setOperationGovernance([]);
+    setAdaptTargetFocus(false);
   }, [robotId]);
 
   useEffect(() => {
@@ -1210,6 +1220,12 @@ function LiveCapabilityView({
 
   const selected = items.find((item) => item.operation === selectedOperation);
   const detailItem = detail?.capability || selected;
+  const selectedAdaptContext = useMemo(
+    () => detailItem && targetSlice
+      ? getAdaptOperationContext(detailItem.operation, targetSlice, operationGovernance)
+      : null,
+    [detailItem, operationGovernance, targetSlice],
+  );
   const relations = useMemo(
     () => detailItem ? getCapabilityRelations(detailItem, items) : [],
     [detailItem, items],
@@ -1233,9 +1249,32 @@ function LiveCapabilityView({
     setAccessFilter("ALL");
     setLifecycleFilter("ALL");
     setClassificationFilter("ALL");
+    setAdaptTargetFocus(false);
     setQuery("");
     setSelectedOperation(related.operation);
     setTab("overview");
+  };
+  const openAdaptOperation = (operation: string) => {
+    const target = items.find((item) => item.operation === operation);
+    if (!target) return;
+    setQuery("");
+    setLayer("ALL");
+    setAvailabilityFilter("ALL");
+    setRiskFilter("ALL");
+    setAccessFilter("ALL");
+    setLifecycleFilter("ALL");
+    setClassificationFilter("ALL");
+    setSelectedOperation(target.operation);
+    setTab("overview");
+  };
+  const toggleAdaptTargetFocus = () => {
+    if (adaptTargetFocus) {
+      setAdaptTargetFocus(false);
+      return;
+    }
+    setAdaptTargetFocus(true);
+    const firstTarget = targetSlice?.target_adapter_operations.find((operation) => items.some((item) => item.operation === operation));
+    if (firstTarget) openAdaptOperation(firstTarget);
   };
 
   return (
@@ -1270,12 +1309,13 @@ function LiveCapabilityView({
           </div>
           <div className="adapt-context-body">
             <section className="adapt-target-list">
-              <header><div><span>Target adapter operations</span><h4>Current implementation surface</h4></div><small>{adaptLens.governedTargetCount} / {adaptLens.targetOperations.length} governance records joined</small></header>
-              {adaptLens.targetOperations.length ? adaptLens.targetOperations.map((item) => <div className="adapt-target-row" key={item.operation}>
+              <header><div><span>Target adapter operations</span><h4>Current implementation surface</h4></div><div className="adapt-target-actions"><small>{adaptLens.governedTargetCount} / {adaptLens.targetOperations.length} governance records joined</small><button className={`secondary-button ${adaptTargetFocus ? "is-active" : ""}`} disabled={!adaptLens.targetOperations.length} onClick={toggleAdaptTargetFocus}>{adaptTargetFocus ? "Show all capabilities" : "Focus target work"}</button></div></header>
+              {adaptLens.targetOperations.length ? adaptLens.targetOperations.map((item) => <button className={`adapt-target-row ${selectedOperation === item.operation ? "is-selected" : ""}`} key={item.operation} onClick={() => openAdaptOperation(item.operation)}>
                 <span className={`adapt-role role-${item.role.toLowerCase()}`}>{item.role}</span>
                 <span><code>{item.operation}</code><small>{item.governance ? `${item.governance.semantic_layer} · ${item.governance.migration_status}` : "Governance record unavailable"}</small></span>
                 <span><small>Future capability</small><code>{item.governance?.future_capability || "Not mapped"}</code></span>
-              </div>) : <div className="adapt-context-empty"><CheckCircle size={20} /><span><strong>No target-adapter operations</strong><small>The current slice does not request adapter implementation work.</small></span></div>}
+                <ArrowRight size={14} />
+              </button>) : <div className="adapt-context-empty"><CheckCircle size={20} /><span><strong>No target-adapter operations</strong><small>The current slice does not request adapter implementation work.</small></span></div>}
             </section>
             <aside className="adapt-context-meta">
               <section><span>Deferred reasons</span>{adaptLens.deferred.length ? adaptLens.deferred.map((item) => <div key={item.reason}><code>{item.reason.replaceAll("_", " ")}</code><strong>{item.count}</strong></div>) : <p>No deferred operations are reported.</p>}</section>
@@ -1286,6 +1326,7 @@ function LiveCapabilityView({
         {adaptMessage && adaptLens && <div className="adapt-context-warning"><WarningCircle size={15} /><span>{adaptMessage}</span><button className="secondary-button" disabled={adaptLoading} onClick={loadAdaptContext}>Retry optional data</button></div>}
         <footer><Info size={15} /><span>This shadow view narrows agent work. It does not change the 294-operation Registry, capability availability, policy, conformance, or release gates.</span></footer>
       </section>}
+      {adaptTargetFocus && targetSlice && <div className="panel adapt-scope-banner"><Target size={18} /><span><strong>Capability list focused on {targetSlice.target_adapter_operations.length} Target Adapter operations</strong><small>Registry filters still apply inside this bounded implementation surface.</small></span><button className="secondary-button" onClick={() => setAdaptTargetFocus(false)}>Show all capabilities</button></div>}
       <div className="capability-layout">
         <div className="capability-list panel">
           <div className="capability-toolbar">
@@ -1340,6 +1381,16 @@ function LiveCapabilityView({
                 <div><span>Contract</span><strong>v{detailItem.contract_version}</strong></div>
                 <div><span>Last verified</span><strong>{detailItem.last_verified_at ? new Date(detailItem.last_verified_at).toLocaleString() : "Not verified"}</strong></div>
               </div>
+              {selectedAdaptContext && <section className={`operation-adapt-context ${selectedAdaptContext.inCurrentSlice ? "is-current" : ""}`}>
+                <header><div><span>External Adapt governance</span><h4>Operation context</h4></div><strong>{selectedAdaptContext.inCurrentSlice ? selectedAdaptContext.role : "OUTSIDE CURRENT SLICE"}</strong></header>
+                <dl>
+                  <div><dt>Execution class</dt><dd>{selectedAdaptContext.executionClass || selectedAdaptContext.governance?.execution_class || "Not classified"}</dd></div>
+                  <div><dt>Semantic layer</dt><dd>{selectedAdaptContext.governance?.semantic_layer || "Not mapped"}</dd></div>
+                  <div><dt>Future capability</dt><dd><code>{selectedAdaptContext.governance?.future_capability || "Not mapped"}</code></dd></div>
+                  <div><dt>Migration</dt><dd>{selectedAdaptContext.governance?.migration_status || "Not available"}</dd></div>
+                </dl>
+                <footer className={selectedAdaptContext.classificationConsistent ? "" : "is-warning"}><Info size={14} /><span>{selectedAdaptContext.classificationConsistent ? "This context explains agent ownership and migration intent; it does not alter Registry availability or runtime trust." : "Slice execution class conflicts with external governance. Treat this context as unresolved until the artifacts agree."}</span></footer>
+              </section>}
               <div className="capability-relations">
                 <header><div><span>Declared operation links</span><h4>Related operations</h4></div><small>{relations.length ? `${relations.length} canonical ${relations.length === 1 ? "link" : "links"}` : "No links declared"}</small></header>
                 {relations.length ? relations.map((relation) => (
