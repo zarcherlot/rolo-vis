@@ -3,7 +3,13 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 import { TOPOLOGY_EDGES, TOPOLOGY_NODES } from "../src/demoData.ts";
-import { RoloApiError, RoloClient, RoloContractError } from "../src/roloClient.ts";
+import {
+  ROLO_API_FEATURES,
+  RoloApiError,
+  RoloClient,
+  RoloContractError,
+  supportsApiFeature,
+} from "../src/roloClient.ts";
 import { getOverviewPresentation, getSurfaceSource } from "../src/workbenchPolicy.ts";
 
 const HEALTH = {
@@ -14,6 +20,43 @@ const HEALTH = {
   robot_use_backend: "offline",
   openai_key_configured: false,
   timestamp: "2026-08-20T00:00:00Z",
+};
+
+const TARGET_OPERATION_SLICE = {
+  schema_version: "robot-target-operation-slice/v1",
+  robot_id: "AMR-07",
+  discovery_id: "discovery-1",
+  registry_sha256: "a".repeat(64),
+  slice_sha256: "b".repeat(64),
+  primary_operations: ["app.navigation.start"],
+  dependency_operations: ["app.navigation.cancel"],
+  agent_native_operations: ["app.navigation.start"],
+  builtin_operations: ["app.navigation.cancel"],
+  target_adapter_operations: [],
+  platform_specific_operations: [],
+  deferred_summary: { NO_ROUTE: 2 },
+};
+
+const OPERATION_GOVERNANCE_COLLECTION = {
+  schema_version: "rolo-operation-governance-collection/v1",
+  items: [{
+    current_operation: "linux.service.inspect",
+    current_layer: "linux",
+    semantic_layer: "os",
+    execution_class: "TARGET_ADAPTER",
+    portable_semantics: true,
+    future_capability: "os.workload.inspect",
+    migration_status: "PLANNED",
+    migration_reason: "Portable workload inspection is planned.",
+    current_registry_action: "KEEP",
+  }],
+  total: 1,
+  limit: 1,
+  offset: 0,
+  next_offset: null,
+  source_kind: "operation_disposition_ledger",
+  influences_registry: false,
+  limitations: ["External governance metadata only."],
 };
 
 const ROBOT = {
@@ -106,6 +149,243 @@ const TOPOLOGY = {
   limitations: ["Registry only"],
 };
 
+const TOPOLOGY_SNAPSHOTS = {
+  schema_version: "rolo-topology-snapshot-collection/v1",
+  robot_id: "AMR-07",
+  items: [{
+    schema_version: "rolo-topology-snapshot-summary/v1",
+    snapshot_id: "topology_snapshot_1",
+    release_id: "release-1",
+    published_at: "2026-08-19T00:00:00Z",
+    node_count: 1,
+    edge_count: 0,
+    coverage: "GATED_RELEASE",
+    integrity_status: "verified",
+    is_current: false,
+  }, {
+    schema_version: "rolo-topology-snapshot-summary/v1",
+    snapshot_id: "topology_snapshot_2",
+    release_id: "release-2",
+    published_at: "2026-08-20T00:00:00Z",
+    node_count: 1,
+    edge_count: 0,
+    coverage: "GATED_RELEASE",
+    integrity_status: "verified",
+    is_current: true,
+  }],
+  total: 2,
+  observed_at: "2026-08-20T00:00:01Z",
+  freshness: "unknown",
+  limitations: ["Verified releases only"],
+};
+
+const TOPOLOGY_DIFF = {
+  schema_version: "rolo-topology-diff/v1",
+  robot_id: "AMR-07",
+  from_snapshot: TOPOLOGY_SNAPSHOTS.items[0],
+  to_snapshot: TOPOLOGY_SNAPSHOTS.items[1],
+  added_nodes: 0,
+  removed_nodes: 0,
+  changed_nodes: 1,
+  added_edges: 0,
+  removed_edges: 0,
+  changed_edges: 0,
+  node_changes: [{
+    schema_version: "rolo-topology-node-change/v1",
+    node_id: "robot_1",
+    change: "CHANGED",
+    changed_fields: ["state"],
+    before: TOPOLOGY.nodes[0],
+    after: { ...TOPOLOGY.nodes[0], state: "GATED", integrity_status: "verified" },
+  }],
+  edge_changes: [],
+  observed_at: "2026-08-20T00:00:00Z",
+  freshness: "unknown",
+  integrity_status: "verified",
+  limitations: ["Gated declarations only"],
+};
+
+const TOPOLOGY_PATH = {
+  schema_version: "rolo-topology-path-explanation/v1",
+  robot_id: "AMR-07",
+  snapshot_id: "topology_1",
+  from_node_id: "robot_1",
+  to_node_id: "adapter_1",
+  found: true,
+  hop_count: 1,
+  nodes: [TOPOLOGY.nodes[0], {
+    ...TOPOLOGY.nodes[0],
+    node_id: "adapter_1",
+    kind: "adapter",
+    label: "Adapter",
+    layer: "Application",
+  }],
+  steps: [{
+    schema_version: "rolo-topology-path-step/v1",
+    index: 0,
+    from_node_id: "robot_1",
+    to_node_id: "adapter_1",
+    edge_id: "edge_path_1",
+    relation: "hosts",
+    direction: "FORWARD",
+    state: "DECLARED",
+    confidence: 1,
+    integrity_status: "validated",
+    evidence_ids: [EVIDENCE_RECORD.evidence_id],
+  }],
+  summary: "A 1-hop topology connection was found.",
+  observed_at: "2026-08-20T00:00:00Z",
+  freshness: "fresh",
+  source_kind: "topology_path_projection",
+  confidence: 1,
+  integrity_status: "validated",
+  limitations: ["This path does not prove physical reachability."],
+};
+
+const WIKI = {
+  schema_version: "rolo-robot-wiki/v1",
+  robot_id: "AMR-07",
+  discovery_id: "discovery-20260820",
+  discovery_status: "SUCCEEDED",
+  created_at: "2026-08-20T00:00:00Z",
+  content_origin: "HUMAN_EDITED",
+  content_integrity: "unverified",
+  sections: [{
+    schema_version: "rolo-wiki-section/v1",
+    heading: "Architecture",
+    lines: ["The robot uses a bounded navigation stack."],
+  }],
+  layers: ["Hardware", "Linux", "Middleware", "Application", "Dependencies"].map((layer) => ({
+    schema_version: "rolo-wiki-layer-summary/v1",
+    layer,
+    status: "OBSERVED",
+    summary: `Observed ${layer} facts.`,
+    facts: { count: 1 },
+  })),
+  insights: [{
+    schema_version: "rolo-wiki-insight-summary/v1",
+    category: "ARCHITECTURE",
+    statement: "Navigation depends on middleware discovery.",
+    confidence: "MEDIUM",
+    verification: "Verify against the active graph.",
+    source: "DETERMINISTIC_RULE",
+    evidence_id: "ev_abcdef123456789012",
+  }],
+  diff_status: "CHANGED",
+  baseline_discovery_id: "discovery-20260819",
+  changes: [{
+    schema_version: "rolo-wiki-change-summary/v1",
+    category: "ROS",
+    added: ["topic /map"],
+    removed: [],
+    changed: [],
+    evidence_id: "ev_1234567890abcdef12",
+  }],
+  observed_at: "2026-08-20T00:00:00Z",
+  freshness: "unknown",
+  source_kind: "verified_discovery_snapshot",
+  confidence: 1,
+  integrity_status: "verified",
+  limitations: ["Insights remain advisory."],
+};
+
+const DISCOVERY_HISTORY = {
+  schema_version: "rolo-discovery-snapshot-collection/v1",
+  robot_id: "AMR-07",
+  items: [{
+    schema_version: "rolo-discovery-snapshot-summary/v1",
+    robot_id: "AMR-07",
+    discovery_id: "discovery-20260820",
+    status: "PARTIAL",
+    discovery_mode: "ARTIFACT_DOC",
+    created_at: "2026-08-20T00:00:00Z",
+    is_latest: true,
+    probe_total: 4,
+    observed_probes: 2,
+    partial_probes: 1,
+    unavailable_probes: 1,
+    operation_candidates: 14,
+    semantic_bindings: 3,
+    warning_count: 2,
+    confidence: 0.8,
+    integrity_status: "verified",
+    limitations: ["Discovery coverage does not prove task success."],
+  }],
+  total: 1,
+  limit: 100,
+  offset: 0,
+  next_offset: null,
+  excluded_unverified: 0,
+  observed_at: "2026-08-20T00:00:00Z",
+  freshness: "unknown",
+  source_kind: "verified_discovery_history",
+  integrity_status: "verified",
+  limitations: ["Only manifest-verified discovery reports are included."],
+};
+
+const FLEET = {
+  schema_version: "rolo-fleet-collection/v1",
+  items: [{
+    schema_version: "rolo-fleet-robot-summary/v1",
+    robot_id: "AMR-07",
+    adapter: "test-adapter",
+    architecture: "arm64",
+    ros_distro: "humble",
+    state: "ATTENTION",
+    active_stage: "adapt",
+    active_status: "BLOCKED",
+    blocker_count: 1,
+    next_action: "Run adapt discovery",
+    observed_at: "2026-08-20T00:00:00Z",
+    freshness: "fresh",
+    source_kind: "computed_robot_overview",
+    confidence: 1,
+    integrity_status: "validated",
+  }],
+  total: 1,
+  limit: 100,
+  offset: 0,
+  next_offset: null,
+  ready: 0,
+  attention: 1,
+  degraded: 0,
+  not_ready: 0,
+  blocker_count: 1,
+  observed_at: "2026-08-20T00:00:00Z",
+  freshness: "fresh",
+  source_kind: "computed_fleet_overviews",
+  confidence: 1,
+  integrity_status: "validated",
+};
+
+const FLEET_BLOCKERS = {
+  schema_version: "rolo-fleet-blocker-collection/v1",
+  items: [{
+    schema_version: "rolo-fleet-blocker-summary/v1",
+    blocker_id: "blocker_123",
+    robot_id: "AMR-07",
+    stage: "adapt",
+    message: "Run adapt discovery",
+    recommended_action: "Run adapt discovery",
+    owner: "adapter_agent",
+    evidence_ids: [],
+    observed_at: "2026-08-20T00:00:00Z",
+    freshness: "fresh",
+    source_kind: "pipeline_assessment",
+    confidence: 1,
+    integrity_status: "validated",
+  }],
+  total: 1,
+  limit: 100,
+  offset: 0,
+  next_offset: null,
+  observed_at: "2026-08-20T00:00:00Z",
+  freshness: "fresh",
+  source_kind: "computed_pipeline_blockers",
+  confidence: 1,
+  integrity_status: "validated",
+};
+
 const EVIDENCE_COLLECTION = {
   schema_version: "rolo-evidence-collection/v1",
   robot_id: "AMR-07",
@@ -116,6 +396,140 @@ const EVIDENCE_COLLECTION = {
   next_offset: null,
   observed_at: "2026-08-20T00:00:00Z",
   freshness: "fresh",
+};
+
+const CAPABILITY_SUMMARY = {
+  schema_version: "rolo-capability-summary/v1",
+  operation: "tool.catalog",
+  layer: "Application",
+  description: "Read the active gated Tool Catalog for one robot identity.",
+  lifecycle: "RELEASED",
+  applicability: "APPLICABLE",
+  availability: "AVAILABLE",
+  registration: "BUILTIN",
+  access: "read",
+  risk: "R0",
+  data_classification: "INTERNAL",
+  contract_version: "1.1.0",
+  contract_digest: "b".repeat(64),
+  paired_operation: null,
+  replacement_operation: null,
+  compensation_operation: null,
+  binding_count: 0,
+  last_verified_at: null,
+  evidence_ids: [],
+  confidence: 0.9,
+  integrity_status: "validated",
+  limitations: ["Built-in availability is not outcome evidence."],
+};
+
+const CAPABILITY_COLLECTION = {
+  schema_version: "rolo-capability-collection/v1",
+  robot_id: "AMR-07",
+  items: [CAPABILITY_SUMMARY],
+  total: 1,
+  limit: 100,
+  offset: 0,
+  next_offset: null,
+  observed_at: "2026-08-20T00:00:00Z",
+  freshness: "fresh",
+  source_kind: "product_registry",
+  limitations: ["Applicability is unknown until discovery."],
+};
+
+const CAPABILITY_DETAIL = {
+  schema_version: "rolo-capability-detail/v1",
+  robot_id: "AMR-07",
+  capability: CAPABILITY_SUMMARY,
+  contract: {
+    schema_version: "rolo-capability-contract/v1",
+    input_schema: { type: "object" },
+    output_schema: { type: "object" },
+    capability_requirements: [],
+    preconditions: [],
+    postconditions: [],
+    semantic_units: {},
+    coordinate_frames: [],
+    time_semantics: "UTC",
+    result_semantics: "OBSERVATION",
+    execution_mode: "REQUEST_RESPONSE",
+    idempotent: true,
+    cancelable: false,
+    max_duration_s: 5,
+    side_effects: [],
+    resource_locks: [],
+    requires_quiescence: false,
+  },
+  bindings: [],
+  observed_at: "2026-08-20T00:00:00Z",
+  freshness: "fresh",
+};
+
+const RUN_SUMMARY = {
+  schema_version: "rolo-lifecycle-run-summary/v1",
+  robot_id: "AMR-07",
+  run_id: "run-1",
+  stage: "adapt",
+  status: "FAILED",
+  gate_status: "FAILED",
+  handoff_status: "MISSING",
+  provider: "codex",
+  model: "test-model",
+  started_at: "2026-08-20T00:00:00Z",
+  completed_at: "2026-08-20T00:00:02Z",
+  duration_s: 2,
+  gate_check_count: 1,
+  evidence_ids: ["ev_run123456789012345"],
+  confidence: 0.8,
+  integrity_status: "validated",
+  limitations: ["No handoff was published."],
+};
+
+const RUN_COLLECTION = {
+  schema_version: "rolo-lifecycle-run-collection/v1",
+  robot_id: "AMR-07",
+  items: [RUN_SUMMARY],
+  total: 1,
+  limit: 50,
+  offset: 0,
+  next_offset: null,
+  observed_at: "2026-08-20T00:00:03Z",
+  freshness: "unknown",
+  source_kind: "lifecycle_artifacts",
+  limitations: [],
+};
+
+const RUN_DETAIL = {
+  schema_version: "rolo-lifecycle-run-detail/v1",
+  run: RUN_SUMMARY,
+  gate_checks: [{
+    schema_version: "rolo-lifecycle-gate-check/v1",
+    check_id: "check-1",
+    label: "Independent gate result",
+    status: "FAILED",
+    authority: "OBSERVED",
+    evidence_id: "ev_run123456789012345",
+  }],
+  handoff: {
+    schema_version: "rolo-lifecycle-handoff-summary/v1",
+    status: "MISSING",
+    authority: "NONE",
+    promoted_at: null,
+    artifact_count: 2,
+    digest: null,
+    evidence_id: null,
+    limitations: ["No handoff was published."],
+  },
+  artifacts: [{
+    schema_version: "rolo-lifecycle-artifact-summary/v1",
+    name: "Independent gate report",
+    kind: "gate",
+    integrity_status: "validated",
+    evidence_id: "ev_run123456789012345",
+    reference_digest: "c".repeat(64),
+  }],
+  observed_at: "2026-08-20T00:00:03Z",
+  freshness: "unknown",
 };
 
 test("RoloClient bootstraps the read-only control-plane surface", async () => {
@@ -129,8 +543,14 @@ test("RoloClient bootstraps the read-only control-plane surface", async () => {
         ? [ROBOT]
         : url.endsWith("/overview")
           ? OVERVIEW
+          : url.endsWith("/topology/snapshots")
+            ? TOPOLOGY_SNAPSHOTS
           : url.endsWith("/topology")
             ? TOPOLOGY
+            : url.includes("/runs?limit=")
+              ? RUN_COLLECTION
+            : url.includes("/capabilities?limit=")
+              ? CAPABILITY_COLLECTION
             : url.includes("/evidence?limit=")
               ? EVIDENCE_COLLECTION
               : PIPELINE;
@@ -140,19 +560,137 @@ test("RoloClient bootstraps the read-only control-plane surface", async () => {
   try {
     const result = await new RoloClient("http://rolo.test/").bootstrap();
     assert.equal(result.health.status, "HEALTHY");
+    assert.deepEqual(result.health.api_features, []);
     assert.equal(result.robots[0].robot_id, "AMR-07");
     assert.equal(result.mode, "live");
     assert.equal(result.overview.schema_version, "rolo-robot-overview/v2");
     assert.equal(result.pipeline.stages[0].stage, "adapt");
     assert.equal(result.topology.schema_version, "rolo-robot-topology/v1");
+    assert.equal(result.topologySnapshots.total, 2);
     assert.equal(result.evidence.items[0].evidence_id, EVIDENCE_RECORD.evidence_id);
+    assert.equal(result.capabilities[0].operation, "tool.catalog");
+    assert.equal(result.runs.items[0].run_id, "run-1");
     assert.deepEqual(requests, [
       "http://rolo.test/health",
       "http://rolo.test/v1/robots",
       "http://rolo.test/v1/robots/AMR-07/overview",
       "http://rolo.test/v1/robots/AMR-07/topology",
+      "http://rolo.test/v1/robots/AMR-07/topology/snapshots",
       "http://rolo.test/v1/robots/AMR-07/evidence?limit=25&offset=0",
+      "http://rolo.test/v1/robots/AMR-07/capabilities?limit=100&offset=0",
+      "http://rolo.test/v1/robots/AMR-07/runs?limit=50&offset=0",
     ]);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("RoloClient reads governance metadata without changing Registry capability data", async () => {
+  const originalFetch = globalThis.fetch;
+  let requestedUrl = "";
+  globalThis.fetch = async (url) => {
+    requestedUrl = url;
+    return { ok: true, json: async () => OPERATION_GOVERNANCE_COLLECTION };
+  };
+
+  try {
+    const result = await new RoloClient("http://rolo.test").operationGovernancePage(
+      undefined,
+      { limit: 1, offset: 0 },
+    );
+    assert.equal(
+      requestedUrl,
+      "http://rolo.test/v1/operations/governance?limit=1&offset=0",
+    );
+    assert.equal(result.items[0].semantic_layer, "os");
+    assert.equal(result.items[0].current_registry_action, "KEEP");
+    assert.equal(result.influences_registry, false);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("RoloClient reads the complete governance ledger only when requested", async () => {
+  const originalFetch = globalThis.fetch;
+  const requests = [];
+  const entries = Array.from({ length: 51 }, (_, index) => ({
+    ...OPERATION_GOVERNANCE_COLLECTION.items[0],
+    current_operation: `linux.test.operation_${String(index).padStart(2, "0")}`,
+    future_capability: `os.test.operation_${String(index).padStart(2, "0")}`,
+  }));
+  globalThis.fetch = async (url) => {
+    requests.push(String(url));
+    const parsed = new URL(String(url));
+    const limit = Number(parsed.searchParams.get("limit"));
+    const offset = Number(parsed.searchParams.get("offset"));
+    return {
+      ok: true,
+      json: async () => ({
+        ...OPERATION_GOVERNANCE_COLLECTION,
+        items: entries.slice(offset, offset + limit),
+        total: entries.length,
+        limit,
+        offset,
+        next_offset: offset + limit < entries.length ? offset + limit : null,
+      }),
+    };
+  };
+
+  try {
+    const result = await new RoloClient("http://rolo.test").operationGovernance();
+    assert.equal(result.items.length, 51);
+    assert.equal(result.items.at(-1).current_operation, "linux.test.operation_50");
+    assert.deepEqual(requests, [
+      "http://rolo.test/v1/operations/governance?limit=50&offset=0",
+      "http://rolo.test/v1/operations/governance?limit=50&offset=50",
+    ]);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("RoloClient keeps the optional Adapt slice out of bootstrap and loads it on demand", async () => {
+  const originalFetch = globalThis.fetch;
+  const requests = [];
+  globalThis.fetch = async (url) => {
+    requests.push(url);
+    const payload = url.endsWith("/health")
+      ? { ...HEALTH, api_features: ["adapt.target-operation-slice/v1"] }
+      : url.endsWith("/v1/robots")
+        ? [ROBOT]
+        : url.endsWith("/overview")
+          ? OVERVIEW
+          : url.endsWith("/topology/snapshots")
+            ? TOPOLOGY_SNAPSHOTS
+            : url.endsWith("/topology")
+              ? TOPOLOGY
+              : url.endsWith("/adapt/operation-slice")
+                ? TARGET_OPERATION_SLICE
+                : url.includes("/runs?limit=")
+                  ? RUN_COLLECTION
+                  : url.includes("/capabilities?limit=")
+                    ? CAPABILITY_COLLECTION
+                    : EVIDENCE_COLLECTION;
+    return { ok: true, json: async () => payload };
+  };
+
+  try {
+    const client = new RoloClient("http://rolo.test");
+    const result = await client.bootstrap();
+    assert.deepEqual(result.health.api_features, ["adapt.target-operation-slice/v1"]);
+    assert.equal(
+      supportsApiFeature(result.health, ROLO_API_FEATURES.targetOperationSlice),
+      true,
+    );
+    assert.equal(requests.includes(
+      "http://rolo.test/v1/robots/AMR-07/adapt/operation-slice",
+    ), false);
+
+    const slice = await client.targetOperationSlice("AMR-07");
+    assert.equal(slice.slice_sha256, "b".repeat(64));
+    assert.equal(requests.at(-1),
+      "http://rolo.test/v1/robots/AMR-07/adapt/operation-slice",
+    );
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -164,7 +702,9 @@ test("RoloClient reports a partial connection when overview is not available", a
     if (url.endsWith("/health")) return { ok: true, json: async () => HEALTH };
     if (url.endsWith("/v1/robots")) return { ok: true, json: async () => [ROBOT] };
     if (url.endsWith("/overview")) return { ok: false, status: 404 };
-    if (url.endsWith("/topology") || url.includes("/evidence?limit=")) return { ok: false, status: 404 };
+    if (url.endsWith("/topology") || url.endsWith("/topology/snapshots") || url.includes("/evidence?limit=")) return { ok: false, status: 404 };
+    if (url.includes("/capabilities?limit=")) return { ok: true, json: async () => CAPABILITY_COLLECTION };
+    if (url.includes("/runs?limit=")) return { ok: true, json: async () => RUN_COLLECTION };
     return {
       ok: true,
       json: async () => ({ ...PIPELINE, stages: [{ ...PIPELINE.stages[0], status: "BLOCKED", blockers: ["Blocked"] }] }),
@@ -190,9 +730,15 @@ test("RoloClient downgrades a degraded control plane to partial", async () => {
         ? [ROBOT]
         : url.endsWith("/overview")
           ? OVERVIEW
+          : url.endsWith("/topology/snapshots")
+            ? TOPOLOGY_SNAPSHOTS
           : url.endsWith("/topology")
             ? TOPOLOGY
-            : EVIDENCE_COLLECTION;
+            : url.includes("/runs?limit=")
+              ? RUN_COLLECTION
+            : url.includes("/capabilities?limit=")
+              ? CAPABILITY_COLLECTION
+              : EVIDENCE_COLLECTION;
     return { ok: true, json: async () => payload };
   };
   try {
@@ -210,7 +756,10 @@ test("RoloClient keeps trusted overview data partial when topology fails", async
     if (url.endsWith("/health")) return { ok: true, json: async () => HEALTH };
     if (url.endsWith("/v1/robots")) return { ok: true, json: async () => [ROBOT] };
     if (url.endsWith("/overview")) return { ok: true, json: async () => OVERVIEW };
+    if (url.endsWith("/topology/snapshots")) return { ok: true, json: async () => TOPOLOGY_SNAPSHOTS };
     if (url.endsWith("/topology")) return { ok: false, status: 503 };
+    if (url.includes("/capabilities?limit=")) return { ok: true, json: async () => CAPABILITY_COLLECTION };
+    if (url.includes("/runs?limit=")) return { ok: true, json: async () => RUN_COLLECTION };
     return { ok: true, json: async () => EVIDENCE_COLLECTION };
   };
   try {
@@ -275,6 +824,51 @@ test("RoloClient requests bounded evidence pages with an authority filter", asyn
     assert.equal(requestedUrl, "http://rolo.test/v1/robots/AMR-07/evidence?limit=2&offset=4&authority=GATED");
     assert.equal(page.offset, 4);
     assert.equal(page.items[0].authority, "GATED");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("RoloClient reads capability coverage and a contract-bound detail", async () => {
+  const originalFetch = globalThis.fetch;
+  const requests = [];
+  globalThis.fetch = async (url) => {
+    requests.push(url);
+    return { ok: true, json: async () => url.includes("/capabilities/tool.catalog") ? CAPABILITY_DETAIL : CAPABILITY_COLLECTION };
+  };
+  try {
+    const client = new RoloClient("http://rolo.test");
+    const coverage = await client.capabilities("AMR-07");
+    const detail = await client.capability("AMR-07", "tool.catalog");
+    assert.equal(coverage.items[0].availability, "AVAILABLE");
+    assert.equal(detail.contract.result_semantics, "OBSERVATION");
+    assert.deepEqual(requests, [
+      "http://rolo.test/v1/robots/AMR-07/capabilities?limit=100&offset=0",
+      "http://rolo.test/v1/robots/AMR-07/capabilities/tool.catalog",
+    ]);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("RoloClient reads lifecycle runs without raw artifact payloads", async () => {
+  const originalFetch = globalThis.fetch;
+  const requests = [];
+  globalThis.fetch = async (url) => {
+    requests.push(url);
+    return { ok: true, json: async () => url.endsWith("/runs/run-1") ? RUN_DETAIL : RUN_COLLECTION };
+  };
+  try {
+    const client = new RoloClient("http://rolo.test");
+    const collection = await client.runs("AMR-07");
+    const detail = await client.run("AMR-07", "run-1");
+    assert.equal(collection.items[0].gate_status, "FAILED");
+    assert.equal(detail.handoff.status, "MISSING");
+    assert.equal(detail.artifacts[0].kind, "gate");
+    assert.deepEqual(requests, [
+      "http://rolo.test/v1/robots/AMR-07/runs?limit=50&offset=0",
+      "http://rolo.test/v1/robots/AMR-07/runs/run-1",
+    ]);
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -372,6 +966,171 @@ test("RoloClient rejects a malformed nested pipeline contract", async () => {
   }
 });
 
+test("RoloClient reads verified topology history and a contract-bound diff", async () => {
+  const originalFetch = globalThis.fetch;
+  const requests = [];
+  globalThis.fetch = async (url) => {
+    requests.push(url);
+    return {
+      ok: true,
+      json: async () => url.endsWith("/topology/snapshots") ? TOPOLOGY_SNAPSHOTS : TOPOLOGY_DIFF,
+    };
+  };
+  try {
+    const client = new RoloClient("http://rolo.test");
+    const snapshots = await client.topologySnapshots("AMR-07");
+    const diff = await client.topologyDiff("AMR-07", "topology_snapshot_1", "topology_snapshot_2");
+    assert.equal(snapshots.items[1].is_current, true);
+    assert.equal(diff.changed_nodes, 1);
+    assert.equal(diff.node_changes[0].changed_fields[0], "state");
+    assert.deepEqual(requests, [
+      "http://rolo.test/v1/robots/AMR-07/topology/snapshots",
+      "http://rolo.test/v1/robots/AMR-07/topology/diff?from=topology_snapshot_1&to=topology_snapshot_2",
+    ]);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("RoloClient reads a contiguous evidence-bound topology path", async () => {
+  const originalFetch = globalThis.fetch;
+  const urls = [];
+  globalThis.fetch = async (url) => {
+    urls.push(String(url));
+    return { ok: true, json: async () => TOPOLOGY_PATH };
+  };
+  try {
+    const path = await new RoloClient("http://rolo.test").topologyPath("AMR-07", "robot_1", "adapter_1");
+    assert.equal(path.hop_count, 1);
+    assert.equal(path.steps[0].evidence_ids[0], EVIDENCE_RECORD.evidence_id);
+    assert.deepEqual(urls, ["http://rolo.test/v1/robots/AMR-07/topology/path?from=robot_1&to=adapter_1&max_hops=8"]);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("RoloClient rejects a non-contiguous topology path", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => ({ ok: true, json: async () => ({ ...TOPOLOGY_PATH, steps: [{ ...TOPOLOGY_PATH.steps[0], to_node_id: "robot_1" }] }) });
+  try {
+    await assert.rejects(
+      () => new RoloClient("http://rolo.test").topologyPath("AMR-07", "robot_1", "adapter_1"),
+      (error) => error instanceof RoloContractError && error.path.includes("/topology/path"),
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("RoloClient reads a trust-separated Robot Wiki", async () => {
+  const originalFetch = globalThis.fetch;
+  const urls = [];
+  globalThis.fetch = async (url) => {
+    urls.push(String(url));
+    return { ok: true, json: async () => WIKI };
+  };
+  try {
+    const wiki = await new RoloClient("http://rolo.test").wiki("AMR-07");
+    assert.equal(wiki.content_origin, "HUMAN_EDITED");
+    assert.equal(wiki.content_integrity, "unverified");
+    assert.equal(wiki.insights[0].evidence_id, "ev_abcdef123456789012");
+    assert.deepEqual(urls, ["http://rolo.test/v1/robots/AMR-07/wiki"]);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("RoloClient reads manifest-verified discovery history", async () => {
+  const originalFetch = globalThis.fetch;
+  const urls = [];
+  globalThis.fetch = async (url) => {
+    urls.push(String(url));
+    return { ok: true, json: async () => DISCOVERY_HISTORY };
+  };
+  try {
+    const history = await new RoloClient("http://rolo.test").discoveries("AMR-07");
+    assert.equal(history.items[0].is_latest, true);
+    assert.equal(history.items[0].operation_candidates, 14);
+    assert.deepEqual(urls, ["http://rolo.test/v1/robots/AMR-07/discoveries?limit=100&offset=0"]);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("RoloClient rejects inconsistent discovery probe coverage", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => ({
+    ok: true,
+    json: async () => ({
+      ...DISCOVERY_HISTORY,
+      items: [{ ...DISCOVERY_HISTORY.items[0], observed_probes: 4 }],
+    }),
+  });
+  try {
+    await assert.rejects(
+      () => new RoloClient("http://rolo.test").discoveries("AMR-07"),
+      (error) => error instanceof RoloContractError
+        && error.path.includes("/discoveries")
+        && error.path.includes("/items/0"),
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("RoloClient reads validated Fleet and Blocker Inbox aggregates", async () => {
+  const originalFetch = globalThis.fetch;
+  const urls = [];
+  globalThis.fetch = async (url) => {
+    urls.push(String(url));
+    return { ok: true, json: async () => String(url).includes("/blockers") ? FLEET_BLOCKERS : FLEET };
+  };
+  try {
+    const client = new RoloClient("http://rolo.test");
+    const [fleet, blockers] = await Promise.all([client.fleet(), client.blockers()]);
+    assert.equal(fleet.items[0].state, "ATTENTION");
+    assert.equal(blockers.items[0].owner, "adapter_agent");
+    assert.deepEqual(urls.sort(), [
+      "http://rolo.test/v1/blockers?limit=100&offset=0",
+      "http://rolo.test/v1/fleet?limit=100&offset=0",
+    ]);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("RoloClient rejects raw paths in the Blocker Inbox", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => ({
+    ok: true,
+    json: async () => ({
+      ...FLEET_BLOCKERS,
+      items: [{ ...FLEET_BLOCKERS.items[0], message: String.raw`Inspect C:\private\adapt.json` }],
+    }),
+  });
+  try {
+    await assert.rejects(
+      () => new RoloClient("http://rolo.test").blockers(),
+      (error) => error instanceof RoloContractError && error.path.startsWith("/v1/blockers"),
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("RoloClient rejects unsafe Robot Wiki references", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => ({ ok: true, json: async () => ({ ...WIKI, sections: [{ ...WIKI.sections[0], lines: ["artifact://private/report.json"] }] }) });
+  try {
+    await assert.rejects(
+      () => new RoloClient("http://rolo.test").wiki("AMR-07"),
+      (error) => error instanceof RoloContractError && error.path.endsWith("/wiki"),
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("RoloClient rejects a dangling topology edge", async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () => ({
@@ -434,8 +1193,13 @@ test("live modes never expose fixture-only workbench surfaces", () => {
     assert.equal(getSurfaceSource(mode, "stack"), "unavailable");
     assert.equal(getSurfaceSource(mode, "capabilities"), "unavailable");
     assert.equal(getSurfaceSource(mode, "evidence"), "unavailable");
+    assert.equal(getSurfaceSource(mode, "wiki"), "unavailable");
+    assert.equal(getSurfaceSource(mode, "fleet"), "unavailable");
     assert.equal(getSurfaceSource(mode, "stack", { stack: true }), "live");
     assert.equal(getSurfaceSource(mode, "evidence", { evidence: true }), "live");
+    assert.equal(getSurfaceSource(mode, "capabilities", { capabilities: true }), "live");
+    assert.equal(getSurfaceSource(mode, "wiki", { wiki: true }), "live");
+    assert.equal(getSurfaceSource(mode, "fleet", { fleet: true }), "live");
   }
   assert.equal(getSurfaceSource("demo", "stack"), "demo");
   assert.equal(getSurfaceSource("unavailable", "overview"), "unavailable");
@@ -463,19 +1227,54 @@ test("live lifecycle component has no fixture evidence or fabricated handoff", a
 
   assert.doesNotMatch(liveLifecycle, /\bEVIDENCE\b|\bDEMO_|sha256:82f3|adapt-20260820/);
   assert.match(liveLifecycle, /selected\.blockerMessages|selected\.artifactRefs|selected\.observedAt/);
+  assert.match(liveLifecycle, /runDetail\.gate_checks|runDetail\.handoff|runDetail\.artifacts/);
+});
+
+test("live Stack Map delegates path explanation to the trusted API", async () => {
+  const source = await readFile(new URL("../src/App.tsx", import.meta.url), "utf8");
+  const start = source.indexOf("function StackMapView");
+  const end = source.indexOf("interface OverviewViewProps", start);
+  const stackMap = source.slice(start, end);
+
+  assert.match(stackMap, /roloClient\.topologyPath/);
+  assert.match(stackMap, /physical reachability|pathExplanation\.limitations/);
+  assert.doesNotMatch(stackMap, /breadth.first|shortestPath|new Map\(sourceEdges/);
+});
+
+test("Wiki snapshot detail exposes every selected discovery limitation", async () => {
+  const source = await readFile(new URL("../src/App.tsx", import.meta.url), "utf8");
+  const start = source.indexOf("function WikiView");
+  const end = source.indexOf("function EvidenceRow", start);
+  assert.ok(start >= 0 && end > start);
+  const liveWiki = source.slice(start, end);
+
+  assert.match(liveWiki, /selectedDiscovery\.limitations\.map/);
+  assert.match(liveWiki, /aria-label="Snapshot limitations"/);
+  assert.match(liveWiki, /Diagnostic limitations/);
 });
 
 test("plugin manifest declares every trusted read-model endpoint", async () => {
   const manifest = JSON.parse(await readFile(new URL("../rolo.plugin.json", import.meta.url), "utf8"));
-  assert.equal(manifest.version, "0.2.0");
+  assert.equal(manifest.version, "0.18.0");
   assert.deepEqual(
     new Set(manifest.api.required_endpoints),
     new Set([
       "/health",
+      "/v1/fleet",
+      "/v1/blockers",
       "/v1/robots",
       "/v1/robots/{robot_id}/overview",
       "/v1/robots/{robot_id}/pipeline",
       "/v1/robots/{robot_id}/topology",
+      "/v1/robots/{robot_id}/topology/snapshots",
+      "/v1/robots/{robot_id}/topology/diff",
+      "/v1/robots/{robot_id}/topology/path",
+      "/v1/robots/{robot_id}/capabilities",
+      "/v1/robots/{robot_id}/capabilities/{operation}",
+      "/v1/robots/{robot_id}/runs",
+      "/v1/robots/{robot_id}/runs/{run_id}",
+      "/v1/robots/{robot_id}/wiki",
+      "/v1/robots/{robot_id}/discoveries",
       "/v1/robots/{robot_id}/evidence",
       "/v1/evidence/{evidence_id}",
     ]),

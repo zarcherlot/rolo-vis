@@ -4,10 +4,26 @@
 
 ## MVP
 
+- Fleet readiness and Blocker Inbox aggregated from validated robot overview and pipeline models.
 - Topology-first Stack Map across Hardware, Linux, ROS/Middleware, and Application.
+- Hash-verified gated topology history with snapshot comparison and bounded change details.
+- Bounded topology path explanations with relationship direction and evidence drilldown.
 - Robot Overview focused on trust, blockers, and next action.
 - Capability Explorer for canonical operations, risk, lifecycle, and bindings.
+- Capability coverage map by product layer with distinct verified, available, unavailable, and unknown trust states.
+- Canonical operation families with explicit paired, replacement, and compensation navigation.
+- Read-only contract schema inspector for required fields, constraints, units, frames, and execution semantics.
+- Binding trust inspector for endpoint authority, provenance, evidence coverage, digests, and limitations.
+- Capability readiness lens that keeps contract, applicability, registration, binding, availability, and verification signals independent.
+- Feature-negotiated Adapt context lens for on-demand target-operation slices, execution classes, deferred reasons, governance mappings, and bounded Capability Explorer focus.
+- Bounded operation-governance matrix with cross-layer summaries, combined filters, pagination, and Registry detail navigation.
+- Governance filters for risk, access, lifecycle, and data classification with row-level policy context.
 - Lifecycle gate view for Adapt → Diagnose → Verify.
+- Lifecycle assessment matrix for current stage status, blockers, prerequisites, artifacts, owners, and supported runs.
+- Immutable lifecycle run details with independent gate checks and verified handoffs.
+- Robot Wiki with manifest-verified discovery summaries, advisory insights, and evidence-linked changes.
+- Manifest-verified discovery history with bounded probe coverage and capability-candidate summaries.
+- Bidirectional Wiki and Stack Map layer context without inferred entity relationships.
 - Evidence ledger with provenance and integrity status.
 - Live rolo API probing with an explicit demo fallback when no robot runtime is reachable.
 
@@ -25,7 +41,11 @@ $env:VITE_ROLO_API_BASE='http://127.0.0.1:8080'
 npm run dev
 ```
 
+To keep the browser on the same origin while targeting a different local rolo port, set `ROLO_API_PROXY_TARGET` before starting Vite.
+
 The plugin is read-only. It does not provide teleoperation, a free-form terminal, arbitrary file browsing, or operation invocation.
+
+Robot Wiki keeps its trust lanes explicit: machine insights and discovery diffs come from the verified discovery manifest, while human-maintained Wiki text is shown separately as validated, unverified, or unavailable. Human prose is never promoted to a machine-observed fact.
 
 ## Build and verify
 
