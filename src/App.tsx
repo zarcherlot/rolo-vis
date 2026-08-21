@@ -53,6 +53,7 @@ import type {
 } from "./demoData";
 import { RoloApiError, roloClient } from "./roloClient";
 import type {
+  CapabilityBinding,
   CapabilityDetail,
   CapabilitySummary,
   DiscoverySnapshotCollection,
@@ -88,6 +89,7 @@ import {
   groupCapabilitiesByFamily,
 } from "./capabilityRelations";
 import { projectContractSchema } from "./contractSchema";
+import { bindingTrustStatement, summarizeBindingTrust } from "./bindingTrust";
 import { getOverviewPresentation, getSurfaceSource } from "./workbenchPolicy";
 import type { WorkbenchMode } from "./workbenchPolicy";
 
@@ -991,6 +993,52 @@ function ContractRuleGroup({ label, values }: { label: string; values: string[] 
   );
 }
 
+function BindingTrustPanel({
+  bindings,
+  onOpenEvidence,
+}: {
+  bindings: CapabilityBinding[];
+  onOpenEvidence: OpenEvidence;
+}) {
+  const summary = useMemo(() => summarizeBindingTrust(bindings), [bindings]);
+  if (!bindings.length) {
+    return <div className="empty-state"><Network size={26} /><strong>No observed binding</strong><span>This contract is not bound to a current robot endpoint.</span></div>;
+  }
+  return (
+    <div className="binding-trust-inspector">
+      <div className="binding-trust-summary">
+        <div><span>Total routes</span><strong>{summary.total}</strong></div>
+        <div><span>Gated</span><strong>{summary.gated}</strong></div>
+        <div><span>Observed</span><strong>{summary.observed}</strong></div>
+        <div><span>Declared</span><strong>{summary.declared}</strong></div>
+        <div><span>Evidence-linked</span><strong>{summary.evidenceLinked}</strong></div>
+      </div>
+      <div className="capability-binding-list">
+        {bindings.map((binding) => (
+          <article className={`binding-card binding-authority-${binding.authority.toLowerCase()}`} key={binding.binding_id}>
+            <header>
+              <div><span className={`mini-chip authority-${binding.authority.toLowerCase()}`}>{binding.authority}</span><small>{binding.source.replace("_", " ")}</small></div>
+              <code>{binding.binding_id}</code>
+            </header>
+            <div className="binding-endpoint"><span>Endpoint</span><code>{binding.endpoint}</code></div>
+            <dl>
+              <div><dt>Kind</dt><dd>{binding.kind.replace("_", " ")}</dd></div>
+              <div><dt>Interface</dt><dd>{binding.interface_type || "Not collected"}</dd></div>
+              <div><dt>Adapter</dt><dd>{binding.adapter || "Not gated"}</dd></div>
+              <div><dt>Observed</dt><dd>{binding.observed_at ? new Date(binding.observed_at).toLocaleString() : "Not observed"}</dd></div>
+            </dl>
+            <div className="binding-verdict"><ShieldCheck size={16} /><span>{bindingTrustStatement(binding)}</span></div>
+            <div className="binding-digest"><span>Reference digest</span><code title={binding.reference_digest}>{binding.reference_digest}</code></div>
+            {binding.evidence_ids.length > 0 && <div className="binding-evidence-links"><span>Binding evidence</span>{binding.evidence_ids.map((id) => <button key={id} onClick={() => onOpenEvidence(id)}><FileText size={14} /><code>{id}</code><ArrowRight size={13} /></button>)}</div>}
+            {binding.limitations.length > 0 && <div className="binding-limitations"><span>Known limits</span>{binding.limitations.map((limitation) => <p key={limitation}>{limitation}</p>)}</div>}
+          </article>
+        ))}
+      </div>
+      <footer><Info size={15} /><span>{summary.limitations} declared limitations. Endpoint presence and binding authority do not prove task or physical outcome success.</span></footer>
+    </div>
+  );
+}
+
 function LiveCapabilityView({
   robotId,
   items,
@@ -1175,7 +1223,7 @@ function LiveCapabilityView({
               </div>
               <div className="contract-time-semantics"><Clock size={16} /><span><strong>Time semantics</strong>{detail.contract.time_semantics}</span></div>
             </div>}
-            {tab === "binding" && detail && <div className="capability-binding-list">{detail.bindings.length ? detail.bindings.map((binding) => <div key={binding.binding_id}><span className={`mini-chip authority-${binding.authority.toLowerCase()}`}>{binding.authority}</span><code>{binding.endpoint}</code><small>{binding.kind}{binding.interface_type ? ` · ${binding.interface_type}` : ""}</small></div>) : <div className="empty-state"><Network size={26} /><strong>No observed binding</strong><span>This contract is not bound to a current robot endpoint.</span></div>}</div>}
+            {tab === "binding" && detail && <BindingTrustPanel bindings={detail.bindings} onOpenEvidence={onOpenEvidence} />}
             {tab === "evidence" && <div className="capability-evidence-list">{detailItem.evidence_ids.length ? detailItem.evidence_ids.map((id) => <button key={id} onClick={() => onOpenEvidence(id)}><ShieldCheck size={17} /><code>{id}</code><ArrowRight size={14} /></button>) : <div className="empty-state"><FileText size={26} /><strong>No gated evidence record</strong><span>Contract validation alone is not runtime or outcome evidence.</span></div>}</div>}
             {detailItem.evidence_ids[0] && <button className="primary-button detail-cta" onClick={() => onOpenEvidence(detailItem.evidence_ids[0])}>View primary evidence</button>}
           </>}

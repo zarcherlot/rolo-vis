@@ -13,6 +13,7 @@
 - Capability coverage map by product layer with distinct verified, available, unavailable, and unknown trust states.
 - Canonical operation families with explicit paired, replacement, and compensation navigation.
 - Read-only contract schema inspector for required fields, constraints, units, frames, and execution semantics.
+- Binding trust inspector for endpoint authority, provenance, evidence coverage, digests, and limitations.
 - Lifecycle gate view for Adapt → Diagnose → Verify.
 - Immutable lifecycle run details with independent gate checks and verified handoffs.
 - Robot Wiki with manifest-verified discovery summaries, advisory insights, and evidence-linked changes.
