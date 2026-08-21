@@ -87,6 +87,7 @@ import {
   capabilityRelations as getCapabilityRelations,
   groupCapabilitiesByFamily,
 } from "./capabilityRelations";
+import { projectContractSchema } from "./contractSchema";
 import { getOverviewPresentation, getSurfaceSource } from "./workbenchPolicy";
 import type { WorkbenchMode } from "./workbenchPolicy";
 
@@ -946,6 +947,50 @@ function DemoCapabilityView({ onOpenEvidence }: { onOpenEvidence: (item: Evidenc
   );
 }
 
+function ContractSchemaPanel({
+  label,
+  schema,
+  semanticUnits,
+}: {
+  label: string;
+  schema: Record<string, unknown>;
+  semanticUnits: Record<string, string>;
+}) {
+  const projection = useMemo(
+    () => projectContractSchema(schema, semanticUnits),
+    [schema, semanticUnits],
+  );
+  return (
+    <section className="contract-schema-panel">
+      <header>
+        <div><span>{label}</span><strong>{projection.fields.length} fields · {projection.rootType}</strong></div>
+        <small>{projection.allowsAdditionalProperties === false ? "Closed schema" : projection.allowsAdditionalProperties ? "Additional fields allowed" : "Additional fields unspecified"}</small>
+      </header>
+      <div className="contract-field-heading"><span>Field</span><span>Type</span><span>Requirement</span><span>Semantics</span></div>
+      {projection.fields.map((field) => (
+        <div className="contract-field-row" key={field.path}>
+          <code style={{ paddingLeft: `${field.depth * 12}px` }}>{field.path}</code>
+          <span>{field.type}</span>
+          <strong className={field.required ? "is-required" : ""}>{field.required ? "Required" : "Optional"}</strong>
+          <small>{[field.unit ? `unit: ${field.unit}` : "", ...field.constraints, field.description || ""].filter(Boolean).join(" · ") || "—"}</small>
+        </div>
+      ))}
+      {!projection.fields.length && <p className="contract-schema-empty">No fields declared.</p>}
+      {projection.truncated && <p className="contract-schema-warning">Field projection is bounded; inspect the raw schema for remaining nested fields.</p>}
+      <details><summary>Raw JSON schema</summary><pre>{JSON.stringify(schema, null, 2)}</pre></details>
+    </section>
+  );
+}
+
+function ContractRuleGroup({ label, values }: { label: string; values: string[] }) {
+  return (
+    <div>
+      <strong>{label}</strong>
+      {values.length ? values.map((value) => <p key={value}>{value}</p>) : <p>None declared.</p>}
+    </div>
+  );
+}
+
 function LiveCapabilityView({
   robotId,
   items,
@@ -1112,9 +1157,23 @@ function LiveCapabilityView({
               {(detailItem.limitations.length || limitations.length) > 0 && <div className="capability-limitations"><strong>Known limits</strong>{[...new Set([...detailItem.limitations, ...limitations])].map((value) => <p key={value}>{value}</p>)}</div>}
             </>}
             {tab === "contract" && detail && <div className="capability-contract-view">
-              <div><span>Input schema</span><pre>{JSON.stringify(detail.contract.input_schema, null, 2)}</pre></div>
-              <div><span>Output schema</span><pre>{JSON.stringify(detail.contract.output_schema, null, 2)}</pre></div>
-              <div className="contract-rule-list"><strong>Preconditions</strong>{detail.contract.preconditions.length ? detail.contract.preconditions.map((value) => <p key={value}>{value}</p>) : <p>None declared.</p>}<strong>Result semantics</strong><p>{detail.contract.result_semantics} · {detail.contract.execution_mode}</p></div>
+              <div className="contract-semantics-grid">
+                <div><span>Execution</span><strong>{detail.contract.execution_mode.replace("_", " ")}</strong></div>
+                <div><span>Result</span><strong className={detail.contract.result_semantics === "ACKNOWLEDGEMENT_ONLY" ? "is-caution" : ""}>{detail.contract.result_semantics.replaceAll("_", " ")}</strong></div>
+                <div><span>Maximum duration</span><strong>{detail.contract.max_duration_s}s</strong></div>
+                <div><span>Control</span><strong>{detail.contract.cancelable ? "Cancelable" : "Not cancelable"} · {detail.contract.idempotent ? "Idempotent" : "Non-idempotent"}</strong></div>
+              </div>
+              <ContractSchemaPanel label="Input schema" schema={detail.contract.input_schema} semanticUnits={detail.contract.semantic_units} />
+              <ContractSchemaPanel label="Output schema" schema={detail.contract.output_schema} semanticUnits={detail.contract.semantic_units} />
+              <div className="contract-context-grid">
+                <ContractRuleGroup label="Capability requirements" values={detail.contract.capability_requirements} />
+                <ContractRuleGroup label="Preconditions" values={detail.contract.preconditions} />
+                <ContractRuleGroup label="Postconditions" values={detail.contract.postconditions} />
+                <ContractRuleGroup label="Side effects" values={detail.contract.side_effects} />
+                <ContractRuleGroup label="Resource locks" values={detail.contract.resource_locks} />
+                <ContractRuleGroup label="Coordinate frames" values={detail.contract.coordinate_frames} />
+              </div>
+              <div className="contract-time-semantics"><Clock size={16} /><span><strong>Time semantics</strong>{detail.contract.time_semantics}</span></div>
             </div>}
             {tab === "binding" && detail && <div className="capability-binding-list">{detail.bindings.length ? detail.bindings.map((binding) => <div key={binding.binding_id}><span className={`mini-chip authority-${binding.authority.toLowerCase()}`}>{binding.authority}</span><code>{binding.endpoint}</code><small>{binding.kind}{binding.interface_type ? ` · ${binding.interface_type}` : ""}</small></div>) : <div className="empty-state"><Network size={26} /><strong>No observed binding</strong><span>This contract is not bound to a current robot endpoint.</span></div>}</div>}
             {tab === "evidence" && <div className="capability-evidence-list">{detailItem.evidence_ids.length ? detailItem.evidence_ids.map((id) => <button key={id} onClick={() => onOpenEvidence(id)}><ShieldCheck size={17} /><code>{id}</code><ArrowRight size={14} /></button>) : <div className="empty-state"><FileText size={26} /><strong>No gated evidence record</strong><span>Contract validation alone is not runtime or outcome evidence.</span></div>}</div>}
