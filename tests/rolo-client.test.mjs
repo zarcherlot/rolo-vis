@@ -151,6 +151,46 @@ const SLICE_RUN_DETAIL = {
   limitations: ["Agent context only."],
 };
 
+const SLICE_COMPARISON = {
+  schema_version: "rolo-adapt-slice-stability-comparison/v1",
+  robot_id: "AMR-07",
+  status: "PARTIAL",
+  recent: { label: "RECENT", requested_observations: 2, observation_count: 1, newest_run_id: "run-2", oldest_run_id: "run-2", successful_canary_count: 1, fallback_count: 0, agent_failed_count: 0, gate_failed_count: 0, context_budget_exceeded_count: 0, average_effective_context_reduction_ratio: 0.5 },
+  previous: { label: "PREVIOUS", requested_observations: 2, observation_count: 1, newest_run_id: "run-1", oldest_run_id: "run-1", successful_canary_count: 0, fallback_count: 1, agent_failed_count: 0, gate_failed_count: 0, context_budget_exceeded_count: 0, average_effective_context_reduction_ratio: 0.4 },
+  delta: { successful_canary_count: 1, fallback_count: -1, agent_failed_count: 0, gate_failed_count: 0, context_budget_exceeded_count: 0, average_effective_context_reduction_ratio: 0.1 },
+  regression_signals: [],
+  source_kind: "immutable_adapt_run_artifacts",
+  influences_release: false,
+  limitations: ["Descriptive only."],
+};
+
+const FLEET_SLICE = {
+  schema_version: "rolo-adapt-fleet-slice-stability/v1",
+  max_runs_per_robot: 20,
+  min_successful_canary_runs: 10,
+  robot_count: 1,
+  observed_robot_count: 1,
+  recommendation_counts: { INSUFFICIENT_DATA: 1 },
+  items: [{ robot_id: "AMR-07", recommendation: "INSUFFICIENT_DATA", observation_count: 1, successful_canary_count: 1, fallback_count: 0, diagnostic_count: 0 }],
+  source_kind: "immutable_adapt_run_artifacts",
+  influences_release: false,
+  limitations: ["Human review required."],
+};
+
+const SLICE_REVIEW_PACKET = {
+  schema_version: "rolo-adapt-slice-review-packet/v1",
+  robot_id: "AMR-07",
+  status: "INCOMPLETE",
+  baseline_status: "MATCHED",
+  stability_recommendation: "INSUFFICIENT_DATA",
+  checks: [{ check_id: "human_rollout_decision", label: "Human rollout decision", status: "HUMAN_REQUIRED", summary: "Review required." }],
+  evidence_run_ids: ["run-20260821-001"],
+  evidence_refs: ["artifact://adapt/AMR-07/runs/run-20260821-001/slice-activation-decision.json"],
+  contains_secret_payloads: false,
+  influences_release: false,
+  limitations: ["Summary only."],
+};
+
 const OPERATION_GOVERNANCE_COLLECTION = {
   schema_version: "rolo-operation-governance-collection/v1",
   items: [{
@@ -916,6 +956,35 @@ test("RoloClient rejects a Slice decision that changes release authority", async
   }
 });
 
+test("RoloClient validates Fleet, window comparison, and human review summaries", async () => {
+  const originalFetch = globalThis.fetch;
+  const requests = [];
+  globalThis.fetch = async (url) => {
+    requests.push(url);
+    if (url.endsWith("/v1/adapt/slice-fleet")) return { ok: true, json: async () => FLEET_SLICE };
+    if (url.endsWith("/slice-stability/comparison")) return { ok: true, json: async () => SLICE_COMPARISON };
+    return { ok: true, json: async () => SLICE_REVIEW_PACKET };
+  };
+
+  try {
+    const client = new RoloClient("http://rolo.test");
+    const fleet = await client.fleetSliceStability();
+    const comparison = await client.sliceStabilityComparison("AMR-07");
+    const packet = await client.sliceReviewPacket("AMR-07");
+    assert.equal(fleet.observed_robot_count, 1);
+    assert.equal(comparison.recent.newest_run_id, "run-2");
+    assert.equal(packet.contains_secret_payloads, false);
+    assert.equal(packet.checks[0].status, "HUMAN_REQUIRED");
+    assert.deepEqual(requests, [
+      "http://rolo.test/v1/adapt/slice-fleet",
+      "http://rolo.test/v1/robots/AMR-07/adapt/slice-stability/comparison",
+      "http://rolo.test/v1/robots/AMR-07/adapt/slice-review",
+    ]);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("RoloClient reports a partial connection when overview is not available", async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async (url) => {
@@ -1485,6 +1554,9 @@ test("Adapt Stability keeps baseline, filtering, and run authority drilldown sep
   assert.match(stability, /roloClient\.sliceRunDetail/);
   assert.match(stability, /Authoritative \/ release operations/);
   assert.match(stability, /Comparison only · never release authority/);
+  assert.match(stability, /Non-overlapping windows|Observation change/);
+  assert.match(stability, /Secret-free evidence summary|Human review packet/);
+  assert.match(stability, /No SECRET payload bodies included/);
 });
 
 test("plugin manifest declares every trusted read-model endpoint", async () => {

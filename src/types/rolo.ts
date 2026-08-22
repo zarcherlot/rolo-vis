@@ -102,6 +102,83 @@ export interface SliceStabilityReport {
   influences_release: false;
 }
 
+export interface SliceObservationWindow {
+  label: "RECENT" | "PREVIOUS";
+  requested_observations: number;
+  observation_count: number;
+  newest_run_id: string | null;
+  oldest_run_id: string | null;
+  successful_canary_count: number;
+  fallback_count: number;
+  agent_failed_count: number;
+  gate_failed_count: number;
+  context_budget_exceeded_count: number;
+  average_effective_context_reduction_ratio: number;
+}
+
+export interface SliceStabilityComparison {
+  schema_version: "rolo-adapt-slice-stability-comparison/v1";
+  robot_id: string;
+  status: "NO_PREVIOUS_WINDOW" | "PARTIAL" | "COMPARABLE";
+  recent: SliceObservationWindow;
+  previous: SliceObservationWindow;
+  delta: {
+    successful_canary_count: number;
+    fallback_count: number;
+    agent_failed_count: number;
+    gate_failed_count: number;
+    context_budget_exceeded_count: number;
+    average_effective_context_reduction_ratio: number;
+  };
+  regression_signals: string[];
+  source_kind: "immutable_adapt_run_artifacts";
+  influences_release: false;
+  limitations: string[];
+}
+
+export interface FleetSliceRobotSummary {
+  robot_id: string;
+  recommendation: SliceStabilityRecommendation;
+  observation_count: number;
+  successful_canary_count: number;
+  fallback_count: number;
+  diagnostic_count: number;
+}
+
+export interface FleetSliceStability {
+  schema_version: "rolo-adapt-fleet-slice-stability/v1";
+  max_runs_per_robot: number;
+  min_successful_canary_runs: number;
+  robot_count: number;
+  observed_robot_count: number;
+  recommendation_counts: Record<string, number>;
+  items: FleetSliceRobotSummary[];
+  source_kind: "immutable_adapt_run_artifacts";
+  influences_release: false;
+  limitations: string[];
+}
+
+export interface SliceReviewCheck {
+  check_id: string;
+  label: string;
+  status: "PASS" | "PENDING" | "BLOCKING" | "HUMAN_REQUIRED";
+  summary: string;
+}
+
+export interface SliceReviewPacket {
+  schema_version: "rolo-adapt-slice-review-packet/v1";
+  robot_id: string;
+  status: "BLOCKED" | "INCOMPLETE" | "READY_FOR_HUMAN_REVIEW";
+  baseline_status: "MATCHED" | "DRIFTED";
+  stability_recommendation: SliceStabilityRecommendation;
+  checks: SliceReviewCheck[];
+  evidence_run_ids: string[];
+  evidence_refs: string[];
+  contains_secret_payloads: false;
+  influences_release: false;
+  limitations: string[];
+}
+
 export interface AdaptBaselineSnapshot {
   schema_version: "robot-adapt-baseline-snapshot/v1";
   operation_count: number;
