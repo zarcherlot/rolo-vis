@@ -513,15 +513,19 @@ const FLEET = {
 };
 
 const FLEET_BLOCKERS = {
-  schema_version: "rolo-fleet-blocker-collection/v1",
+  schema_version: "rolo-fleet-blocker-collection/v2",
   items: [{
-    schema_version: "rolo-fleet-blocker-summary/v1",
+    schema_version: "rolo-fleet-blocker-summary/v2",
     blocker_id: "blocker_123",
     robot_id: "AMR-07",
     stage: "adapt",
     message: "Run adapt discovery",
-    recommended_action: "Run adapt discovery",
+    recommended_action: "Resolve the reported Adapt blocker, then reassess the pipeline.",
     owner: "adapter_agent",
+    category: "PIPELINE_BLOCKER",
+    classification_basis: "normalized_pipeline_message",
+    impact: "Prevents Adapt from advancing while the validated pipeline assessment reports this blocker.",
+    resolution_requirement_count: 1,
     evidence_ids: [],
     observed_at: "2026-08-20T00:00:00Z",
     freshness: "fresh",
@@ -538,6 +542,28 @@ const FLEET_BLOCKERS = {
   source_kind: "computed_pipeline_blockers",
   confidence: 1,
   integrity_status: "validated",
+  limitations: ["Normalized triage only."],
+};
+
+const FLEET_BLOCKER_DETAIL = {
+  schema_version: "rolo-fleet-blocker-detail/v1",
+  blocker: FLEET_BLOCKERS.items[0],
+  stage_status: "BLOCKED",
+  stage_summary: "Adapt is blocked",
+  expected_stage_statuses: ["READY", "COMPLETE"],
+  resolution_requirements: [{
+    requirement_id: "fresh_pipeline_assessment",
+    kind: "FRESH_ASSESSMENT",
+    statement: "A newer Adapt assessment must no longer report this blocker.",
+    evidence_id: null,
+    status: "REQUIRED",
+  }],
+  canonical_cli_argv: ["robotctl", "pipeline-status", "--robot", "AMR-07"],
+  resolution_state: "OPEN",
+  contains_secret_payloads: false,
+  source_kind: "pipeline_assessment",
+  integrity_status: "validated",
+  limitations: ["No remediation is executed."],
 };
 
 const EVIDENCE_COLLECTION = {
@@ -1528,6 +1554,38 @@ test("live Stack Map delegates path explanation to the trusted API", async () =>
   assert.match(stackMap, /roloClient\.topologyPath/);
   assert.match(stackMap, /physical reachability|pathExplanation\.limitations/);
   assert.doesNotMatch(stackMap, /breadth.first|shortestPath|new Map\(sourceEdges/);
+});
+
+test("Fleet Blocker Inbox separates triage category from resolution evidence", async () => {
+  const source = await readFile(new URL("../src/App.tsx", import.meta.url), "utf8");
+  const start = source.indexOf("function FleetView");
+  const end = source.indexOf("function StackMapView", start);
+  assert.ok(start >= 0 && end > start);
+  const fleet = source.slice(start, end);
+
+  assert.match(fleet, /All blocker categories|classification|categoryFilter/);
+  assert.match(fleet, /Required to clear|resolution_requirements/);
+  assert.match(fleet, /Read-only reproduction path|canonical_cli_argv/);
+  assert.match(fleet, /contains_secret_payloads|limitations\.join/);
+  assert.doesNotMatch(fleet, /fetch\([^)]*artifact|invoke|execute remediation/i);
+});
+
+test("RoloClient reads a blocker resolution detail without remediation authority", async () => {
+  const originalFetch = globalThis.fetch;
+  const urls = [];
+  globalThis.fetch = async (url) => {
+    urls.push(String(url));
+    return { ok: true, json: async () => FLEET_BLOCKER_DETAIL };
+  };
+  try {
+    const detail = await new RoloClient("http://rolo.test").blockerDetail("blocker_123");
+    assert.equal(detail.blocker.category, "PIPELINE_BLOCKER");
+    assert.equal(detail.resolution_requirements[0].status, "REQUIRED");
+    assert.equal(detail.contains_secret_payloads, false);
+    assert.deepEqual(urls, ["http://rolo.test/v1/blockers/blocker_123"]);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
 
 test("Wiki snapshot detail exposes every selected discovery limitation", async () => {

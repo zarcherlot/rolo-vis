@@ -12,6 +12,7 @@ import type {
   EvidenceRecord,
   FleetSliceStability,
   FleetBlockerCollection,
+  FleetBlockerDetail,
   FleetBlockerSummary,
   FleetCollection,
   FleetRobotSummary,
@@ -54,6 +55,7 @@ export const ROLO_API_FEATURES = {
   sliceStabilityComparison: "adapt.slice-stability-comparison/v1",
   sliceStability: "adapt.slice-stability/v1",
   targetOperationSlice: "adapt.target-operation-slice/v1",
+  blockerDetail: "workbench.blocker-detail/v1",
 } as const;
 
 export function supportsApiFeature(health: HealthResponse, feature: string): boolean {
@@ -970,10 +972,13 @@ function parseFleetCollection(value: unknown, path: string): FleetCollection {
 }
 
 function parseFleetBlockerSummary(value: unknown, path: string): FleetBlockerSummary {
-  requireContract(isRecord(value) && value.schema_version === "rolo-fleet-blocker-summary/v1", "invalid fleet blocker", path);
+  requireContract(isRecord(value) && value.schema_version === "rolo-fleet-blocker-summary/v2", "invalid fleet blocker", path);
   requireContract(typeof value.blocker_id === "string" && Boolean(value.blocker_id) && typeof value.robot_id === "string" && Boolean(value.robot_id), "invalid fleet blocker identity", path);
   requireContract(["adapt", "diagnose", "verify"].includes(String(value.stage)), "invalid fleet blocker stage", path);
   requireContract(typeof value.message === "string" && typeof value.recommended_action === "string" && typeof value.owner === "string", "invalid fleet blocker guidance", path);
+  requireContract(["MISSING_VERIFIED_EVIDENCE", "EVIDENCE_UNAVAILABLE_OR_INVALID", "POLICY_OR_AUTHORIZATION", "DEPENDENCY_OR_PREREQUISITE", "PIPELINE_BLOCKER"].includes(String(value.category)), "invalid fleet blocker category", path);
+  requireContract(value.classification_basis === "normalized_pipeline_message" && typeof value.impact === "string", "invalid fleet blocker classification", path);
+  requireContract(Number.isInteger(value.resolution_requirement_count) && Number(value.resolution_requirement_count) >= 1, "invalid blocker resolution count", path);
   requireContract(isStringArray(value.evidence_ids) && value.evidence_ids.every((item) => item.startsWith("ev_")), "invalid fleet blocker evidence", path);
   requireContract(isTimestamp(value.observed_at) && value.freshness === "fresh" && value.source_kind === "pipeline_assessment", "invalid fleet blocker observation metadata", path);
   requireContract(isConfidence(value.confidence) && value.integrity_status === "validated", "invalid fleet blocker trust metadata", path);
@@ -981,7 +986,7 @@ function parseFleetBlockerSummary(value: unknown, path: string): FleetBlockerSum
 }
 
 function parseFleetBlockerCollection(value: unknown, path: string): FleetBlockerCollection {
-  requireContract(isRecord(value) && value.schema_version === "rolo-fleet-blocker-collection/v1" && Array.isArray(value.items), "invalid fleet blocker collection", path);
+  requireContract(isRecord(value) && value.schema_version === "rolo-fleet-blocker-collection/v2" && Array.isArray(value.items), "invalid fleet blocker collection", path);
   const items = value.items.map((item, index) => parseFleetBlockerSummary(item, `${path}/items/${index}`));
   requireContract(new Set(items.map((item) => item.blocker_id)).size === items.length, "duplicate blocker in fleet collection", path);
   requireContract(Number.isInteger(value.total) && Number(value.total) >= items.length, "invalid fleet blocker total", path);
@@ -989,8 +994,30 @@ function parseFleetBlockerCollection(value: unknown, path: string): FleetBlocker
   requireContract(Number.isInteger(value.offset) && Number(value.offset) >= 0 && (value.next_offset === null || (Number.isInteger(value.next_offset) && Number(value.next_offset) > Number(value.offset))), "invalid fleet blocker page offset", path);
   requireContract(isTimestamp(value.observed_at) && value.freshness === "fresh" && value.source_kind === "computed_pipeline_blockers", "invalid fleet blocker collection metadata", path);
   requireContract(isConfidence(value.confidence) && value.integrity_status === "validated", "invalid fleet blocker collection trust", path);
+  requireContract(isStringArray(value.limitations), "invalid fleet blocker limitations", path);
   requireContract(!containsUnsafeReference(value), "fleet blocker collection contains an unsafe reference", path);
   return { ...value, items } as unknown as FleetBlockerCollection;
+}
+
+function parseFleetBlockerDetail(value: unknown, path: string, blockerId: string): FleetBlockerDetail {
+  requireContract(isRecord(value) && value.schema_version === "rolo-fleet-blocker-detail/v1", "invalid fleet blocker detail", path);
+  const blocker = parseFleetBlockerSummary(value.blocker, `${path}/blocker`);
+  requireContract(blocker.blocker_id === blockerId, "fleet blocker detail identity does not match", path);
+  requireContract(["NOT_STARTED", "BLOCKED", "DEGRADED", "READY", "COMPLETE"].includes(String(value.stage_status)) && typeof value.stage_summary === "string", "invalid blocker stage context", path);
+  requireContract(JSON.stringify(value.expected_stage_statuses) === JSON.stringify(["READY", "COMPLETE"]), "invalid blocker resolution target", path);
+  requireContract(Array.isArray(value.resolution_requirements) && value.resolution_requirements.length === blocker.resolution_requirement_count, "invalid blocker resolution requirements", path);
+  for (const [index, requirement] of value.resolution_requirements.entries()) {
+    const requirementPath = `${path}/resolution_requirements/${index}`;
+    requireContract(isRecord(requirement) && typeof requirement.requirement_id === "string" && typeof requirement.statement === "string", "invalid blocker resolution requirement", requirementPath);
+    requireContract(["FRESH_ASSESSMENT", "VALIDATED_EVIDENCE"].includes(String(requirement.kind)) && requirement.status === "REQUIRED", "invalid blocker resolution requirement state", requirementPath);
+    requireContract(requirement.evidence_id === null || (typeof requirement.evidence_id === "string" && requirement.evidence_id.startsWith("ev_")), "invalid blocker resolution evidence", requirementPath);
+  }
+  requireContract(new Set(value.resolution_requirements.map((item) => isRecord(item) ? item.requirement_id : "")).size === value.resolution_requirements.length, "duplicate blocker resolution requirement", path);
+  requireContract(JSON.stringify(value.canonical_cli_argv) === JSON.stringify(["robotctl", "pipeline-status", "--robot", blocker.robot_id]), "invalid blocker reproduction CLI", path);
+  requireContract(value.resolution_state === "OPEN" && value.contains_secret_payloads === false, "invalid blocker resolution authority", path);
+  requireContract(value.source_kind === "pipeline_assessment" && value.integrity_status === "validated" && isStringArray(value.limitations), "invalid blocker detail trust metadata", path);
+  requireContract(!containsUnsafeReference(value), "fleet blocker detail contains an unsafe reference", path);
+  return { ...value, blocker } as unknown as FleetBlockerDetail;
 }
 
 export class RoloClient {
@@ -1182,6 +1209,15 @@ export class RoloClient {
   async run(robotId: string, runId: string, options?: RequestInit) {
     const path = `/v1/robots/${encodeURIComponent(robotId)}/runs/${encodeURIComponent(runId)}`;
     return parseLifecycleRunDetail(await this.request<unknown>(path, options), path, robotId, runId);
+  }
+
+  async blockerDetail(blockerId: string, options?: RequestInit) {
+    const path = `/v1/blockers/${encodeURIComponent(blockerId)}`;
+    return parseFleetBlockerDetail(
+      await this.request<unknown>(path, options),
+      path,
+      blockerId,
+    );
   }
 
   async operationGovernancePage(

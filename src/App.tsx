@@ -65,6 +65,7 @@ import type {
   EvidenceCollection,
   EvidenceRecord,
   FleetBlockerCollection,
+  FleetBlockerDetail,
   FleetCollection,
   FleetSliceStability,
   LifecycleRunCollection,
@@ -422,18 +423,26 @@ function FleetView({
   fleet,
   blockers,
   sliceFleet,
+  blockerDetailSupported,
   onSelectRobot,
   onOpenEvidence,
 }: {
   fleet: FleetCollection;
   blockers: FleetBlockerCollection;
   sliceFleet: FleetSliceStability | null;
+  blockerDetailSupported: boolean;
   onSelectRobot: (robotId: string) => void;
   onOpenEvidence: OpenEvidence;
 }) {
   const [query, setQuery] = useState("");
   const [stateFilter, setStateFilter] = useState("all");
   const [stageFilter, setStageFilter] = useState("all");
+  const [categoryFilter, setCategoryFilter] = useState("all");
+  const [selectedBlockerId, setSelectedBlockerId] = useState("");
+  const [blockerDetail, setBlockerDetail] = useState<FleetBlockerDetail | null>(null);
+  const [blockerDetailMessage, setBlockerDetailMessage] = useState("");
+  const [blockerDetailLoading, setBlockerDetailLoading] = useState(false);
+  const blockerDetailRequest = useRef<AbortController | null>(null);
   const normalizedQuery = query.trim().toLowerCase();
   const filteredRobots = fleet.items.filter((item) =>
     (stateFilter === "all" || item.state === stateFilter)
@@ -441,8 +450,40 @@ function FleetView({
   );
   const filteredBlockers = blockers.items.filter((item) =>
     (stageFilter === "all" || item.stage === stageFilter)
+    && (categoryFilter === "all" || item.category === categoryFilter)
     && (!normalizedQuery || `${item.robot_id} ${item.message} ${item.owner}`.toLowerCase().includes(normalizedQuery)),
   );
+  useEffect(() => () => blockerDetailRequest.current?.abort(), []);
+  const closeBlockerDetail = () => {
+    blockerDetailRequest.current?.abort();
+    blockerDetailRequest.current = null;
+    setSelectedBlockerId("");
+    setBlockerDetail(null);
+    setBlockerDetailMessage("");
+    setBlockerDetailLoading(false);
+  };
+  const openBlockerDetail = (blockerId: string) => {
+    if (!blockerDetailSupported) {
+      const blocker = blockers.items.find((item) => item.blocker_id === blockerId);
+      if (blocker?.evidence_ids[0]) onOpenEvidence(blocker.evidence_ids[0]);
+      else if (blocker) onSelectRobot(blocker.robot_id);
+      return;
+    }
+    blockerDetailRequest.current?.abort();
+    const controller = new AbortController();
+    blockerDetailRequest.current = controller;
+    setSelectedBlockerId(blockerId);
+    setBlockerDetail(null);
+    setBlockerDetailMessage("");
+    setBlockerDetailLoading(true);
+    void roloClient.blockerDetail(blockerId, { signal: controller.signal })
+      .then((value) => { if (!controller.signal.aborted) setBlockerDetail(value); })
+      .catch((error) => { if (!controller.signal.aborted) setBlockerDetailMessage(error instanceof Error ? error.message : "Blocker detail is unavailable."); })
+      .finally(() => {
+        if (!controller.signal.aborted) setBlockerDetailLoading(false);
+        if (blockerDetailRequest.current === controller) blockerDetailRequest.current = null;
+      });
+  };
   const summary = [
     { label: "Ready", value: fleet.ready, state: "ready" },
     { label: "Attention", value: fleet.attention, state: "attention" },
@@ -471,6 +512,7 @@ function FleetView({
         <label className="search-box"><MagnifyingGlass size={17} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search robots, adapters, blockers…" /></label>
         <label className="select-control"><Funnel size={15} /><select value={stateFilter} onChange={(event) => setStateFilter(event.target.value)}><option value="all">All robot states</option><option value="READY">Ready</option><option value="ATTENTION">Attention</option><option value="DEGRADED">Degraded</option><option value="NOT_READY">Not ready</option></select></label>
         <label className="select-control"><GitBranch size={15} /><select value={stageFilter} onChange={(event) => setStageFilter(event.target.value)}><option value="all">All blocker stages</option><option value="adapt">Adapt</option><option value="diagnose">Diagnose</option><option value="verify">Verify</option></select></label>
+        <label className="select-control"><WarningCircle size={15} /><select value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)}><option value="all">All blocker categories</option><option value="MISSING_VERIFIED_EVIDENCE">Missing verified evidence</option><option value="EVIDENCE_UNAVAILABLE_OR_INVALID">Unavailable / invalid evidence</option><option value="POLICY_OR_AUTHORIZATION">Policy / authorization</option><option value="DEPENDENCY_OR_PREREQUISITE">Dependency / prerequisite</option><option value="PIPELINE_BLOCKER">Other pipeline blockers</option></select></label>
       </div>
       <div className="fleet-layout">
         <section className="panel fleet-robots">
@@ -490,11 +532,23 @@ function FleetView({
         </section>
         <aside className="panel blocker-inbox">
           <header><div><span>Blocker Inbox</span><h3>{filteredBlockers.length} visible blockers</h3></div><small>Validated pipeline assessments</small></header>
+          {(selectedBlockerId || blockerDetailMessage) && <section className="blocker-triage-detail" aria-label="Blocker resolution detail">
+            <header><div><span>Resolution evidence</span><h4>{blockerDetail?.blocker.robot_id || "Loading blocker"}</h4></div><button className="icon-button" aria-label="Close blocker detail" onClick={closeBlockerDetail}><X size={14} /></button></header>
+            {blockerDetailLoading ? <div className="blocker-detail-state"><Pulse size={18} /><span><strong>Validating blocker context</strong><small>Reading stage impact and bounded evidence requirements.</small></span></div> : blockerDetail ? <>
+              <div className="blocker-detail-verdict"><span><small>{blockerDetail.blocker.category.replaceAll("_", " ")}</small><strong>{blockerDetail.resolution_state}</strong></span><em>{blockerDetail.blocker.stage} · {blockerDetail.stage_status.replaceAll("_", " ")}</em></div>
+              <p>{blockerDetail.blocker.message}</p>
+              <section><span>Impact</span><p>{blockerDetail.blocker.impact}</p></section>
+              <section className="blocker-resolution-list"><span>Required to clear</span>{blockerDetail.resolution_requirements.map((requirement) => <article key={requirement.requirement_id}><CheckCircle size={14} /><span><strong>{requirement.kind.replaceAll("_", " ")}</strong><small>{requirement.statement}</small></span><em>{requirement.status}</em>{requirement.evidence_id && <button onClick={() => onOpenEvidence(requirement.evidence_id!)}>Open evidence <ArrowRight size={11} /></button>}</article>)}</section>
+              <section className="blocker-reproduction"><span>Read-only reproduction path</span><code>{blockerDetail.canonical_cli_argv.join(" ")}</code></section>
+              <footer><Info size={13} /><span>{blockerDetail.limitations.join(" ")}</span></footer>
+            </> : <div className="blocker-detail-state is-warning"><WarningCircle size={18} /><span><strong>Blocker detail unavailable</strong><small>{blockerDetailMessage}</small></span></div>}
+          </section>}
           {filteredBlockers.map((item) => (
-            <button key={item.blocker_id} onClick={() => item.evidence_ids[0] ? onOpenEvidence(item.evidence_ids[0]) : onSelectRobot(item.robot_id)}>
+            <button key={item.blocker_id} className={selectedBlockerId === item.blocker_id ? "is-selected" : ""} onClick={() => openBlockerDetail(item.blocker_id)}>
               <span className="blocker-inbox-heading"><strong>{item.robot_id}</strong><em>{item.stage}</em></span>
+              <span className="blocker-category">{item.category.replaceAll("_", " ")}</span>
               <p>{item.message}</p>
-              <dl><div><dt>Owner</dt><dd>{item.owner.replaceAll("_", " ")}</dd></div><div><dt>Evidence</dt><dd>{item.evidence_ids.length || "No bound artifact"}</dd></div></dl>
+              <dl><div><dt>Owner</dt><dd>{item.owner.replaceAll("_", " ")}</dd></div><div><dt>Evidence</dt><dd>{item.evidence_ids.length || "No bound artifact"}</dd></div><div><dt>Clear conditions</dt><dd>{item.resolution_requirement_count}</dd></div></dl>
               <span className="blocker-action">{item.recommended_action}<ArrowRight size={13} /></span>
             </button>
           ))}
@@ -2399,7 +2453,7 @@ function AppContent() {
       <main className="app-main">
         {(["connecting", "unavailable"].includes(mode) || !robot) ? <ConnectionStateView mode={mode} message={connectionMessage} onRetry={() => connect()} onUseDemo={useDemo} /> : <>
           {active === "stack" && (stackSource === "demo" ? <StackMapView focusLayer={stackContextFocus} onOpenWikiLayer={openWikiLayer} onOpenEvidence={openEvidence} /> : stackSource === "live" ? <StackMapView topology={topology} topologySnapshots={topologySnapshots} robotId={robot.robot_id} focusLayer={stackContextFocus} onOpenWikiLayer={openWikiLayer} onOpenEvidence={openEvidence} /> : <ReadModelUnavailableView title="Stack Map" description="Live topology needs a versioned rolo topology read model." />)}
-          {active === "fleet" && (mode === "demo" ? <ReadModelUnavailableView title="Fleet" description="The labeled demo fixture represents one robot and does not include a fleet aggregate." /> : fleet && fleetBlockers ? <FleetView fleet={fleet} blockers={fleetBlockers} sliceFleet={fleetSlice} onSelectRobot={selectFleetRobot} onOpenEvidence={openEvidence} /> : fleetLoading ? <section className="content-view"><PageTitle title="Fleet" description="Aggregating validated robot overviews and pipeline blockers…" /><div className="panel read-model-unavailable" role="status"><Pulse size={26} /><div><strong>Loading Fleet</strong><p>No runtime telemetry is inferred while this read model is loading.</p></div></div></section> : <ReadModelUnavailableView title="Fleet" description={fleetMessage || "Open this surface to read the validated Fleet aggregate."} />)}
+          {active === "fleet" && (mode === "demo" ? <ReadModelUnavailableView title="Fleet" description="The labeled demo fixture represents one robot and does not include a fleet aggregate." /> : fleet && fleetBlockers ? <FleetView fleet={fleet} blockers={fleetBlockers} sliceFleet={fleetSlice} blockerDetailSupported={apiFeatures.includes(ROLO_API_FEATURES.blockerDetail)} onSelectRobot={selectFleetRobot} onOpenEvidence={openEvidence} /> : fleetLoading ? <section className="content-view"><PageTitle title="Fleet" description="Aggregating validated robot overviews and pipeline blockers…" /><div className="panel read-model-unavailable" role="status"><Pulse size={26} /><div><strong>Loading Fleet</strong><p>No runtime telemetry is inferred while this read model is loading.</p></div></div></section> : <ReadModelUnavailableView title="Fleet" description={fleetMessage || "Open this surface to read the validated Fleet aggregate."} />)}
           {active === "overview" && <OverviewView robot={robot} pipeline={pipeline} overview={overview} mode={mode} evidenceItems={evidenceItems} onOpenEvidence={openEvidence} onNavigate={navigate} />}
           {active === "capabilities" && (capabilitySource === "demo" ? <DemoCapabilityView onOpenEvidence={setEvidence} /> : capabilitySource === "live" && capabilityList ? <LiveCapabilityView robotId={robot.robot_id} items={capabilityList} limitations={capabilityLimitations} apiFeatures={apiFeatures} onOpenEvidence={openEvidence} /> : <ReadModelUnavailableView title="Capabilities" description="Live capability coverage needs a versioned rolo capability read model." />)}
           {active === "lifecycle" && (lifecycleSource === "demo" ? <DemoLifecycleView pipeline={pipeline} onOpenEvidence={setEvidence} /> : lifecycleSource === "live" && lifecycleRuns ? <LiveLifecycleView pipeline={pipeline} runs={lifecycleRuns} robotId={robot.robot_id} onOpenEvidence={openEvidence} /> : <ReadModelUnavailableView title="Lifecycle" description="Live lifecycle requires trusted stage and run read models." />)}

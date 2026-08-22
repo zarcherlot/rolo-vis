@@ -8,6 +8,7 @@
   "capabilities": [
     "fleet.overview.read",
     "fleet.blockers.read",
+    "fleet.blockers.detail.read",
     "robot.overview.read",
     "robot.topology.read",
     "robot.topology.diff.read",

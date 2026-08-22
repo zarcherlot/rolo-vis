@@ -782,13 +782,17 @@ export interface FleetCollection {
 }
 
 export interface FleetBlockerSummary {
-  schema_version: "rolo-fleet-blocker-summary/v1";
+  schema_version: "rolo-fleet-blocker-summary/v2";
   blocker_id: string;
   robot_id: string;
   stage: "adapt" | "diagnose" | "verify";
   message: string;
   recommended_action: string;
   owner: string;
+  category: "MISSING_VERIFIED_EVIDENCE" | "EVIDENCE_UNAVAILABLE_OR_INVALID" | "POLICY_OR_AUTHORIZATION" | "DEPENDENCY_OR_PREREQUISITE" | "PIPELINE_BLOCKER";
+  classification_basis: "normalized_pipeline_message";
+  impact: string;
+  resolution_requirement_count: number;
   evidence_ids: string[];
   observed_at: string;
   freshness: "fresh";
@@ -798,7 +802,7 @@ export interface FleetBlockerSummary {
 }
 
 export interface FleetBlockerCollection {
-  schema_version: "rolo-fleet-blocker-collection/v1";
+  schema_version: "rolo-fleet-blocker-collection/v2";
   items: FleetBlockerSummary[];
   total: number;
   limit: number;
@@ -809,6 +813,30 @@ export interface FleetBlockerCollection {
   source_kind: "computed_pipeline_blockers";
   confidence: number;
   integrity_status: "validated";
+  limitations: string[];
+}
+
+export interface BlockerResolutionRequirement {
+  requirement_id: string;
+  kind: "FRESH_ASSESSMENT" | "VALIDATED_EVIDENCE";
+  statement: string;
+  evidence_id: string | null;
+  status: "REQUIRED";
+}
+
+export interface FleetBlockerDetail {
+  schema_version: "rolo-fleet-blocker-detail/v1";
+  blocker: FleetBlockerSummary;
+  stage_status: "NOT_STARTED" | "BLOCKED" | "DEGRADED" | "READY" | "COMPLETE";
+  stage_summary: string;
+  expected_stage_statuses: ["READY", "COMPLETE"];
+  resolution_requirements: BlockerResolutionRequirement[];
+  canonical_cli_argv: string[];
+  resolution_state: "OPEN";
+  contains_secret_payloads: false;
+  source_kind: "pipeline_assessment";
+  integrity_status: "validated";
+  limitations: string[];
 }
 
 export interface BootstrapResult {
