@@ -545,6 +545,34 @@ const FLEET_BLOCKERS = {
   limitations: ["Normalized triage only."],
 };
 
+const FLEET_BLOCKERS_V1 = {
+  schema_version: "rolo-fleet-blocker-collection/v1",
+  items: [{
+    schema_version: "rolo-fleet-blocker-summary/v1",
+    blocker_id: "blocker_legacy",
+    robot_id: "AMR-07",
+    stage: "adapt",
+    message: "Run adapt discovery",
+    recommended_action: "Inspect the validated pipeline assessment.",
+    owner: "adapter_agent",
+    evidence_ids: [],
+    observed_at: "2026-08-20T00:00:00Z",
+    freshness: "fresh",
+    source_kind: "pipeline_assessment",
+    confidence: 1,
+    integrity_status: "validated",
+  }],
+  total: 1,
+  limit: 100,
+  offset: 0,
+  next_offset: null,
+  observed_at: "2026-08-20T00:00:00Z",
+  freshness: "fresh",
+  source_kind: "computed_pipeline_blockers",
+  confidence: 1,
+  integrity_status: "validated",
+};
+
 const FLEET_BLOCKER_DETAIL = {
   schema_version: "rolo-fleet-blocker-detail/v1",
   blocker: FLEET_BLOCKERS.items[0],
@@ -1349,7 +1377,26 @@ test("RoloClient reads a trust-separated Robot Wiki", async () => {
     assert.equal(wiki.content_origin, "HUMAN_EDITED");
     assert.equal(wiki.content_integrity, "unverified");
     assert.equal(wiki.insights[0].evidence_id, "ev_abcdef123456789012");
+    assert.equal(wiki.insights[0].source, "DETERMINISTIC_RULE");
     assert.deepEqual(urls, ["http://rolo.test/v1/robots/AMR-07/wiki"]);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("RoloClient preserves Agent Wiki provenance as unverified advisory content", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => ({
+    ok: true,
+    json: async () => ({
+      ...WIKI,
+      insights: [{ ...WIKI.insights[0], source: "ADAPT_AGENT_SKILL" }],
+    }),
+  });
+  try {
+    const wiki = await new RoloClient("http://rolo.test").wiki("AMR-07");
+    assert.equal(wiki.content_integrity, "unverified");
+    assert.equal(wiki.insights[0].source, "ADAPT_AGENT_SKILL");
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -1414,6 +1461,35 @@ test("RoloClient reads validated Fleet and Blocker Inbox aggregates", async () =
   }
 });
 
+test("RoloClient preserves Fleet blocker v1 as an explicit basic compatibility contract", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => ({ ok: true, json: async () => FLEET_BLOCKERS_V1 });
+  try {
+    const blockers = await new RoloClient("http://rolo.test").blockers();
+    assert.equal(blockers.schema_version, "rolo-fleet-blocker-collection/v1");
+    assert.equal(blockers.items[0].schema_version, "rolo-fleet-blocker-summary/v1");
+    assert.equal("category" in blockers.items[0], false);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("RoloClient rejects mixed Fleet blocker collection and item schemas", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => ({
+    ok: true,
+    json: async () => ({ ...FLEET_BLOCKERS_V1, items: FLEET_BLOCKERS.items }),
+  });
+  try {
+    await assert.rejects(
+      () => new RoloClient("http://rolo.test").blockers(),
+      (error) => error instanceof RoloContractError && error.path.startsWith("/v1/blockers"),
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("RoloClient rejects raw paths in the Blocker Inbox", async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () => ({
@@ -1440,6 +1516,25 @@ test("RoloClient rejects unsafe Robot Wiki references", async () => {
     await assert.rejects(
       () => new RoloClient("http://rolo.test").wiki("AMR-07"),
       (error) => error instanceof RoloContractError && error.path.endsWith("/wiki"),
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("RoloClient rejects an unknown Robot Wiki insight source", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => ({
+    ok: true,
+    json: async () => ({
+      ...WIKI,
+      insights: [{ ...WIKI.insights[0], source: "MODEL_GUESS" }],
+    }),
+  });
+  try {
+    await assert.rejects(
+      () => new RoloClient("http://rolo.test").wiki("AMR-07"),
+      (error) => error instanceof RoloContractError && error.path.includes("/insights/0"),
     );
   } finally {
     globalThis.fetch = originalFetch;
@@ -1566,8 +1661,23 @@ test("Fleet Blocker Inbox separates triage category from resolution evidence", a
   assert.match(fleet, /All blocker categories|classification|categoryFilter/);
   assert.match(fleet, /Required to clear|resolution_requirements/);
   assert.match(fleet, /Read-only reproduction path|canonical_cli_argv/);
+  assert.match(fleet, /Basic blocker compatibility|No triage meaning is inferred/);
+  assert.match(fleet, /rolo-fleet-blocker-collection\/v2|triageAvailable/);
   assert.match(fleet, /contains_secret_payloads|limitations\.join/);
   assert.doesNotMatch(fleet, /fetch\([^)]*artifact|invoke|execute remediation/i);
+});
+
+test("Wiki insight cards distinguish rule-derived records from unverified Agent suggestions", async () => {
+  const source = await readFile(new URL("../src/App.tsx", import.meta.url), "utf8");
+  const start = source.indexOf("function WikiView");
+  const end = source.indexOf("function EvidenceRow", start);
+  assert.ok(start >= 0 && end > start);
+  const wiki = source.slice(start, end);
+
+  assert.match(wiki, /Rule-derived/);
+  assert.match(wiki, /Agent suggestion · unverified/);
+  assert.match(wiki, /insight\.source === "ADAPT_AGENT_SKILL"/);
+  assert.doesNotMatch(wiki, /Agent verified|Verified Agent/);
 });
 
 test("RoloClient reads a blocker resolution detail without remediation authority", async () => {

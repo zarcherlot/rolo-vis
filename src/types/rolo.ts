@@ -781,18 +781,13 @@ export interface FleetCollection {
   integrity_status: "validated";
 }
 
-export interface FleetBlockerSummary {
-  schema_version: "rolo-fleet-blocker-summary/v2";
+interface FleetBlockerSummaryBase {
   blocker_id: string;
   robot_id: string;
   stage: "adapt" | "diagnose" | "verify";
   message: string;
   recommended_action: string;
   owner: string;
-  category: "MISSING_VERIFIED_EVIDENCE" | "EVIDENCE_UNAVAILABLE_OR_INVALID" | "POLICY_OR_AUTHORIZATION" | "DEPENDENCY_OR_PREREQUISITE" | "PIPELINE_BLOCKER";
-  classification_basis: "normalized_pipeline_message";
-  impact: string;
-  resolution_requirement_count: number;
   evidence_ids: string[];
   observed_at: string;
   freshness: "fresh";
@@ -801,9 +796,21 @@ export interface FleetBlockerSummary {
   integrity_status: "validated";
 }
 
-export interface FleetBlockerCollection {
-  schema_version: "rolo-fleet-blocker-collection/v2";
-  items: FleetBlockerSummary[];
+export interface FleetBlockerSummaryV1 extends FleetBlockerSummaryBase {
+  schema_version: "rolo-fleet-blocker-summary/v1";
+}
+
+export interface FleetBlockerSummaryV2 extends FleetBlockerSummaryBase {
+  schema_version: "rolo-fleet-blocker-summary/v2";
+  category: "MISSING_VERIFIED_EVIDENCE" | "EVIDENCE_UNAVAILABLE_OR_INVALID" | "POLICY_OR_AUTHORIZATION" | "DEPENDENCY_OR_PREREQUISITE" | "PIPELINE_BLOCKER";
+  classification_basis: "normalized_pipeline_message";
+  impact: string;
+  resolution_requirement_count: number;
+}
+
+export type FleetBlockerSummary = FleetBlockerSummaryV1 | FleetBlockerSummaryV2;
+
+interface FleetBlockerCollectionBase {
   total: number;
   limit: number;
   offset: number;
@@ -813,8 +820,20 @@ export interface FleetBlockerCollection {
   source_kind: "computed_pipeline_blockers";
   confidence: number;
   integrity_status: "validated";
+}
+
+export interface FleetBlockerCollectionV1 extends FleetBlockerCollectionBase {
+  schema_version: "rolo-fleet-blocker-collection/v1";
+  items: FleetBlockerSummaryV1[];
+}
+
+export interface FleetBlockerCollectionV2 extends FleetBlockerCollectionBase {
+  schema_version: "rolo-fleet-blocker-collection/v2";
+  items: FleetBlockerSummaryV2[];
   limitations: string[];
 }
+
+export type FleetBlockerCollection = FleetBlockerCollectionV1 | FleetBlockerCollectionV2;
 
 export interface BlockerResolutionRequirement {
   requirement_id: string;
@@ -826,7 +845,7 @@ export interface BlockerResolutionRequirement {
 
 export interface FleetBlockerDetail {
   schema_version: "rolo-fleet-blocker-detail/v1";
-  blocker: FleetBlockerSummary;
+  blocker: FleetBlockerSummaryV2;
   stage_status: "NOT_STARTED" | "BLOCKED" | "DEGRADED" | "READY" | "COMPLETE";
   stage_summary: string;
   expected_stage_statuses: ["READY", "COMPLETE"];

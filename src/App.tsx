@@ -66,6 +66,7 @@ import type {
   EvidenceRecord,
   FleetBlockerCollection,
   FleetBlockerDetail,
+  FleetBlockerSummaryV2,
   FleetCollection,
   FleetSliceStability,
   LifecycleRunCollection,
@@ -419,6 +420,10 @@ function PageTitle({ eyebrow, title, description, action }: PageTitleProps) {
   );
 }
 
+function isTriageBlocker(item: FleetBlockerCollection["items"][number]): item is FleetBlockerSummaryV2 {
+  return item.schema_version === "rolo-fleet-blocker-summary/v2";
+}
+
 function FleetView({
   fleet,
   blockers,
@@ -443,6 +448,7 @@ function FleetView({
   const [blockerDetailMessage, setBlockerDetailMessage] = useState("");
   const [blockerDetailLoading, setBlockerDetailLoading] = useState(false);
   const blockerDetailRequest = useRef<AbortController | null>(null);
+  const triageAvailable = blockers.schema_version === "rolo-fleet-blocker-collection/v2";
   const normalizedQuery = query.trim().toLowerCase();
   const filteredRobots = fleet.items.filter((item) =>
     (stateFilter === "all" || item.state === stateFilter)
@@ -450,7 +456,7 @@ function FleetView({
   );
   const filteredBlockers = blockers.items.filter((item) =>
     (stageFilter === "all" || item.stage === stageFilter)
-    && (categoryFilter === "all" || item.category === categoryFilter)
+    && (categoryFilter === "all" || (isTriageBlocker(item) && item.category === categoryFilter))
     && (!normalizedQuery || `${item.robot_id} ${item.message} ${item.owner}`.toLowerCase().includes(normalizedQuery)),
   );
   useEffect(() => () => blockerDetailRequest.current?.abort(), []);
@@ -463,7 +469,7 @@ function FleetView({
     setBlockerDetailLoading(false);
   };
   const openBlockerDetail = (blockerId: string) => {
-    if (!blockerDetailSupported) {
+    if (!blockerDetailSupported || !triageAvailable) {
       const blocker = blockers.items.find((item) => item.blocker_id === blockerId);
       if (blocker?.evidence_ids[0]) onOpenEvidence(blocker.evidence_ids[0]);
       else if (blocker) onSelectRobot(blocker.robot_id);
@@ -512,7 +518,7 @@ function FleetView({
         <label className="search-box"><MagnifyingGlass size={17} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search robots, adapters, blockers…" /></label>
         <label className="select-control"><Funnel size={15} /><select value={stateFilter} onChange={(event) => setStateFilter(event.target.value)}><option value="all">All robot states</option><option value="READY">Ready</option><option value="ATTENTION">Attention</option><option value="DEGRADED">Degraded</option><option value="NOT_READY">Not ready</option></select></label>
         <label className="select-control"><GitBranch size={15} /><select value={stageFilter} onChange={(event) => setStageFilter(event.target.value)}><option value="all">All blocker stages</option><option value="adapt">Adapt</option><option value="diagnose">Diagnose</option><option value="verify">Verify</option></select></label>
-        <label className="select-control"><WarningCircle size={15} /><select value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)}><option value="all">All blocker categories</option><option value="MISSING_VERIFIED_EVIDENCE">Missing verified evidence</option><option value="EVIDENCE_UNAVAILABLE_OR_INVALID">Unavailable / invalid evidence</option><option value="POLICY_OR_AUTHORIZATION">Policy / authorization</option><option value="DEPENDENCY_OR_PREREQUISITE">Dependency / prerequisite</option><option value="PIPELINE_BLOCKER">Other pipeline blockers</option></select></label>
+        {triageAvailable && <label className="select-control"><WarningCircle size={15} /><select value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)}><option value="all">All blocker categories</option><option value="MISSING_VERIFIED_EVIDENCE">Missing verified evidence</option><option value="EVIDENCE_UNAVAILABLE_OR_INVALID">Unavailable / invalid evidence</option><option value="POLICY_OR_AUTHORIZATION">Policy / authorization</option><option value="DEPENDENCY_OR_PREREQUISITE">Dependency / prerequisite</option><option value="PIPELINE_BLOCKER">Other pipeline blockers</option></select></label>}
       </div>
       <div className="fleet-layout">
         <section className="panel fleet-robots">
@@ -532,6 +538,7 @@ function FleetView({
         </section>
         <aside className="panel blocker-inbox">
           <header><div><span>Blocker Inbox</span><h3>{filteredBlockers.length} visible blockers</h3></div><small>Validated pipeline assessments</small></header>
+          {!triageAvailable && <div className="blocker-compat-note" role="status"><Info size={15} /><span><strong>Basic blocker compatibility</strong><small>This rolo version does not expose normalized categories or resolution details. No triage meaning is inferred.</small></span></div>}
           {(selectedBlockerId || blockerDetailMessage) && <section className="blocker-triage-detail" aria-label="Blocker resolution detail">
             <header><div><span>Resolution evidence</span><h4>{blockerDetail?.blocker.robot_id || "Loading blocker"}</h4></div><button className="icon-button" aria-label="Close blocker detail" onClick={closeBlockerDetail}><X size={14} /></button></header>
             {blockerDetailLoading ? <div className="blocker-detail-state"><Pulse size={18} /><span><strong>Validating blocker context</strong><small>Reading stage impact and bounded evidence requirements.</small></span></div> : blockerDetail ? <>
@@ -546,9 +553,9 @@ function FleetView({
           {filteredBlockers.map((item) => (
             <button key={item.blocker_id} className={selectedBlockerId === item.blocker_id ? "is-selected" : ""} onClick={() => openBlockerDetail(item.blocker_id)}>
               <span className="blocker-inbox-heading"><strong>{item.robot_id}</strong><em>{item.stage}</em></span>
-              <span className="blocker-category">{item.category.replaceAll("_", " ")}</span>
+              {isTriageBlocker(item) && <span className="blocker-category">{item.category.replaceAll("_", " ")}</span>}
               <p>{item.message}</p>
-              <dl><div><dt>Owner</dt><dd>{item.owner.replaceAll("_", " ")}</dd></div><div><dt>Evidence</dt><dd>{item.evidence_ids.length || "No bound artifact"}</dd></div><div><dt>Clear conditions</dt><dd>{item.resolution_requirement_count}</dd></div></dl>
+              <dl><div><dt>Owner</dt><dd>{item.owner.replaceAll("_", " ")}</dd></div><div><dt>Evidence</dt><dd>{item.evidence_ids.length || "No bound artifact"}</dd></div>{isTriageBlocker(item) && <div><dt>Clear conditions</dt><dd>{item.resolution_requirement_count}</dd></div>}</dl>
               <span className="blocker-action">{item.recommended_action}<ArrowRight size={13} /></span>
             </button>
           ))}
@@ -2036,10 +2043,10 @@ function WikiView({
           {selectedSection ? <div>{selectedSection.lines.map((line, index) => <p key={`${selectedSection.heading}-${index}`}>{line}</p>)}</div> : <div className="empty-state"><BookOpenText size={27} /><strong>No narrative content</strong><span>Machine observations remain available in the verified panels.</span></div>}
         </article>
         <aside className="panel wiki-insights">
-          <header><span>Advisory insights</span><small>{wiki.insights.length} manifest-verified records</small></header>
+          <header><span>Advisory insights</span><small>{wiki.insights.length} integrity-checked advisory records</small></header>
           {wiki.insights.map((insight) => (
             <button key={insight.evidence_id} onClick={() => onOpenEvidence(insight.evidence_id)}>
-              <span className="wiki-insight-meta"><strong>{insight.category}</strong><em>{insight.confidence} confidence</em></span>
+              <span className="wiki-insight-meta"><strong>{insight.category}</strong><span className={`wiki-insight-source is-${insight.source.toLowerCase().replaceAll("_", "-")}`}>{insight.source === "ADAPT_AGENT_SKILL" ? "Agent suggestion · unverified" : "Rule-derived"}</span><em>{insight.confidence} confidence</em></span>
               <p>{insight.statement}</p>
               <small>Verify: {insight.verification}</small>
               <span className="wiki-evidence-link"><ShieldCheck size={14} /> Open evidence</span>
