@@ -109,3 +109,25 @@ raw paths.
 - Request `expires_at` is never presented as evidence freshness.
 - Stale evidence cannot appear current or verified.
 - Raw artifact paths and sensitive collector metadata remain rejected.
+
+## Batch 6: MVP baseline hardening
+
+Status: approved and included in the MVP baseline.
+
+- Capability and discovery parsers now live behind an explicit contract boundary.
+- The accepted capability v1/v2 and discovery v1/v2/v3 schema ranges are pinned in
+  one compatibility manifest and exercised by baseline tests.
+- Review-only trust fixtures cover Agent completed, fallback, disabled, fresh-local,
+  and stale-remote states without entering the live product data path.
+- Development, production build, preview, and Sites packaging use the same Vite
+  configuration loader.
+
+## Batch 7: Read-only MVP baseline candidate
+
+Status: approved and promoted as the `0.19.0` MVP baseline.
+
+- Version `0.19.0` identifies the established read-only MVP baseline.
+- The baseline freezes the read-only Overview, Stack Map, Capability, Wiki,
+  Lifecycle, and Evidence boundaries described in `MVP_READONLY_BASELINE.md`.
+- Promotion passed the full baseline verification command and a live `rolo-data`
+  regression. Future contract expansion starts from this tagged boundary.

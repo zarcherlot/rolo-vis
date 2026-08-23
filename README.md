@@ -56,4 +56,10 @@ npm run build
 npm run test:sites
 ```
 
+For the complete MVP release-candidate gate, run:
+
+```powershell
+npm run verify:baseline
+```
+
 The selected visual target is stored at `docs/design/selected-stack-map.png`, and the product scope is in `docs/WEB_VISUALIZATION_PRODUCT_PROPOSAL.md`.

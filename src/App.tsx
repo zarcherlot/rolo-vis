@@ -1177,7 +1177,7 @@ function CapabilityReadinessPanel({
     [bindings, capability],
   );
   return (
-    <section className="capability-readiness-panel">
+    <section className="capability-readiness-panel" aria-label="Capability readiness">
       <header><div><span>Independent read-model signals</span><h4>Capability readiness lens</h4></div><small>{signals.filter((signal) => signal.state === "established").length} of {signals.length} established</small></header>
       <div className="capability-readiness-signals">
         {signals.map((signal, index) => {

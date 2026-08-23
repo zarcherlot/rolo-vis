@@ -50,6 +50,19 @@ import type {
   TopologySnapshotCollection,
   TopologySnapshotSummary,
 } from "./types/rolo";
+import { parseCapabilityCollection, parseCapabilityDetail } from "./contracts/capability.ts";
+import { parseDiscoverySnapshotCollection } from "./contracts/discovery.ts";
+import {
+  containsUnsafeReference,
+  isConfidence,
+  isRecord,
+  isStringArray,
+  isTimestamp,
+  requireContract,
+  RoloContractError,
+} from "./contracts/guards.ts";
+
+export { RoloContractError } from "./contracts/guards.ts";
 
 const DEFAULT_BASE = "/rolo-api";
 
@@ -88,28 +101,6 @@ export class RoloApiError extends Error {
   }
 }
 
-export class RoloContractError extends Error {
-  path: string;
-
-  constructor(message: string, path: string) {
-    super(message);
-    this.name = "RoloContractError";
-    this.path = path;
-  }
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function requireContract(condition: boolean, message: string, path: string): asserts condition {
-  if (!condition) throw new RoloContractError(message, path);
-}
-
-function isStringArray(value: unknown): value is string[] {
-  return Array.isArray(value) && value.every((item) => typeof item === "string");
-}
-
 function isStringRecord(value: unknown): value is Record<string, string> {
   return isRecord(value) && Object.values(value).every((item) => typeof item === "string");
 }
@@ -118,14 +109,6 @@ function isNonNegativeIntegerRecord(value: unknown): value is Record<string, num
   return isRecord(value) && Object.values(value).every(
     (item) => Number.isInteger(item) && Number(item) >= 0,
   );
-}
-
-function isTimestamp(value: unknown): value is string {
-  return typeof value === "string" && !Number.isNaN(Date.parse(value));
-}
-
-function isConfidence(value: unknown): value is number {
-  return typeof value === "number" && value >= 0 && value <= 1;
 }
 
 function isSafeAttributes(value: unknown): value is Record<string, string | number | boolean> {
@@ -548,13 +531,6 @@ function parseRobotTopology(value: unknown, path: string, expectedRobotId: strin
   return value as unknown as RobotTopology;
 }
 
-function containsUnsafeReference(value: unknown): boolean {
-  const serialized = JSON.stringify(value);
-  return serialized.includes("artifact://")
-    || /[A-Za-z]:\\\\/.test(serialized)
-    || /\/(?:home|root|etc|var|tmp|workspace|mnt|Users)\//i.test(serialized);
-}
-
 function parseTopologySnapshotSummary(value: unknown, path: string): TopologySnapshotSummary {
   requireContract(isRecord(value), "topology snapshot summary must be an object", path);
   requireContract(value.schema_version === "rolo-topology-snapshot-summary/v1", "unsupported topology snapshot summary schema", path);
@@ -728,87 +704,6 @@ function parseEvidenceCollection(
   return { ...value, items } as unknown as EvidenceCollection;
 }
 
-function parseCapabilitySummary(value: unknown, path: string): CapabilitySummary {
-  requireContract(isRecord(value), "capability summary must be an object", path);
-  requireContract(["rolo-capability-summary/v1", "rolo-capability-summary/v2"].includes(String(value.schema_version)), "unsupported capability summary schema", path);
-  requireContract(typeof value.operation === "string" && value.operation.length > 0, "missing canonical operation", path);
-  requireContract(["Hardware", "Linux", "Middleware", "Application"].includes(String(value.layer)), "invalid capability layer", path);
-  requireContract(typeof value.description === "string", "invalid capability description", path);
-  requireContract(["DRAFT", "GATEABLE", "RELEASED", "DEPRECATED"].includes(String(value.lifecycle)), "invalid capability lifecycle", path);
-  requireContract(["APPLICABLE", "NOT_OBSERVED", "UNKNOWN"].includes(String(value.applicability)), "invalid capability applicability", path);
-  requireContract(["VERIFIED", "AVAILABLE", "UNAVAILABLE", "UNKNOWN"].includes(String(value.availability)), "invalid capability availability", path);
-  requireContract(["BUILTIN", "REGISTERED", "NOT_REGISTERED", "STALE"].includes(String(value.registration)), "invalid capability registration", path);
-  requireContract(["read", "write"].includes(String(value.access)) && ["R0", "R1", "R2", "R3"].includes(String(value.risk)), "invalid capability access or risk", path);
-  requireContract(["PUBLIC", "INTERNAL", "SENSITIVE", "SECRET"].includes(String(value.data_classification)), "invalid capability classification", path);
-  requireContract(typeof value.contract_version === "string" && /^[0-9a-f]{64}$/.test(String(value.contract_digest)), "invalid capability contract identity", path);
-  requireContract(Number.isInteger(value.binding_count) && Number(value.binding_count) >= 0, "invalid capability binding count", path);
-  requireContract(value.last_verified_at === null || isTimestamp(value.last_verified_at), "invalid capability verification time", path);
-  requireContract(isStringArray(value.evidence_ids) && isConfidence(value.confidence), "invalid capability evidence or confidence", path);
-  requireContract(["validated", "verified"].includes(String(value.integrity_status)) && isStringArray(value.limitations), "invalid capability integrity or limitations", path);
-  if (value.schema_version === "rolo-capability-summary/v1") return value as unknown as CapabilitySummaryV1;
-  requireContract(Number.isInteger(value.inferred_binding_count) && Number(value.inferred_binding_count) >= 0, "invalid inferred binding count", path);
-  requireContract(value.candidate_origin === null || ["DETERMINISTIC", "HEURISTIC_AGENT"].includes(String(value.candidate_origin)), "invalid candidate origin", path);
-  requireContract(value.candidate_verification_status === null || value.candidate_verification_status === "DISCOVERED_UNVERIFIED", "invalid candidate verification status", path);
-  requireContract((value.candidate_origin === null) === (value.candidate_verification_status === null), "inconsistent candidate provenance", path);
-  return value as unknown as CapabilitySummaryV2;
-}
-
-function parseCapabilityCollection(
-  value: unknown,
-  path: string,
-  robotId: string,
-  expectedPage: { limit: number; offset: number },
-): CapabilityCollection {
-  requireContract(isRecord(value), "capability collection must be an object", path);
-  requireContract(["rolo-capability-collection/v1", "rolo-capability-collection/v2"].includes(String(value.schema_version)), "unsupported capability collection schema", path);
-  requireContract(value.robot_id === robotId && Array.isArray(value.items), "invalid capability collection identity or items", path);
-  const items = value.items.map((item, index) => parseCapabilitySummary(item, `${path}/items/${index}`));
-  const expectedItemSchema = value.schema_version === "rolo-capability-collection/v2" ? "rolo-capability-summary/v2" : "rolo-capability-summary/v1";
-  requireContract(items.every((item) => item.schema_version === expectedItemSchema), "capability item schema does not match collection", path);
-  requireContract(new Set(items.map((item) => item.operation)).size === items.length, "capability page contains duplicate operations", path);
-  requireContract(Number.isInteger(value.total) && Number(value.total) >= items.length, "invalid capability collection total", path);
-  requireContract(value.limit === expectedPage.limit && value.offset === expectedPage.offset && items.length <= expectedPage.limit, "capability collection does not match the requested page", path);
-  requireContract(value.next_offset === null || (Number.isInteger(value.next_offset) && Number(value.next_offset) > Number(value.offset)), "invalid capability next offset", path);
-  requireContract(isTimestamp(value.observed_at) && ["fresh", "unknown"].includes(String(value.freshness)), "invalid capability observation metadata", path);
-  requireContract(["product_registry", "discovery", "gated_release"].includes(String(value.source_kind)) && isStringArray(value.limitations), "invalid capability source metadata", path);
-  return { ...value, items } as unknown as CapabilityCollection;
-}
-
-function parseCapabilityDetail(value: unknown, path: string, robotId: string, operation: string): CapabilityDetail {
-  requireContract(isRecord(value), "capability detail must be an object", path);
-  requireContract(["rolo-capability-detail/v1", "rolo-capability-detail/v2"].includes(String(value.schema_version)) && value.robot_id === robotId, "invalid capability detail identity", path);
-  const capability = parseCapabilitySummary(value.capability, `${path}/capability`);
-  const expectedSummarySchema = value.schema_version === "rolo-capability-detail/v2" ? "rolo-capability-summary/v2" : "rolo-capability-summary/v1";
-  requireContract(capability.schema_version === expectedSummarySchema, "capability summary schema does not match detail", path);
-  requireContract(capability.operation === operation, "capability operation does not match request", path);
-  requireContract(isRecord(value.contract) && value.contract.schema_version === "rolo-capability-contract/v1", "invalid capability contract", path);
-  requireContract(isRecord(value.contract.input_schema) && isRecord(value.contract.output_schema), "invalid capability schemas", path);
-  requireContract(Array.isArray(value.bindings), "capability bindings must be an array", path);
-  for (const [index, binding] of value.bindings.entries()) {
-    const bindingPath = `${path}/bindings/${index}`;
-    requireContract(isRecord(binding) && binding.schema_version === "rolo-capability-binding/v1", "invalid capability binding", bindingPath);
-    requireContract(typeof binding.binding_id === "string" && typeof binding.endpoint === "string", "invalid capability binding identity", bindingPath);
-    requireContract(["gated_release", "discovery_candidate"].includes(String(binding.source)) && ["GATED", "OBSERVED", "DECLARED"].includes(String(binding.authority)), "invalid capability binding authority", bindingPath);
-    requireContract(/^[0-9a-f]{64}$/.test(String(binding.reference_digest)) && isStringArray(binding.evidence_ids) && isStringArray(binding.limitations), "invalid capability binding evidence", bindingPath);
-  }
-  if (value.schema_version === "rolo-capability-detail/v2") {
-    requireContract(Array.isArray(value.inferred_bindings), "inferred capability bindings must be an array", path);
-    for (const [index, inference] of value.inferred_bindings.entries()) {
-      const inferencePath = `${path}/inferred_bindings/${index}`;
-      requireContract(isRecord(inference) && inference.schema_version === "rolo-capability-inferred-binding/v1", "invalid inferred capability binding", inferencePath);
-      requireContract(typeof inference.inference_id === "string" && typeof inference.endpoint === "string" && typeof inference.kind === "string", "invalid inferred binding identity", inferencePath);
-      requireContract(inference.origin === "HEURISTIC_AGENT" && inference.verification_status === "DISCOVERED_UNVERIFIED", "invalid inferred binding provenance", inferencePath);
-      requireContract(["OBSERVED", "DECLARED"].includes(String(inference.authority)), "invalid inferred route authority", inferencePath);
-      requireContract(inference.observed_at === null || isTimestamp(inference.observed_at), "invalid inferred binding observation time", inferencePath);
-      requireContract(/^[0-9a-f]{64}$/.test(String(inference.reference_digest)) && isStringArray(inference.limitations), "invalid inferred binding evidence", inferencePath);
-      requireContract(!containsUnsafeReference(inference), "inferred binding contains an unsafe reference", inferencePath);
-    }
-    requireContract(value.inferred_bindings.length === (capability as CapabilitySummaryV2).inferred_binding_count, "inferred binding count does not match detail", path);
-  }
-  requireContract(isTimestamp(value.observed_at) && ["fresh", "unknown"].includes(String(value.freshness)), "invalid capability detail observation metadata", path);
-  return { ...value, capability } as unknown as CapabilityDetail;
-}
-
 function parseLifecycleRunSummary(value: unknown, path: string, robotId: string): LifecycleRunSummary {
   requireContract(isRecord(value), "lifecycle run summary must be an object", path);
   requireContract(value.schema_version === "rolo-lifecycle-run-summary/v1", "unsupported lifecycle run schema", path);
@@ -923,101 +818,6 @@ function parseRobotWiki(value: unknown, path: string, robotId: string): RobotWik
   requireContract(isConfidence(value.confidence) && isStringArray(value.limitations), "invalid robot Wiki confidence or limitations", path);
   requireContract(!containsUnsafeReference(value), "robot Wiki contains an unsafe reference", path);
   return value as unknown as RobotWikiSnapshot;
-}
-
-function parseDiscoveryHeuristicSummary(value: unknown, path: string) {
-  requireContract(isRecord(value) && value.schema_version === "rolo-discovery-heuristic-summary/v1", "invalid discovery heuristic summary", path);
-  requireContract(["disabled", "shadow", "enabled"].includes(String(value.mode)), "invalid discovery heuristic mode", path);
-  requireContract(["AGENT_COMPLETED", "FALLBACK", "DISABLED"].includes(String(value.status)), "invalid discovery heuristic status", path);
-  requireContract(Number.isInteger(value.inferred_operation_count) && Number(value.inferred_operation_count) >= 0, "invalid inferred Operation count", path);
-  requireContract(Number.isInteger(value.missing_evidence_count) && Number(value.missing_evidence_count) >= 0, "invalid missing evidence count", path);
-  requireContract(value.influences_release === false, "heuristic summary cannot influence release", path);
-  if (value.mode === "disabled") {
-    requireContract(value.status === "DISABLED" && value.inferred_operation_count === 0 && value.missing_evidence_count === 0, "inconsistent disabled heuristic summary", path);
-  } else {
-    requireContract(value.status !== "DISABLED", "active heuristic mode cannot be disabled", path);
-  }
-  requireContract(!containsUnsafeReference(value), "heuristic summary contains an unsafe reference", path);
-  return value;
-}
-
-function parseDiscoveryTargetEvidenceSummary(value: unknown, path: string) {
-  requireContract(isRecord(value) && value.schema_version === "rolo-discovery-target-evidence-summary/v1", "invalid target evidence summary", path);
-  const allowedKeys = new Set(["schema_version", "deployment_scope", "freshness", "collected_at", "refresh_required", "refresh_reason"]);
-  requireContract(Object.keys(value).every((key) => allowedKeys.has(key)), "target evidence summary contains unsupported metadata", path);
-  requireContract(["LOCAL", "REMOTE"].includes(String(value.deployment_scope)), "invalid target evidence scope", path);
-  requireContract(["FRESH", "STALE"].includes(String(value.freshness)) && isTimestamp(value.collected_at), "invalid target evidence freshness", path);
-  requireContract(typeof value.refresh_required === "boolean" && (value.refresh_reason === null || typeof value.refresh_reason === "string"), "invalid target evidence refresh metadata", path);
-  if (value.freshness === "FRESH") {
-    requireContract(value.refresh_required === false && value.refresh_reason === null, "fresh target evidence cannot require recollection", path);
-  } else {
-    requireContract(value.refresh_required === true && typeof value.refresh_reason === "string" && Boolean(value.refresh_reason), "stale target evidence must require recollection", path);
-  }
-  requireContract(!containsUnsafeReference(value), "target evidence summary contains an unsafe reference", path);
-  return value;
-}
-
-function parseDiscoverySnapshotSummary(
-  value: unknown,
-  path: string,
-  robotId: string,
-): DiscoverySnapshotSummary {
-  requireContract(isRecord(value) && ["rolo-discovery-snapshot-summary/v1", "rolo-discovery-snapshot-summary/v2", "rolo-discovery-snapshot-summary/v3"].includes(String(value.schema_version)), "invalid discovery snapshot summary", path);
-  requireContract(value.robot_id === robotId && typeof value.discovery_id === "string" && /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(value.discovery_id), "invalid discovery snapshot identity", path);
-  requireContract(["SUCCEEDED", "PARTIAL", "UNAVAILABLE", "FAILED"].includes(String(value.status)), "invalid discovery snapshot status", path);
-  requireContract(typeof value.discovery_mode === "string" && /^[A-Za-z0-9._-]{1,48}$/.test(value.discovery_mode), "invalid discovery mode", path);
-  requireContract(isTimestamp(value.created_at) && typeof value.is_latest === "boolean", "invalid discovery snapshot metadata", path);
-  const counts = [
-    value.probe_total,
-    value.observed_probes,
-    value.partial_probes,
-    value.unavailable_probes,
-    value.operation_candidates,
-    value.semantic_bindings,
-    value.warning_count,
-  ];
-  requireContract(counts.every((item) => Number.isInteger(item) && Number(item) >= 0), "invalid discovery snapshot counts", path);
-  requireContract(Number(value.observed_probes) + Number(value.partial_probes) + Number(value.unavailable_probes) === Number(value.probe_total), "inconsistent discovery probe coverage", path);
-  requireContract(isConfidence(value.confidence) && value.integrity_status === "verified" && isStringArray(value.limitations), "invalid discovery snapshot trust metadata", path);
-  if (value.schema_version === "rolo-discovery-snapshot-summary/v1") {
-    requireContract(!containsUnsafeReference(value), "discovery snapshot contains an unsafe reference", path);
-    return value as unknown as DiscoverySnapshotSummaryV1;
-  }
-  parseDiscoveryHeuristicSummary(value.heuristic_summary, `${path}/heuristic_summary`);
-  if (value.schema_version === "rolo-discovery-snapshot-summary/v3") {
-    if (value.target_evidence !== null) parseDiscoveryTargetEvidenceSummary(value.target_evidence, `${path}/target_evidence`);
-    requireContract(!containsUnsafeReference(value), "discovery snapshot contains an unsafe reference", path);
-    return value as unknown as DiscoverySnapshotSummaryV3;
-  }
-  requireContract(!containsUnsafeReference(value), "discovery snapshot contains an unsafe reference", path);
-  return value as unknown as DiscoverySnapshotSummaryV2;
-}
-
-function parseDiscoverySnapshotCollection(
-  value: unknown,
-  path: string,
-  robotId: string,
-): DiscoverySnapshotCollection {
-  requireContract(isRecord(value) && ["rolo-discovery-snapshot-collection/v1", "rolo-discovery-snapshot-collection/v2", "rolo-discovery-snapshot-collection/v3"].includes(String(value.schema_version)), "unsupported discovery history schema", path);
-  requireContract(value.robot_id === robotId && Array.isArray(value.items), "discovery history identity does not match request", path);
-  const items = value.items.map((item, index) => parseDiscoverySnapshotSummary(item, `${path}/items/${index}`, robotId));
-  const expectedItemSchema = value.schema_version === "rolo-discovery-snapshot-collection/v3"
-    ? "rolo-discovery-snapshot-summary/v3"
-    : value.schema_version === "rolo-discovery-snapshot-collection/v2"
-      ? "rolo-discovery-snapshot-summary/v2"
-      : "rolo-discovery-snapshot-summary/v1";
-  requireContract(items.every((item) => item.schema_version === expectedItemSchema), "discovery history item schema does not match collection", path);
-  requireContract(new Set(items.map((item) => item.discovery_id)).size === items.length, "duplicate discovery snapshot identity", path);
-  requireContract(items.filter((item) => item.is_latest).length <= 1, "multiple latest discovery snapshots", path);
-  requireContract(Number.isInteger(value.total) && Number(value.total) >= items.length, "invalid discovery history total", path);
-  requireContract(Number.isInteger(value.limit) && Number(value.limit) >= 1 && Number(value.limit) <= 100 && items.length <= Number(value.limit), "invalid discovery history page limit", path);
-  requireContract(Number.isInteger(value.offset) && Number(value.offset) >= 0, "invalid discovery history page offset", path);
-  requireContract(value.next_offset === null || (Number.isInteger(value.next_offset) && Number(value.next_offset) > Number(value.offset)), "invalid discovery history next offset", path);
-  requireContract(Number.isInteger(value.excluded_unverified) && Number(value.excluded_unverified) >= 0, "invalid excluded discovery count", path);
-  requireContract(isTimestamp(value.observed_at) && value.freshness === "unknown", "invalid discovery history observation metadata", path);
-  requireContract(value.source_kind === "verified_discovery_history" && value.integrity_status === "verified" && isStringArray(value.limitations), "invalid discovery history trust metadata", path);
-  requireContract(!containsUnsafeReference(value), "discovery history contains an unsafe reference", path);
-  return { ...value, items } as unknown as DiscoverySnapshotCollection;
 }
 
 function parseFleetRobotSummary(value: unknown, path: string): FleetRobotSummary {
