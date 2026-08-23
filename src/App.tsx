@@ -61,6 +61,7 @@ import type {
   CapabilityDetail,
   CapabilitySummary,
   DiscoverySnapshotCollection,
+  DiscoverySnapshotSummaryV2,
   EvidenceAuthority,
   EvidenceCollection,
   EvidenceRecord,
@@ -1934,6 +1935,12 @@ function LiveLifecycleView({
   );
 }
 
+function hasHeuristicSummary(
+  item: DiscoverySnapshotCollection["items"][number],
+): item is DiscoverySnapshotSummaryV2 {
+  return item.schema_version === "rolo-discovery-snapshot-summary/v2";
+}
+
 function WikiView({
   wiki,
   history,
@@ -1963,6 +1970,16 @@ function WikiView({
   const selectedSection = wiki.sections.find((section) => section.heading === selectedHeading) || wiki.sections[0];
   const selectedDiscovery = history.items.find((item) => item.discovery_id === selectedDiscoveryId)
     || history.items[0];
+  const heuristicSummary = selectedDiscovery && hasHeuristicSummary(selectedDiscovery)
+    ? selectedDiscovery.heuristic_summary
+    : null;
+  const heuristicMessage = heuristicSummary?.status === "AGENT_COMPLETED"
+    ? "Agent analysis completed. This does not verify any Operation, runtime route, task result, or physical outcome."
+    : heuristicSummary?.status === "FALLBACK"
+      ? "Agent analysis did not complete. The bounded fallback remains advisory and does not establish Capability readiness."
+      : heuristicSummary?.status === "DISABLED"
+        ? "Heuristic Agent analysis was disabled for this discovery snapshot."
+        : "This rolo version does not expose a sanitized heuristic summary. No Agent state is inferred.";
   const narrativeLabel = wiki.content_origin === "GENERATED_MATCH"
     ? "Generated text matches snapshot"
     : wiki.content_origin === "HUMAN_EDITED" ? "Human-maintained text" : "Narrative unavailable";
@@ -2005,6 +2022,18 @@ function WikiView({
               <div><dt>Semantic bindings</dt><dd>{selectedDiscovery.semantic_bindings}</dd></div>
               <div><dt>Warnings</dt><dd>{selectedDiscovery.warning_count}</dd></div>
             </dl>
+            <section className={`wiki-heuristic-summary ${heuristicSummary ? `is-${heuristicSummary.status.toLowerCase().replaceAll("_", "-")}` : "is-unavailable"}`} aria-label="Heuristic discovery summary">
+              <header>
+                <div><Robot size={17} weight="fill" /><span><strong>Heuristic analysis</strong><small>{heuristicSummary ? `${heuristicSummary.mode} mode · advisory only` : "safe summary unavailable"}</small></span></div>
+                <em>{heuristicSummary?.status.replaceAll("_", " ") || "UNAVAILABLE"}</em>
+              </header>
+              {heuristicSummary && <dl>
+                <div><dt>Inferred Operations</dt><dd>{heuristicSummary.inferred_operation_count}</dd></div>
+                <div><dt>Missing evidence</dt><dd>{heuristicSummary.missing_evidence_count}</dd></div>
+                <div><dt>Release influence</dt><dd>{heuristicSummary.influences_release ? "Blocked" : "None"}</dd></div>
+              </dl>}
+              <p>{heuristicMessage}</p>
+            </section>
             {selectedDiscovery.limitations.length > 0 && <section className="wiki-discovery-limitations" aria-label="Snapshot limitations">
               <header><div><WarningCircle size={16} weight="fill" /><span>Diagnostic limitations</span></div><strong>{selectedDiscovery.limitations.length}</strong></header>
               <ul>{selectedDiscovery.limitations.map((limitation, index) => <li key={`${index}-${limitation}`}>{limitation}</li>)}</ul>

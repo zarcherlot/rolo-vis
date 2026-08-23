@@ -1,6 +1,12 @@
 # rolo main compatibility roadmap
 
-## Current review batch: Batch 1 + Batch 2
+## Delivery status
+
+- Batch 1 + Batch 2: approved, committed, and pushed.
+- Batch 3: active development and the next review boundary.
+- Batch 4 + Batch 5: recorded only; do not start before Batch 3 review approval.
+
+## Approved baseline: Batch 1 + Batch 2
 
 This batch restores a safe compatibility boundary between rolo-vis and the P0 Adapt
 heuristic Agent redesign merged into rolo `main`.
@@ -13,9 +19,11 @@ heuristic Agent redesign merged into rolo `main`.
   `Rule-derived` or `Agent suggestion · unverified`.
 - Raw artifact paths remain rejected by the client trust boundary.
 
-Batch 1 + 2 must pass review before any item below starts.
+Batch 1 + 2 passed review and is the compatibility baseline for the remaining work.
 
 ## Batch 3: Discovery heuristic summary
+
+Status: in development. This batch ends at a separate review checkpoint.
 
 ### Upstream dependency
 

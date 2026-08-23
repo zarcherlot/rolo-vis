@@ -444,10 +444,10 @@ const WIKI = {
 };
 
 const DISCOVERY_HISTORY = {
-  schema_version: "rolo-discovery-snapshot-collection/v1",
+  schema_version: "rolo-discovery-snapshot-collection/v2",
   robot_id: "AMR-07",
   items: [{
-    schema_version: "rolo-discovery-snapshot-summary/v1",
+    schema_version: "rolo-discovery-snapshot-summary/v2",
     robot_id: "AMR-07",
     discovery_id: "discovery-20260820",
     status: "PARTIAL",
@@ -464,6 +464,14 @@ const DISCOVERY_HISTORY = {
     confidence: 0.8,
     integrity_status: "verified",
     limitations: ["Discovery coverage does not prove task success."],
+    heuristic_summary: {
+      schema_version: "rolo-discovery-heuristic-summary/v1",
+      mode: "shadow",
+      status: "AGENT_COMPLETED",
+      inferred_operation_count: 4,
+      missing_evidence_count: 2,
+      influences_release: false,
+    },
   }],
   total: 1,
   limit: 100,
@@ -475,6 +483,13 @@ const DISCOVERY_HISTORY = {
   source_kind: "verified_discovery_history",
   integrity_status: "verified",
   limitations: ["Only manifest-verified discovery reports are included."],
+};
+
+const { heuristic_summary: _ignoredHeuristic, ...DISCOVERY_SUMMARY_V1 } = DISCOVERY_HISTORY.items[0];
+const DISCOVERY_HISTORY_V1 = {
+  ...DISCOVERY_HISTORY,
+  schema_version: "rolo-discovery-snapshot-collection/v1",
+  items: [{ ...DISCOVERY_SUMMARY_V1, schema_version: "rolo-discovery-snapshot-summary/v1" }],
 };
 
 const FLEET = {
@@ -1413,7 +1428,102 @@ test("RoloClient reads manifest-verified discovery history", async () => {
     const history = await new RoloClient("http://rolo.test").discoveries("AMR-07");
     assert.equal(history.items[0].is_latest, true);
     assert.equal(history.items[0].operation_candidates, 14);
+    assert.equal(history.items[0].heuristic_summary.status, "AGENT_COMPLETED");
+    assert.equal(history.items[0].heuristic_summary.influences_release, false);
     assert.deepEqual(urls, ["http://rolo.test/v1/robots/AMR-07/discoveries?limit=100&offset=0"]);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("RoloClient preserves discovery history v1 without inventing Agent state", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => ({ ok: true, json: async () => DISCOVERY_HISTORY_V1 });
+  try {
+    const history = await new RoloClient("http://rolo.test").discoveries("AMR-07");
+    assert.equal(history.schema_version, "rolo-discovery-snapshot-collection/v1");
+    assert.equal(history.items[0].schema_version, "rolo-discovery-snapshot-summary/v1");
+    assert.equal("heuristic_summary" in history.items[0], false);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("RoloClient accepts every bounded heuristic discovery status", async () => {
+  const originalFetch = globalThis.fetch;
+  const summaries = [
+    { mode: "shadow", status: "AGENT_COMPLETED", inferred_operation_count: 4, missing_evidence_count: 2 },
+    { mode: "enabled", status: "FALLBACK", inferred_operation_count: 1, missing_evidence_count: 3 },
+    { mode: "disabled", status: "DISABLED", inferred_operation_count: 0, missing_evidence_count: 0 },
+  ];
+  try {
+    for (const summary of summaries) {
+      globalThis.fetch = async () => ({
+        ok: true,
+        json: async () => ({
+          ...DISCOVERY_HISTORY,
+          items: [{
+            ...DISCOVERY_HISTORY.items[0],
+            heuristic_summary: {
+              ...DISCOVERY_HISTORY.items[0].heuristic_summary,
+              ...summary,
+            },
+          }],
+        }),
+      });
+      const history = await new RoloClient("http://rolo.test").discoveries("AMR-07");
+      assert.equal(history.items[0].heuristic_summary.status, summary.status);
+    }
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("RoloClient fails closed on unsafe heuristic discovery authority", async () => {
+  const originalFetch = globalThis.fetch;
+  const invalidSummaries = [
+    { status: "MODEL_GUESS" },
+    { mode: "experimental" },
+    { influences_release: true },
+    { inferred_operation_count: -1 },
+    { heuristic_analysis_ref: "artifact://private/summary.json" },
+  ];
+  try {
+    for (const override of invalidSummaries) {
+      globalThis.fetch = async () => ({
+        ok: true,
+        json: async () => ({
+          ...DISCOVERY_HISTORY,
+          items: [{
+            ...DISCOVERY_HISTORY.items[0],
+            heuristic_summary: {
+              ...DISCOVERY_HISTORY.items[0].heuristic_summary,
+              ...override,
+            },
+          }],
+        }),
+      });
+      await assert.rejects(
+        () => new RoloClient("http://rolo.test").discoveries("AMR-07"),
+        (error) => error instanceof RoloContractError && error.path.includes("/heuristic_summary"),
+      );
+    }
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("RoloClient rejects mixed discovery collection and item schemas", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => ({
+    ok: true,
+    json: async () => ({ ...DISCOVERY_HISTORY_V1, items: DISCOVERY_HISTORY.items }),
+  });
+  try {
+    await assert.rejects(
+      () => new RoloClient("http://rolo.test").discoveries("AMR-07"),
+      (error) => error instanceof RoloContractError && error.path.includes("/discoveries"),
+    );
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -1708,6 +1818,23 @@ test("Wiki snapshot detail exposes every selected discovery limitation", async (
   assert.match(liveWiki, /selectedDiscovery\.limitations\.map/);
   assert.match(liveWiki, /aria-label="Snapshot limitations"/);
   assert.match(liveWiki, /Diagnostic limitations/);
+});
+
+test("Wiki snapshot keeps heuristic analysis in an advisory release-neutral lane", async () => {
+  const source = await readFile(new URL("../src/App.tsx", import.meta.url), "utf8");
+  const wikiStart = source.indexOf("function WikiView");
+  const wikiEnd = source.indexOf("function EvidenceRow", wikiStart);
+  const capabilityStart = source.indexOf("function LiveCapabilityView");
+  const capabilityEnd = source.indexOf("function DemoLifecycleView", capabilityStart);
+  assert.ok(wikiStart >= 0 && wikiEnd > wikiStart && capabilityStart >= 0 && capabilityEnd > capabilityStart);
+  const liveWiki = source.slice(wikiStart, wikiEnd);
+  const liveCapabilities = source.slice(capabilityStart, capabilityEnd);
+
+  assert.match(liveWiki, /Heuristic analysis/);
+  assert.match(liveWiki, /Agent analysis completed\. This does not verify any Operation/);
+  assert.match(liveWiki, /Release influence/);
+  assert.match(liveWiki, /influences_release/);
+  assert.doesNotMatch(liveCapabilities, /heuristic_summary|heuristicSummary/);
 });
 
 test("Adapt Stability keeps baseline, filtering, and run authority drilldown separate", async () => {

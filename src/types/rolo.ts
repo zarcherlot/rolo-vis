@@ -708,8 +708,16 @@ export interface RobotWikiSnapshot {
   limitations: string[];
 }
 
-export interface DiscoverySnapshotSummary {
-  schema_version: "rolo-discovery-snapshot-summary/v1";
+export interface DiscoveryHeuristicSummary {
+  schema_version: "rolo-discovery-heuristic-summary/v1";
+  mode: "disabled" | "shadow" | "enabled";
+  status: "AGENT_COMPLETED" | "FALLBACK" | "DISABLED";
+  inferred_operation_count: number;
+  missing_evidence_count: number;
+  influences_release: false;
+}
+
+interface DiscoverySnapshotSummaryBase {
   robot_id: string;
   discovery_id: string;
   status: "SUCCEEDED" | "PARTIAL" | "UNAVAILABLE" | "FAILED";
@@ -728,10 +736,19 @@ export interface DiscoverySnapshotSummary {
   limitations: string[];
 }
 
-export interface DiscoverySnapshotCollection {
-  schema_version: "rolo-discovery-snapshot-collection/v1";
+export interface DiscoverySnapshotSummaryV1 extends DiscoverySnapshotSummaryBase {
+  schema_version: "rolo-discovery-snapshot-summary/v1";
+}
+
+export interface DiscoverySnapshotSummaryV2 extends DiscoverySnapshotSummaryBase {
+  schema_version: "rolo-discovery-snapshot-summary/v2";
+  heuristic_summary: DiscoveryHeuristicSummary;
+}
+
+export type DiscoverySnapshotSummary = DiscoverySnapshotSummaryV1 | DiscoverySnapshotSummaryV2;
+
+interface DiscoverySnapshotCollectionBase {
   robot_id: string;
-  items: DiscoverySnapshotSummary[];
   total: number;
   limit: number;
   offset: number;
@@ -743,6 +760,18 @@ export interface DiscoverySnapshotCollection {
   integrity_status: "verified";
   limitations: string[];
 }
+
+export interface DiscoverySnapshotCollectionV1 extends DiscoverySnapshotCollectionBase {
+  schema_version: "rolo-discovery-snapshot-collection/v1";
+  items: DiscoverySnapshotSummaryV1[];
+}
+
+export interface DiscoverySnapshotCollectionV2 extends DiscoverySnapshotCollectionBase {
+  schema_version: "rolo-discovery-snapshot-collection/v2";
+  items: DiscoverySnapshotSummaryV2[];
+}
+
+export type DiscoverySnapshotCollection = DiscoverySnapshotCollectionV1 | DiscoverySnapshotCollectionV2;
 
 export interface FleetRobotSummary {
   schema_version: "rolo-fleet-robot-summary/v1";
