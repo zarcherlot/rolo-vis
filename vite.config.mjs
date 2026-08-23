@@ -16,6 +16,16 @@ export default defineConfig({
   optimizeDeps: {
     include: ["react", "react-dom/client"],
   },
+  preview: {
+    host: "127.0.0.1",
+    proxy: {
+      "/rolo-api": {
+        target: process.env.ROLO_API_PROXY_TARGET || "http://127.0.0.1:8080",
+        changeOrigin: false,
+        rewrite: (path) => path.replace(/^\/rolo-api/, ""),
+      },
+    },
+  },
   server: {
     host: "0.0.0.0",
     allowedHosts: ["terminal.local"],

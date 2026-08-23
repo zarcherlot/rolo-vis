@@ -59,9 +59,12 @@ import type {
   AdaptSemanticLayer,
   CapabilityBinding,
   CapabilityDetail,
+  CapabilityInferredBinding,
   CapabilitySummary,
+  CapabilitySummaryV2,
   DiscoverySnapshotCollection,
   DiscoverySnapshotSummaryV2,
+  DiscoverySnapshotSummaryV3,
   EvidenceAuthority,
   EvidenceCollection,
   EvidenceRecord,
@@ -1141,6 +1144,27 @@ function BindingTrustPanel({
   );
 }
 
+function isCapabilitySummaryV2(capability: CapabilitySummary): capability is CapabilitySummaryV2 {
+  return capability.schema_version === "rolo-capability-summary/v2";
+}
+
+function InferredBindingPanel({ bindings }: { bindings: CapabilityInferredBinding[] }) {
+  return (
+    <section className="inferred-binding-panel" aria-label="Unverified Agent inferences">
+      <header><div><Robot size={18} weight="fill" /><span><strong>Agent-inferred routes</strong><small>Advisory lane · never included in readiness</small></span></div><em>{bindings.length} UNVERIFIED</em></header>
+      {bindings.map((binding) => <article key={binding.inference_id} className="inferred-binding-card">
+        <div><span className={`mini-chip authority-${binding.authority.toLowerCase()}`}>{binding.authority} ROUTE</span><strong>OPERATION MAPPING UNVERIFIED</strong></div>
+        <code>{binding.endpoint}</code>
+        <dl><div><dt>Kind</dt><dd>{binding.kind.replaceAll("_", " ")}</dd></div><div><dt>Interface</dt><dd>{binding.interface_type || "Not collected"}</dd></div><div><dt>Observed</dt><dd>{binding.observed_at ? new Date(binding.observed_at).toLocaleString() : "Not observed"}</dd></div></dl>
+        <p>The endpoint may be observed, but its mapping to this canonical Operation was inferred by an Agent and remains unverified.</p>
+        {binding.limitations.map((limitation) => <small key={limitation}>{limitation}</small>)}
+      </article>)}
+      {!bindings.length && <div className="empty-state"><Robot size={25} /><strong>No Agent-inferred route</strong><span>No advisory route mapping is exposed for this Operation.</span></div>}
+      <footer><Info size={15} /><span>These records do not count as Available, Verified, Applicable, or ordinary bindings.</span></footer>
+    </section>
+  );
+}
+
 function CapabilityReadinessPanel({
   capability,
   bindings,
@@ -1686,7 +1710,7 @@ function LiveCapabilityView({
               <header><code>{family.family}</code><span>{family.items.length} {family.items.length === 1 ? "operation" : "operations"}</span></header>
               {family.items.map((item) => (
                 <button key={item.operation} className={`operation-row ${selected?.operation === item.operation ? "is-selected" : ""}`} onClick={() => { setSelectedOperation(item.operation); setTab("overview"); }}>
-                  <span className="operation-main"><code>{item.operation}</code><small>{item.layer} · {item.applicability.replace("_", " ")}</small><small className="operation-governance-line">{item.access} · {item.risk} · {item.data_classification}</small></span>
+                  <span className="operation-main"><code>{item.operation}</code><small>{item.layer} · {item.applicability.replace("_", " ")}</small>{isCapabilitySummaryV2(item) && item.candidate_origin === "HEURISTIC_AGENT" && <small className="operation-inference-label">Agent inferred · unverified</small>}<small className="operation-governance-line">{item.access} · {item.risk} · {item.data_classification}</small></span>
                   <span className={`mini-chip lifecycle-${item.lifecycle.toLowerCase()}`}>{item.lifecycle}</span>
                   <span className={`mini-chip availability-${item.availability.toLowerCase()}`}>{item.availability}</span>
                   <ArrowRight size={15} />
@@ -1719,6 +1743,9 @@ function LiveCapabilityView({
                 <div><span>Contract</span><strong>v{detailItem.contract_version}</strong></div>
                 <div><span>Last verified</span><strong>{detailItem.last_verified_at ? new Date(detailItem.last_verified_at).toLocaleString() : "Not verified"}</strong></div>
               </div>
+              {isCapabilitySummaryV2(detailItem) && detailItem.candidate_origin === "HEURISTIC_AGENT" && <section className="capability-inference-notice">
+                <Robot size={20} weight="fill" /><span><strong>Agent suggestion · discovered-unverified</strong><small>{detailItem.inferred_binding_count} inferred route{detailItem.inferred_binding_count === 1 ? "" : "s"} are available in a separate advisory lane. They do not contribute to the readiness signals below.</small></span>
+              </section>}
               {selectedAdaptContext && <section className={`operation-adapt-context ${selectedAdaptContext.inCurrentSlice ? "is-current" : ""}`}>
                 <header><div><span>External Adapt governance</span><h4>Operation context</h4></div><strong>{selectedAdaptContext.inCurrentSlice ? selectedAdaptContext.role : "OUTSIDE CURRENT SLICE"}</strong></header>
                 <dl>
@@ -1761,7 +1788,7 @@ function LiveCapabilityView({
               </div>
               <div className="contract-time-semantics"><Clock size={16} /><span><strong>Time semantics</strong>{detail.contract.time_semantics}</span></div>
             </div>}
-            {tab === "binding" && detail && <BindingTrustPanel bindings={detail.bindings} onOpenEvidence={onOpenEvidence} />}
+            {tab === "binding" && detail && <div className="capability-binding-lanes"><BindingTrustPanel bindings={detail.bindings} onOpenEvidence={onOpenEvidence} />{detail.schema_version === "rolo-capability-detail/v2" && <InferredBindingPanel bindings={detail.inferred_bindings} />}</div>}
             {tab === "evidence" && <div className="capability-evidence-list">{detailItem.evidence_ids.length ? detailItem.evidence_ids.map((id) => <button key={id} onClick={() => onOpenEvidence(id)}><ShieldCheck size={17} /><code>{id}</code><ArrowRight size={14} /></button>) : <div className="empty-state"><FileText size={26} /><strong>No gated evidence record</strong><span>Contract validation alone is not runtime or outcome evidence.</span></div>}</div>}
             {detailItem.evidence_ids[0] && <button className="primary-button detail-cta" onClick={() => onOpenEvidence(detailItem.evidence_ids[0])}>View primary evidence</button>}
           </>}
@@ -1937,8 +1964,9 @@ function LiveLifecycleView({
 
 function hasHeuristicSummary(
   item: DiscoverySnapshotCollection["items"][number],
-): item is DiscoverySnapshotSummaryV2 {
-  return item.schema_version === "rolo-discovery-snapshot-summary/v2";
+): item is DiscoverySnapshotSummaryV2 | DiscoverySnapshotSummaryV3 {
+  return item.schema_version === "rolo-discovery-snapshot-summary/v2"
+    || item.schema_version === "rolo-discovery-snapshot-summary/v3";
 }
 
 function WikiView({
@@ -1972,6 +2000,9 @@ function WikiView({
     || history.items[0];
   const heuristicSummary = selectedDiscovery && hasHeuristicSummary(selectedDiscovery)
     ? selectedDiscovery.heuristic_summary
+    : null;
+  const targetEvidence = selectedDiscovery?.schema_version === "rolo-discovery-snapshot-summary/v3"
+    ? selectedDiscovery.target_evidence
     : null;
   const heuristicMessage = heuristicSummary?.status === "AGENT_COMPLETED"
     ? "Agent analysis completed. This does not verify any Operation, runtime route, task result, or physical outcome."
@@ -2033,6 +2064,14 @@ function WikiView({
                 <div><dt>Release influence</dt><dd>{heuristicSummary.influences_release ? "Blocked" : "None"}</dd></div>
               </dl>}
               <p>{heuristicMessage}</p>
+            </section>
+            <section className={`wiki-target-evidence ${targetEvidence ? `is-${targetEvidence.freshness.toLowerCase()}` : "is-unavailable"}`} aria-label="Target evidence summary">
+              <header><div><Crosshair size={17} weight="fill" /><span><strong>Target-bound evidence</strong><small>{targetEvidence ? `${targetEvidence.deployment_scope} · read-only collection` : "safe summary unavailable"}</small></span></div><em>{targetEvidence?.freshness || "UNAVAILABLE"}</em></header>
+              {targetEvidence ? <>
+                <dl><div><dt>Deployment</dt><dd>{targetEvidence.deployment_scope}</dd></div><div><dt>Collected</dt><dd>{new Date(targetEvidence.collected_at).toLocaleString()}</dd></div><div><dt>Refresh</dt><dd>{targetEvidence.refresh_required ? "Recollection required" : "Not required"}</dd></div></dl>
+                <p>{targetEvidence.refresh_required ? targetEvidence.refresh_reason : "Verified target evidence remains inside the collector replay window."}</p>
+                {targetEvidence.refresh_required && <div className="target-evidence-prompt"><WarningCircle size={15} weight="fill" /><span><strong>Recollect evidence</strong><small>Run the bounded target evidence workflow outside this read-only workbench, then create a new discovery snapshot.</small></span></div>}
+              </> : <p>{selectedDiscovery?.schema_version === "rolo-discovery-snapshot-summary/v3" ? "This snapshot has no target-bound evidence summary." : "This rolo version does not expose target evidence scope or freshness. No state is inferred."}</p>}
             </section>
             {selectedDiscovery.limitations.length > 0 && <section className="wiki-discovery-limitations" aria-label="Snapshot limitations">
               <header><div><WarningCircle size={16} weight="fill" /><span>Diagnostic limitations</span></div><strong>{selectedDiscovery.limitations.length}</strong></header>

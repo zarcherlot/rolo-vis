@@ -396,8 +396,7 @@ export type CapabilityApplicability = "APPLICABLE" | "NOT_OBSERVED" | "UNKNOWN";
 export type CapabilityAvailability = "VERIFIED" | "AVAILABLE" | "UNAVAILABLE" | "UNKNOWN";
 export type CapabilityRegistration = "BUILTIN" | "REGISTERED" | "NOT_REGISTERED" | "STALE";
 
-export interface CapabilitySummary {
-  schema_version: "rolo-capability-summary/v1";
+interface CapabilitySummaryBase {
   operation: string;
   layer: CapabilityLayer;
   description: string;
@@ -515,10 +514,8 @@ export interface TopologyPathExplanation {
   limitations: string[];
 }
 
-export interface CapabilityCollection {
-  schema_version: "rolo-capability-collection/v1";
+interface CapabilityCollectionBase {
   robot_id: string;
-  items: CapabilitySummary[];
   total: number;
   limit: number;
   offset: number;
@@ -564,15 +561,26 @@ export interface CapabilityContract {
   requires_quiescence: boolean;
 }
 
-export interface CapabilityDetail {
-  schema_version: "rolo-capability-detail/v1";
+interface CapabilityDetailBase {
   robot_id: string;
-  capability: CapabilitySummary;
   contract: CapabilityContract;
   bindings: CapabilityBinding[];
   observed_at: string;
   freshness: "fresh" | "unknown";
 }
+
+export interface CapabilityDetailV1 extends CapabilityDetailBase {
+  schema_version: "rolo-capability-detail/v1";
+  capability: CapabilitySummaryV1;
+}
+
+export interface CapabilityDetailV2 extends CapabilityDetailBase {
+  schema_version: "rolo-capability-detail/v2";
+  capability: CapabilitySummaryV2;
+  inferred_bindings: CapabilityInferredBinding[];
+}
+
+export type CapabilityDetail = CapabilityDetailV1 | CapabilityDetailV2;
 
 export type LifecycleRunStatus = "RUNNING" | "SUCCEEDED" | "FAILED" | "GATED" | "UNKNOWN";
 export type LifecycleGateStatus = "PASSED" | "FAILED" | "NOT_AVAILABLE";
@@ -717,6 +725,15 @@ export interface DiscoveryHeuristicSummary {
   influences_release: false;
 }
 
+export interface DiscoveryTargetEvidenceSummary {
+  schema_version: "rolo-discovery-target-evidence-summary/v1";
+  deployment_scope: "LOCAL" | "REMOTE";
+  freshness: "FRESH" | "STALE";
+  collected_at: string;
+  refresh_required: boolean;
+  refresh_reason: string | null;
+}
+
 interface DiscoverySnapshotSummaryBase {
   robot_id: string;
   discovery_id: string;
@@ -736,6 +753,45 @@ interface DiscoverySnapshotSummaryBase {
   limitations: string[];
 }
 
+export interface CapabilityInferredBinding {
+  schema_version: "rolo-capability-inferred-binding/v1";
+  inference_id: string;
+  origin: "HEURISTIC_AGENT";
+  verification_status: "DISCOVERED_UNVERIFIED";
+  authority: "OBSERVED" | "DECLARED";
+  kind: string;
+  endpoint: string;
+  interface_type: string | null;
+  observed_at: string | null;
+  reference_digest: string;
+  limitations: string[];
+}
+
+export interface CapabilityCollectionV1 extends CapabilityCollectionBase {
+  schema_version: "rolo-capability-collection/v1";
+  items: CapabilitySummaryV1[];
+}
+
+export interface CapabilityCollectionV2 extends CapabilityCollectionBase {
+  schema_version: "rolo-capability-collection/v2";
+  items: CapabilitySummaryV2[];
+}
+
+export type CapabilityCollection = CapabilityCollectionV1 | CapabilityCollectionV2;
+
+export interface CapabilitySummaryV1 extends CapabilitySummaryBase {
+  schema_version: "rolo-capability-summary/v1";
+}
+
+export interface CapabilitySummaryV2 extends CapabilitySummaryBase {
+  schema_version: "rolo-capability-summary/v2";
+  inferred_binding_count: number;
+  candidate_origin: "DETERMINISTIC" | "HEURISTIC_AGENT" | null;
+  candidate_verification_status: "DISCOVERED_UNVERIFIED" | null;
+}
+
+export type CapabilitySummary = CapabilitySummaryV1 | CapabilitySummaryV2;
+
 export interface DiscoverySnapshotSummaryV1 extends DiscoverySnapshotSummaryBase {
   schema_version: "rolo-discovery-snapshot-summary/v1";
 }
@@ -745,7 +801,13 @@ export interface DiscoverySnapshotSummaryV2 extends DiscoverySnapshotSummaryBase
   heuristic_summary: DiscoveryHeuristicSummary;
 }
 
-export type DiscoverySnapshotSummary = DiscoverySnapshotSummaryV1 | DiscoverySnapshotSummaryV2;
+export interface DiscoverySnapshotSummaryV3 extends DiscoverySnapshotSummaryBase {
+  schema_version: "rolo-discovery-snapshot-summary/v3";
+  heuristic_summary: DiscoveryHeuristicSummary;
+  target_evidence: DiscoveryTargetEvidenceSummary | null;
+}
+
+export type DiscoverySnapshotSummary = DiscoverySnapshotSummaryV1 | DiscoverySnapshotSummaryV2 | DiscoverySnapshotSummaryV3;
 
 interface DiscoverySnapshotCollectionBase {
   robot_id: string;
@@ -771,7 +833,12 @@ export interface DiscoverySnapshotCollectionV2 extends DiscoverySnapshotCollecti
   items: DiscoverySnapshotSummaryV2[];
 }
 
-export type DiscoverySnapshotCollection = DiscoverySnapshotCollectionV1 | DiscoverySnapshotCollectionV2;
+export interface DiscoverySnapshotCollectionV3 extends DiscoverySnapshotCollectionBase {
+  schema_version: "rolo-discovery-snapshot-collection/v3";
+  items: DiscoverySnapshotSummaryV3[];
+}
+
+export type DiscoverySnapshotCollection = DiscoverySnapshotCollectionV1 | DiscoverySnapshotCollectionV2 | DiscoverySnapshotCollectionV3;
 
 export interface FleetRobotSummary {
   schema_version: "rolo-fleet-robot-summary/v1";

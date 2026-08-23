@@ -492,6 +492,23 @@ const DISCOVERY_HISTORY_V1 = {
   items: [{ ...DISCOVERY_SUMMARY_V1, schema_version: "rolo-discovery-snapshot-summary/v1" }],
 };
 
+const DISCOVERY_HISTORY_V3 = {
+  ...DISCOVERY_HISTORY,
+  schema_version: "rolo-discovery-snapshot-collection/v3",
+  items: [{
+    ...DISCOVERY_HISTORY.items[0],
+    schema_version: "rolo-discovery-snapshot-summary/v3",
+    target_evidence: {
+      schema_version: "rolo-discovery-target-evidence-summary/v1",
+      deployment_scope: "REMOTE",
+      freshness: "STALE",
+      collected_at: "2026-08-19T23:50:00Z",
+      refresh_required: true,
+      refresh_reason: "Verified target evidence is older than the collector replay window.",
+    },
+  }],
+};
+
 const FLEET = {
   schema_version: "rolo-fleet-collection/v1",
   items: [{
@@ -686,6 +703,42 @@ const CAPABILITY_DETAIL = {
   bindings: [],
   observed_at: "2026-08-20T00:00:00Z",
   freshness: "fresh",
+};
+
+const CAPABILITY_SUMMARY_V2 = {
+  ...CAPABILITY_SUMMARY,
+  schema_version: "rolo-capability-summary/v2",
+  applicability: "NOT_OBSERVED",
+  availability: "UNAVAILABLE",
+  registration: "NOT_REGISTERED",
+  inferred_binding_count: 1,
+  candidate_origin: "HEURISTIC_AGENT",
+  candidate_verification_status: "DISCOVERED_UNVERIFIED",
+};
+
+const CAPABILITY_COLLECTION_V2 = {
+  ...CAPABILITY_COLLECTION,
+  schema_version: "rolo-capability-collection/v2",
+  items: [CAPABILITY_SUMMARY_V2],
+};
+
+const CAPABILITY_DETAIL_V2 = {
+  ...CAPABILITY_DETAIL,
+  schema_version: "rolo-capability-detail/v2",
+  capability: CAPABILITY_SUMMARY_V2,
+  inferred_bindings: [{
+    schema_version: "rolo-capability-inferred-binding/v1",
+    inference_id: "inference_123",
+    origin: "HEURISTIC_AGENT",
+    verification_status: "DISCOVERED_UNVERIFIED",
+    authority: "OBSERVED",
+    kind: "ros_topic",
+    endpoint: "/agent_route",
+    interface_type: "geometry_msgs/msg/Twist",
+    observed_at: "2026-08-20T00:00:00Z",
+    reference_digest: "c".repeat(64),
+    limitations: ["Operation mapping remains unverified."],
+  }],
 };
 
 const RUN_SUMMARY = {
@@ -1449,6 +1502,94 @@ test("RoloClient preserves discovery history v1 without inventing Agent state", 
   }
 });
 
+test("RoloClient reads bounded target evidence freshness without collector metadata", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => ({ ok: true, json: async () => DISCOVERY_HISTORY_V3 });
+  try {
+    const history = await new RoloClient("http://rolo.test").discoveries("AMR-07");
+    const target = history.items[0].target_evidence;
+    assert.equal(target.deployment_scope, "REMOTE");
+    assert.equal(target.freshness, "STALE");
+    assert.equal(target.refresh_required, true);
+    assert.equal("collector_id" in target, false);
+    assert.equal("expires_at" in target, false);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("RoloClient rejects unsafe or inconsistent target evidence summaries", async () => {
+  const originalFetch = globalThis.fetch;
+  const unsafeOverrides = [
+    { collector_id: "private-collector" },
+    { expires_at: "2026-08-20T00:05:00Z" },
+    { freshness: "FRESH", refresh_required: true },
+    { deployment_scope: "CLOUD" },
+  ];
+  try {
+    for (const override of unsafeOverrides) {
+      globalThis.fetch = async () => ({
+        ok: true,
+        json: async () => ({
+          ...DISCOVERY_HISTORY_V3,
+          items: [{
+            ...DISCOVERY_HISTORY_V3.items[0],
+            target_evidence: {
+              ...DISCOVERY_HISTORY_V3.items[0].target_evidence,
+              ...override,
+            },
+          }],
+        }),
+      });
+      await assert.rejects(
+        () => new RoloClient("http://rolo.test").discoveries("AMR-07"),
+        (error) => error instanceof RoloContractError && error.path.includes("/target_evidence"),
+      );
+    }
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("RoloClient keeps Agent candidate routes in an unverified capability lane", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url) => ({
+    ok: true,
+    json: async () => url.includes("/capabilities/tool.catalog") ? CAPABILITY_DETAIL_V2 : CAPABILITY_COLLECTION_V2,
+  });
+  try {
+    const client = new RoloClient("http://rolo.test");
+    const coverage = await client.capabilities("AMR-07");
+    const detail = await client.capability("AMR-07", "tool.catalog");
+    assert.equal(coverage.items[0].binding_count, 0);
+    assert.equal(coverage.items[0].inferred_binding_count, 1);
+    assert.equal(coverage.items[0].availability, "UNAVAILABLE");
+    assert.equal(detail.bindings.length, 0);
+    assert.equal(detail.inferred_bindings[0].verification_status, "DISCOVERED_UNVERIFIED");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("RoloClient rejects unsafe Agent candidate provenance", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => ({
+    ok: true,
+    json: async () => ({
+      ...CAPABILITY_COLLECTION_V2,
+      items: [{ ...CAPABILITY_SUMMARY_V2, candidate_origin: "AGENT_VERIFIED" }],
+    }),
+  });
+  try {
+    await assert.rejects(
+      () => new RoloClient("http://rolo.test").capabilities("AMR-07"),
+      (error) => error instanceof RoloContractError && error.path.includes("/items/0"),
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("RoloClient accepts every bounded heuristic discovery status", async () => {
   const originalFetch = globalThis.fetch;
   const summaries = [
@@ -1835,6 +1976,33 @@ test("Wiki snapshot keeps heuristic analysis in an advisory release-neutral lane
   assert.match(liveWiki, /Release influence/);
   assert.match(liveWiki, /influences_release/);
   assert.doesNotMatch(liveCapabilities, /heuristic_summary|heuristicSummary/);
+});
+
+test("Capability UI keeps Agent inferences outside ordinary readiness and bindings", async () => {
+  const source = await readFile(new URL("../src/App.tsx", import.meta.url), "utf8");
+  const start = source.indexOf("function LiveCapabilityView");
+  const end = source.indexOf("function DemoLifecycleView", start);
+  const readinessStart = source.indexOf("function CapabilityReadinessPanel");
+  assert.ok(start >= 0 && end > start && readinessStart >= 0);
+  const liveCapabilities = source.slice(start, end);
+
+  assert.match(liveCapabilities, /Agent inferred · unverified/);
+  assert.match(liveCapabilities, /bindings=\{detail\.bindings\}/);
+  assert.match(liveCapabilities, /InferredBindingPanel bindings=\{detail\.inferred_bindings\}/);
+  assert.doesNotMatch(liveCapabilities, /CapabilityReadinessPanel[^>]+inferred_bindings/);
+});
+
+test("Wiki target evidence prompt is read-only and exposes no remediation call", async () => {
+  const source = await readFile(new URL("../src/App.tsx", import.meta.url), "utf8");
+  const start = source.indexOf("function WikiView");
+  const end = source.indexOf("function EvidenceRow", start);
+  assert.ok(start >= 0 && end > start);
+  const liveWiki = source.slice(start, end);
+
+  assert.match(liveWiki, /Target-bound evidence/);
+  assert.match(liveWiki, /Recollect evidence/);
+  assert.match(liveWiki, /outside this read-only workbench/);
+  assert.doesNotMatch(liveWiki, /roloClient\.(collect|recollect|targetEvidence)/);
 });
 
 test("Adapt Stability keeps baseline, filtering, and run authority drilldown separate", async () => {

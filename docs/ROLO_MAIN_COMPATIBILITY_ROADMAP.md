@@ -3,8 +3,8 @@
 ## Delivery status
 
 - Batch 1 + Batch 2: approved, committed, and pushed.
-- Batch 3: active development and the next review boundary.
-- Batch 4 + Batch 5: recorded only; do not start before Batch 3 review approval.
+- Batch 3: approved, committed, and pushed.
+- Batch 4 + Batch 5: approved and ready to become the next compatibility baseline.
 
 ## Approved baseline: Batch 1 + Batch 2
 
@@ -23,7 +23,7 @@ Batch 1 + 2 passed review and is the compatibility baseline for the remaining wo
 
 ## Batch 3: Discovery heuristic summary
 
-Status: in development. This batch ends at a separate review checkpoint.
+Status: approved, committed, and pushed.
 
 ### Upstream dependency
 
@@ -54,6 +54,8 @@ read `heuristic_analysis_ref` or any raw heuristic artifact.
 
 ## Batch 4: Capability inference provenance
 
+Status: approved.
+
 ### Upstream dependency
 
 rolo must expose candidate provenance through a versioned Capability summary or
@@ -79,6 +81,8 @@ binding contract, including:
 - Release-gated bindings remain the only established binding readiness signal.
 
 ## Batch 5: Target evidence scope and freshness
+
+Status: approved.
 
 ### Upstream dependency
 
