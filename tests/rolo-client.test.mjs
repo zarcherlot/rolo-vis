@@ -2024,7 +2024,7 @@ test("Adapt Stability keeps baseline, filtering, and run authority drilldown sep
 
 test("plugin manifest declares every trusted read-model endpoint", async () => {
   const manifest = JSON.parse(await readFile(new URL("../rolo.plugin.json", import.meta.url), "utf8"));
-  assert.equal(manifest.version, "0.22.0");
+  assert.equal(manifest.version, "0.23.0");
   assert.deepEqual(
     new Set(manifest.api.required_endpoints),
     new Set([

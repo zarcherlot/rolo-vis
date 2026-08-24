@@ -1,10 +1,10 @@
 # Episode Cohort Review consumer contract
 
-Status: E8 implementation review candidate
+Status: approved and promoted as the v0.23.0 read-only baseline
 
 Backend feature: `workbench.episode-cohort-read-model/v1`
 
-Baseline: rolo-vis `v0.22.0`
+Extends baseline: rolo-vis `v0.22.0`
 
 ## Purpose
 
@@ -83,5 +83,5 @@ sorting default, or delta sign may imply better or worse.
 
 E8D passed against an isolated six-publication population: the 7/30/90-day windows
 returned one, two, and three eligible immutable members; running and mutable publications
-remained excluded; a limit-one read validated `BOUNDED_PARTIAL`. Promotion to a release
-baseline remains a separate post-review decision.
+remained excluded; a limit-one read validated `BOUNDED_PARTIAL`. The reviewed producer
+and consumer commits are frozen by the v0.23.0 baseline.

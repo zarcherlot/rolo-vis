@@ -28,7 +28,8 @@
 - Bidirectional Wiki and Stack Map layer context without inferred entity relationships.
 - Evidence ledger with provenance and integrity status.
 - Episode Studio with revision-pinned timelines, diagnostic focus, neutral pair comparison,
-  and feature-negotiated immutable revision history.
+  feature-negotiated immutable revision history, and descriptive-only exact-match Cohort
+  Review over bounded 7/30/90-day windows.
 - Live rolo API probing with an explicit demo fallback when no robot runtime is reachable.
 
 ## Run

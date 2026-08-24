@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.23.0 - 2026-08-24
+
+- Baseline the feature-negotiated Episode Cohort Review over exact semantic identity.
+- Freeze bounded 7/30/90-day populations, current immutable member rules, and explicit
+  running, mutable, and truncated counts.
+- Publish descriptive-only duration and count distributions while keeping outcome,
+  verification, and publication coverage independent.
+- Preserve v0.22 behavior on older rolo connections and keep ranking, regression,
+  significance, release verdicts, replay, export, and writes outside the plugin.
+
 ## 0.22.0 - 2026-08-24
 
 - Add feature-negotiated, bounded Episode revision history.

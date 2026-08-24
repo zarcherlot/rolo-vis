@@ -230,7 +230,10 @@ merged to main by `4efd11df`; frontend minimum `b836dcd`, merged by `b9ca3f0`.
 - Promotion evidence includes all backend and frontend remote checks plus live
   two-revision validation with six timeline events per side.
 
-## E8 implementation review: Episode Cohort Review
+## E8 baseline: Episode Cohort Review
+
+Status: approved and promoted as rolo-vis `v0.23.0`; producer minimum rolo `463d501`,
+merged to main by `891cbf1`; frontend minimum `2c2967f`, merged by `3f18124`.
 
 - Use one pinned Episode revision as the server-validated semantic reference.
 - Include at most one current, terminal, immutable revision from each other Episode.
@@ -240,8 +243,8 @@ merged to main by `4efd11df`; frontend minimum `b836dcd`, merged by `b9ca3f0`.
   complete/partial coverage and exclusion arithmetic.
 - Keep all distributions descriptive; no ranking, regression, significance, causal,
   release, or write authority is introduced.
-- E8A–E8D are implemented on isolated producer and consumer branches for joint review.
+- E8A–E8D are frozen as the v0.23.0 read-only successor to the revision-history baseline.
 - Validation evidence: 568 producer tests passed with four expected skips; 132 consumer
   tests, type checking, production build, and four Sites packaging tests passed.
 - Live validation covered all 7/30/90-day windows, running and mutable exclusions, and
-  a limit-one `BOUNDED_PARTIAL` response. Release baseline promotion remains pending.
+  a limit-one `BOUNDED_PARTIAL` response. No successor development is included.
