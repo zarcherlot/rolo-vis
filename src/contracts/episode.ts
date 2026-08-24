@@ -2,6 +2,9 @@ import type {
   EpisodeAssetSummary,
   EpisodeAuthority,
   EpisodeCollection,
+  EpisodeCohort,
+  EpisodeCohortExclusions,
+  EpisodeCohortMember,
   EpisodeDetail,
   EpisodeFindingKind,
   EpisodeFindingSummary,
@@ -304,6 +307,80 @@ export function parseEpisodeRevisionCollection(
   requireContract(value.next_offset === null || (Number.isInteger(value.next_offset) && Number(value.next_offset) > expected.offset && Number(value.next_offset) <= Number(value.total)), "invalid Episode revision next offset", path);
   requireContract(isAwareTimestamp(value.as_of) && value.source_kind === "episode_revision_history" && isStringArray(value.limitations) && value.limitations.length <= 32, "invalid Episode revision collection metadata", path);
   return { ...value, items } as unknown as EpisodeRevisionCollection;
+}
+
+function parseEpisodeCohortMember(
+  value: unknown,
+  path: string,
+  robotId: string,
+): EpisodeCohortMember {
+  requireContract(isRecord(value), "Episode cohort member must be an object", path);
+  requireOnlyKeys(value, [
+    "schema_version", "robot_id", "episode_id", "revision", "task_label",
+    "started_at", "ended_at", "duration_ms", "state", "outcome", "verification",
+    "coverage", "immutable", "is_current", "event_count", "asset_count",
+    "finding_count", "evidence_count", "source_kind", "limitations",
+  ], path);
+  requireContract(supportsEpisodeSchema("cohortMember", value.schema_version), "unsupported Episode cohort member schema", path);
+  requireContract(value.robot_id === robotId && isIdentifier(value.episode_id), "invalid Episode cohort member identity", path);
+  requireContract(Number.isInteger(value.revision) && Number(value.revision) >= 1 && typeof value.task_label === "string" && value.task_label.length >= 1 && value.task_label.length <= 256, "invalid Episode cohort member revision or label", path);
+  requireContract(isAwareTimestamp(value.started_at) && isAwareTimestamp(value.ended_at), "invalid Episode cohort member time", path);
+  const durationMs = Date.parse(String(value.ended_at)) - Date.parse(String(value.started_at));
+  requireContract(durationMs >= 0 && value.duration_ms === durationMs, "Episode cohort member duration does not match timestamps", path);
+  requireContract(["COMPLETED", "FAILED", "CANCELLED", "PARTIAL"].includes(String(value.state)), "invalid Episode cohort member terminal state", path);
+  requireContract(EPISODE_OUTCOMES.includes(value.outcome as EpisodeOutcome) && EPISODE_VERIFICATIONS.includes(value.verification as EpisodeVerification), "invalid Episode cohort member outcome or verification", path);
+  requireContract(["METADATA_ONLY", "PARTIAL", "COMPLETE"].includes(String(value.coverage)), "invalid Episode cohort member coverage", path);
+  requireContract(value.immutable === true && value.is_current === true && value.source_kind === "current_episode_publication", "Episode cohort member is not an immutable current publication", path);
+  requireContract(["event_count", "asset_count", "finding_count", "evidence_count"].every((key) => isNonNegativeInteger(value[key])), "invalid Episode cohort member counts", path);
+  requireContract(isStringArray(value.limitations) && value.limitations.length <= 32, "invalid Episode cohort member limitations", path);
+  return value as unknown as EpisodeCohortMember;
+}
+
+function parseEpisodeCohortExclusions(value: unknown, path: string): EpisodeCohortExclusions {
+  requireContract(isRecord(value), "Episode cohort exclusions must be an object", path);
+  requireOnlyKeys(value, ["schema_version", "running", "mutable"], path);
+  requireContract(supportsEpisodeSchema("cohortExclusions", value.schema_version), "unsupported Episode cohort exclusions schema", path);
+  requireContract(isNonNegativeInteger(value.running) && isNonNegativeInteger(value.mutable), "invalid Episode cohort exclusions", path);
+  return value as unknown as EpisodeCohortExclusions;
+}
+
+export function parseEpisodeCohort(
+  value: unknown,
+  path: string,
+  robotId: string,
+  referenceEpisodeId: string,
+  referenceRevision: number,
+  expected: { windowDays: 7 | 30 | 90; limit: number },
+): EpisodeCohort {
+  requireSafePublicContent(value, path);
+  requireContract(isRecord(value), "Episode cohort must be an object", path);
+  requireOnlyKeys(value, [
+    "schema_version", "robot_id", "reference_episode_id", "reference_revision",
+    "operation", "test_case_id", "expected_behavior_sha256", "window_days",
+    "window_started_at", "window_ended_at", "items", "population_count",
+    "included_count", "excluded_count", "truncated_count", "exclusions",
+    "coverage", "limit", "as_of", "source_kind", "limitations",
+  ], path);
+  requireContract(supportsEpisodeSchema("cohort", value.schema_version), "unsupported Episode cohort schema", path);
+  requireContract(value.robot_id === robotId && value.reference_episode_id === referenceEpisodeId && value.reference_revision === referenceRevision, "Episode cohort does not match the pinned reference", path);
+  requireContract(isIdentifier(value.operation) && isIdentifier(value.test_case_id) && typeof value.expected_behavior_sha256 === "string" && DIGEST.test(value.expected_behavior_sha256), "invalid Episode cohort semantic identity", path);
+  requireContract(value.window_days === expected.windowDays && value.limit === expected.limit && expected.limit >= 1 && expected.limit <= 100, "Episode cohort does not match the requested bounds", path);
+  requireContract(isAwareTimestamp(value.window_started_at) && isAwareTimestamp(value.window_ended_at) && Date.parse(String(value.window_ended_at)) - Date.parse(String(value.window_started_at)) === expected.windowDays * 86_400_000, "invalid Episode cohort window", path);
+  requireContract(Array.isArray(value.items) && value.items.length <= expected.limit && value.items.length <= 100, "Episode cohort exceeds its member bound", path);
+  const items = value.items.map((item, index) => parseEpisodeCohortMember(item, `${path}/items/${index}`, robotId));
+  const exclusions = parseEpisodeCohortExclusions(value.exclusions, `${path}/exclusions`);
+  const identities = items.map((item) => `${item.episode_id}@@${item.revision}`);
+  requireContract(new Set(identities).size === identities.length && items.every((item) => item.episode_id !== referenceEpisodeId), "invalid or duplicate Episode cohort member identity", path);
+  const windowStart = Date.parse(String(value.window_started_at));
+  const windowEnd = Date.parse(String(value.window_ended_at));
+  requireContract(items.every((item) => Date.parse(item.started_at) >= windowStart && Date.parse(item.started_at) < windowEnd), "Episode cohort member is outside the derived window", path);
+  const ordered = [...items].sort((left, right) => Date.parse(right.started_at) - Date.parse(left.started_at) || right.episode_id.localeCompare(left.episode_id) || right.revision - left.revision);
+  requireContract(items.every((item, index) => item === ordered[index]), "Episode cohort members are not newest-first", path);
+  requireContract(isNonNegativeInteger(value.population_count) && isNonNegativeInteger(value.included_count) && isNonNegativeInteger(value.excluded_count) && isNonNegativeInteger(value.truncated_count), "invalid Episode cohort counts", path);
+  requireContract(value.included_count === items.length && value.excluded_count === exclusions.running + exclusions.mutable && value.population_count === value.included_count + value.excluded_count + value.truncated_count, "Episode cohort count arithmetic does not balance", path);
+  requireContract(value.coverage === (value.truncated_count > 0 ? "BOUNDED_PARTIAL" : "COMPLETE"), "Episode cohort coverage contradicts truncation", path);
+  requireContract(isAwareTimestamp(value.as_of) && value.source_kind === "published_episode_cohort" && isStringArray(value.limitations) && value.limitations.length <= 32, "invalid Episode cohort metadata", path);
+  return { ...value, items, exclusions } as unknown as EpisodeCohort;
 }
 
 export function parseEpisodeTimelinePage(

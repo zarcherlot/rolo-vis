@@ -15,6 +15,7 @@ import type {
   EvidenceAuthority,
   EvidenceCollection,
   EvidenceRecord,
+  EpisodeCohort,
   EpisodeState,
   FleetSliceStability,
   FleetBlockerCollection,
@@ -53,7 +54,7 @@ import type {
 } from "./types/rolo";
 import { parseCapabilityCollection, parseCapabilityDetail } from "./contracts/capability.ts";
 import { parseDiscoverySnapshotCollection } from "./contracts/discovery.ts";
-import { parseEpisodeCollection, parseEpisodeDetail, parseEpisodeRevisionCollection, parseEpisodeTimelinePage } from "./contracts/episode.ts";
+import { parseEpisodeCohort, parseEpisodeCollection, parseEpisodeDetail, parseEpisodeRevisionCollection, parseEpisodeTimelinePage } from "./contracts/episode.ts";
 import {
   containsUnsafeReference,
   isConfidence,
@@ -80,6 +81,7 @@ export const ROLO_API_FEATURES = {
   blockerDetail: "workbench.blocker-detail/v1",
   episodeReadModel: "workbench.episode-read-model/v1",
   episodeRevisionHistory: "workbench.episode-revision-history/v1",
+  episodeCohortReadModel: "workbench.episode-cohort-read-model/v1",
 } as const;
 
 export function supportsApiFeature(health: HealthResponse, feature: string): boolean {
@@ -1093,6 +1095,32 @@ export class RoloClient {
     const path = `/v1/robots/${encodeURIComponent(robotId)}/episodes/${encodeURIComponent(episodeId)}/revisions?${query.toString()}`;
     return parseEpisodeRevisionCollection(
       await this.request<unknown>(path, options), path, robotId, episodeId, { limit, offset },
+    );
+  }
+
+  async episodeCohort(
+    robotId: string,
+    referenceEpisodeId: string,
+    referenceRevision: number,
+    options?: RequestInit,
+    bounds: { windowDays?: 7 | 30 | 90; limit?: number } = {},
+  ): Promise<EpisodeCohort> {
+    const windowDays = bounds.windowDays ?? 30;
+    const limit = bounds.limit ?? 100;
+    const query = new URLSearchParams({
+      reference_episode_id: referenceEpisodeId,
+      reference_revision: String(referenceRevision),
+      window_days: String(windowDays),
+      limit: String(limit),
+    });
+    const path = `/v1/robots/${encodeURIComponent(robotId)}/episode-cohorts?${query.toString()}`;
+    return parseEpisodeCohort(
+      await this.request<unknown>(path, options),
+      path,
+      robotId,
+      referenceEpisodeId,
+      referenceRevision,
+      { windowDays, limit },
     );
   }
 

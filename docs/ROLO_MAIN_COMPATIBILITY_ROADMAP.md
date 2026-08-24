@@ -229,3 +229,19 @@ merged to main by `4efd11df`; frontend minimum `b836dcd`, merged by `b9ca3f0`.
   boundaries.
 - Promotion evidence includes all backend and frontend remote checks plus live
   two-revision validation with six timeline events per side.
+
+## E8 implementation review: Episode Cohort Review
+
+- Use one pinned Episode revision as the server-validated semantic reference.
+- Include at most one current, terminal, immutable revision from each other Episode.
+- Require exact operation, test-case, and expected-behavior identity in a mandatory
+  7/30/90-day window.
+- Return one bounded, non-pageable population of at most 100 members with explicit
+  complete/partial coverage and exclusion arithmetic.
+- Keep all distributions descriptive; no ranking, regression, significance, causal,
+  release, or write authority is introduced.
+- E8A–E8D are implemented on isolated producer and consumer branches for joint review.
+- Validation evidence: 568 producer tests passed with four expected skips; 132 consumer
+  tests, type checking, production build, and four Sites packaging tests passed.
+- Live validation covered all 7/30/90-day windows, running and mutable exclusions, and
+  a limit-one `BOUNDED_PARTIAL` response. Release baseline promotion remains pending.

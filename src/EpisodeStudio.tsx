@@ -13,6 +13,8 @@ import {
   WarningCircle,
 } from "@phosphor-icons/react";
 import { buildEpisodePairComparison, type EpisodePairComparison } from "./episodeComparison";
+import { buildEpisodeCohortReview } from "./episodeCohort";
+import { EpisodeCohortView } from "./EpisodeCohortView";
 import { EpisodeComparisonView } from "./EpisodeComparisonView";
 import { buildEpisodeDiagnosticFocus } from "./episodeDiagnosticFocus";
 import { EpisodeDiagnosticFocusView } from "./EpisodeDiagnosticFocusView";
@@ -32,6 +34,8 @@ import type {
   EpisodeAssetSummary,
   EpisodeAuthority,
   EpisodeCollection,
+  EpisodeCohort,
+  EpisodeCohortMember,
   EpisodeDetail,
   EpisodeFindingSummary,
   EpisodeRevisionCollection,
@@ -255,7 +259,7 @@ function EpisodeTimeline({ detail, events, selectedEventId, visibleLanes, focuse
   );
 }
 
-export function EpisodeStudio({ robotId, initialTarget, revisionHistorySupported, onOpenEvidence }: { robotId: string; initialTarget?: EpisodeDeepLinkTarget | null; revisionHistorySupported: boolean; onOpenEvidence: (evidenceId: string) => void }) {
+export function EpisodeStudio({ robotId, initialTarget, revisionHistorySupported, cohortSupported, onOpenEvidence }: { robotId: string; initialTarget?: EpisodeDeepLinkTarget | null; revisionHistorySupported: boolean; cohortSupported: boolean; onOpenEvidence: (evidenceId: string) => void }) {
   const [collection, setCollection] = useState<EpisodeCollection | null>(null);
   const [episodes, setEpisodes] = useState<EpisodeSummary[]>([]);
   const [collectionLoading, setCollectionLoading] = useState(true);
@@ -281,9 +285,14 @@ export function EpisodeStudio({ robotId, initialTarget, revisionHistorySupported
   const [comparison, setComparison] = useState<EpisodePairComparison | null>(null);
   const [comparisonLoading, setComparisonLoading] = useState(false);
   const [comparisonMessage, setComparisonMessage] = useState("");
+  const [cohortDays, setCohortDays] = useState<7 | 30 | 90>(() => initialTarget?.robotId === robotId ? initialTarget.cohortDays ?? 30 : 30);
+  const [cohort, setCohort] = useState<EpisodeCohort | null>(null);
+  const [cohortLoading, setCohortLoading] = useState(false);
+  const [cohortMessage, setCohortMessage] = useState("");
   const collectionRequest = useRef<AbortController | null>(null);
   const detailRequest = useRef<AbortController | null>(null);
   const comparisonRequest = useRef<AbortController | null>(null);
+  const cohortRequest = useRef<AbortController | null>(null);
   const initialTargetConsumed = useRef(false);
 
   const loadCollection = useCallback(async () => {
@@ -414,6 +423,36 @@ export function EpisodeStudio({ robotId, initialTarget, revisionHistorySupported
   }, [robotId, detail, compareEpisodeId, compareRevision, revisionHistorySupported]);
 
   useEffect(() => {
+    cohortRequest.current?.abort();
+    setCohort(null);
+    setCohortMessage("");
+    setCohortLoading(false);
+    if (!cohortSupported || !detail) return;
+    if (!detail.operation || !detail.test_case_id || !detail.expected_behavior?.trim()) {
+      setCohortMessage("The pinned revision has no complete operation, test case, and expected-behavior identity. Exact matching was not relaxed.");
+      return;
+    }
+    const controller = new AbortController();
+    cohortRequest.current = controller;
+    setCohortLoading(true);
+    void roloClient.episodeCohort(
+      robotId,
+      detail.episode_id,
+      detail.revision,
+      { signal: controller.signal },
+      { windowDays: cohortDays },
+    ).then((value) => {
+      if (!controller.signal.aborted) setCohort(value);
+    }).catch((error: unknown) => {
+      if (!controller.signal.aborted) setCohortMessage(error instanceof Error ? error.message : "The exact-match cohort could not be read.");
+    }).finally(() => {
+      if (!controller.signal.aborted) setCohortLoading(false);
+      if (cohortRequest.current === controller) cohortRequest.current = null;
+    });
+    return () => controller.abort();
+  }, [robotId, detail, cohortDays, cohortSupported]);
+
+  useEffect(() => {
     if (!detail) return;
     const next = buildEpisodeDeepLink(window.location.href, {
       robotId,
@@ -423,9 +462,10 @@ export function EpisodeStudio({ robotId, initialTarget, revisionHistorySupported
       findingId: selectedFindingId || null,
       compareEpisodeId: compareEpisodeId && (compareEpisodeId !== detail.episode_id || compareRevision !== detail.revision) ? compareEpisodeId : null,
       compareRevision: compareEpisodeId && (compareEpisodeId !== detail.episode_id || compareRevision !== detail.revision) ? compareRevision : null,
+      cohortDays: cohortSupported ? cohortDays : null,
     });
     window.history.replaceState(null, "", next);
-  }, [robotId, detail, selectedEventId, selectedFindingId, compareEpisodeId, compareRevision]);
+  }, [robotId, detail, selectedEventId, selectedFindingId, compareEpisodeId, compareRevision, cohortDays, cohortSupported]);
 
   const loadMoreTimeline = async () => {
     if (!detail || !nextCursor || timelineLoading || events.length >= EPISODE_VISIBLE_EVENT_LIMIT) return;
@@ -496,6 +536,7 @@ export function EpisodeStudio({ robotId, initialTarget, revisionHistorySupported
     return [...historicalRevisions, ...currentEpisodes];
   }, [episodes, selectedEpisodeId, detail, revisionHistory, revisionHistorySupported]);
   const comparisonKey = compareEpisodeId && compareRevision !== null ? `${compareEpisodeId}@@${compareRevision}` : "";
+  const cohortReview = useMemo(() => cohort && detail ? buildEpisodeCohortReview(cohort, detail) : null, [cohort, detail]);
   const compareSelectionMissing = Boolean(comparisonKey) && !compareOptions.some((item) => `${item.episodeId}@@${item.revision}` === comparisonKey);
   const clearComparison = () => {
     comparisonRequest.current?.abort();
@@ -515,6 +556,15 @@ export function EpisodeStudio({ robotId, initialTarget, revisionHistorySupported
     setCompareEpisodeId(option.episodeId);
     setCompareRevision(option.revision);
   };
+  const openCohortMember = (member: EpisodeCohortMember) => {
+    clearComparison();
+    setSelectedEpisodeId(member.episode_id);
+    setSelectedRevision(member.revision);
+    window.requestAnimationFrame(() => document.querySelector(".episode-page-title")?.scrollIntoView({
+      behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
+      block: "start",
+    }));
+  };
 
   if (collectionLoading && !collection) return <section className="content-view episode-view"><div className="page-title"><div><div className="eyebrow">Read-only execution record</div><h2>Episode Studio</h2><p>Loading published Episode revisions without inferring live runtime state.</p></div></div><div className="panel episode-state-view"><Pulse size={28} /><div><strong>Reading Episode index</strong><p>Only a feature-negotiated, versioned read model can populate this workspace.</p></div></div></section>;
   if (collectionMessage && !collection) return <section className="content-view episode-view"><div className="page-title"><div><div className="eyebrow">Read-only execution record</div><h2>Episode Studio</h2><p>Published execution history with explicit authority and verification boundaries.</p></div></div><div className="panel episode-state-view is-error"><WarningCircle size={28} weight="fill" /><div><strong>Episode read model unavailable</strong><p>{collectionMessage}</p><small>No Lifecycle or fixture data was substituted.</small><button className="secondary-button" onClick={() => void loadCollection()}>Retry Episode index</button></div></div></section>;
@@ -533,6 +583,7 @@ export function EpisodeStudio({ robotId, initialTarget, revisionHistorySupported
       {comparisonLoading && <div className="episode-compare-state panel"><Pulse size={20} /><span><strong>Reading both pinned revisions</strong><small>Each side is bounded to {EPISODE_COMPARE_PAGE_BUDGET} timeline pages and {EPISODE_VISIBLE_EVENT_LIMIT} visible events.</small></span></div>}
       {comparisonMessage && <div className="episode-compare-state is-error panel" role="alert"><WarningCircle size={20} weight="fill" /><span><strong>Comparison rejected</strong><small>{comparisonMessage}</small></span></div>}
       {comparison && <EpisodeComparisonView comparison={comparison} onClear={clearComparison} />}
+      {cohortSupported && <EpisodeCohortView cohort={cohort} review={cohortReview} loading={cohortLoading} message={cohortMessage} windowDays={cohortDays} disabled={!detail || detailLoading} onWindowDays={setCohortDays} onOpenMember={openCohortMember} />}
       <div className="episode-shell">
         <aside className="episode-index panel">
           <header><span>Published Episodes</span><strong>{collection?.total || episodes.length}</strong></header>
