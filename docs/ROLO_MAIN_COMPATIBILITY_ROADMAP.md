@@ -170,3 +170,17 @@ Status: approved and promoted as rolo-vis `v0.20.0`; producer minimum rolo `e221
 - Episode pair comparison is the next planned read-only contract design after this
   candidate is promoted; media, live stream, replay, export, and write actions remain
   outside the candidate.
+
+## Phase 2 E5: Episode Pair Compare
+
+Status: E5A derived-model design ready for review.
+
+- Comparison reuses two independently validated Episode v1 details and bounded
+  revision-pinned timelines; no backend compare endpoint is introduced.
+- Comparable mode requires the same robot, immutable terminal publications, matching
+  operation, test-case identity, and expected behavior.
+- All numeric deltas are neutral `right - left` facts. The client cannot label them as
+  improved, regressed, safer, successful, or verified.
+- Agent inference, confidence, evidence volume, and finding counts never produce a
+  pair verdict or causal attribution.
+- E5B UI work starts only after the derived model and trust language are reviewed.

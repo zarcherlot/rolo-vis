@@ -8,7 +8,7 @@
     "build": "vite build --configLoader runner && node scripts/prepare-sites-build.mjs",
     "preview": "vite preview --configLoader runner",
     "typecheck": "tsc --noEmit",
-    "test": "node --test tests/adapt-context.test.mjs tests/baseline-contracts.test.mjs tests/binding-trust.test.mjs tests/capability-coverage.test.mjs tests/capability-filters.test.mjs tests/capability-readiness.test.mjs tests/capability-relations.test.mjs tests/context-link.test.mjs tests/contract-schema.test.mjs tests/episode-baseline.test.mjs tests/episode-contract-design.test.mjs tests/episode-hardening.test.mjs tests/episode-read-model.test.mjs tests/lifecycle-assessment.test.mjs tests/rolo-client.test.mjs tests/slice-stability.test.mjs",
+    "test": "node --test tests/adapt-context.test.mjs tests/baseline-contracts.test.mjs tests/binding-trust.test.mjs tests/capability-coverage.test.mjs tests/capability-filters.test.mjs tests/capability-readiness.test.mjs tests/capability-relations.test.mjs tests/context-link.test.mjs tests/contract-schema.test.mjs tests/episode-baseline.test.mjs tests/episode-comparison.test.mjs tests/episode-contract-design.test.mjs tests/episode-hardening.test.mjs tests/episode-read-model.test.mjs tests/lifecycle-assessment.test.mjs tests/rolo-client.test.mjs tests/slice-stability.test.mjs",
     "check:episode-live": "node scripts/check-episode-read-model.mjs",
     "test:sites": "node --test tests/sites-worker.test.mjs",
     "verify:baseline": "npm test && npm run typecheck && npm run build && npm run test:sites"
