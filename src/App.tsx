@@ -131,6 +131,7 @@ import { filterSliceObservations } from "./sliceStability";
 import { getOverviewPresentation, getSurfaceSource } from "./workbenchPolicy";
 import type { WorkbenchMode } from "./workbenchPolicy";
 import { EpisodeStudio } from "./EpisodeStudio";
+import { buildWorkbenchViewLink, readEpisodeDeepLink } from "./episodeNavigation";
 
 type NavId = "fleet" | "overview" | "stack" | "capabilities" | "lifecycle" | "episode" | "wiki" | "evidence";
 type ViewRobot = DemoRobot | (RobotCapability & { status: "online" });
@@ -2284,7 +2285,8 @@ function EvidenceDrawer({ evidence, onClose }: { evidence: EvidenceItem | null; 
 }
 
 function AppContent() {
-  const [active, setActive] = useState<NavId>("stack");
+  const [initialEpisodeTarget] = useState(() => readEpisodeDeepLink(window.location.href));
+  const [active, setActive] = useState<NavId>(() => initialEpisodeTarget ? "episode" : "stack");
   const [stackContextFocus, setStackContextFocus] = useState<StackContextFocus | null>(null);
   const [wikiContextFocus, setWikiContextFocus] = useState<WikiLayer | null>(null);
   const [mode, setMode] = useState<WorkbenchMode>("connecting");
@@ -2411,9 +2413,12 @@ function AppContent() {
     setMode("demo");
   }, []);
 
-  useEffect(() => { void connect(); }, [connect]);
+  useEffect(() => { void connect(initialEpisodeTarget?.robotId); }, [connect, initialEpisodeTarget]);
   useEffect(() => {
-    if (active === "episode" && !apiFeatures.includes(ROLO_API_FEATURES.episodeReadModel) && ["live", "partial", "demo"].includes(mode)) setActive("stack");
+    if (active === "episode" && !apiFeatures.includes(ROLO_API_FEATURES.episodeReadModel) && ["live", "partial", "demo"].includes(mode)) {
+      setActive("stack");
+      window.history.replaceState(null, "", buildWorkbenchViewLink(window.location.href, "stack"));
+    }
   }, [active, apiFeatures, mode]);
   useEffect(() => {
     if (active !== "wiki" || !robot || (wiki && discoveryHistory) || wikiLoading || wikiRequestRobotId === robot.robot_id || !["live", "partial"].includes(mode)) return;
@@ -2511,6 +2516,7 @@ function AppContent() {
     setStackContextFocus(null);
     setWikiContextFocus(null);
     setActive(view);
+    window.history.replaceState(null, "", buildWorkbenchViewLink(window.location.href, view));
   }, []);
   const openStackLayer = useCallback((layer: ContextWikiLayer) => {
     setWikiContextFocus(null);
@@ -2541,13 +2547,13 @@ function AppContent() {
       <Sidebar active={active} apiFeatures={apiFeatures} onChange={navigate} />
       <Topbar robot={robot} robots={robots} activeLabel={activeLabel} mode={mode} snapshot={overview?.observed_at} onRetry={() => connect(robot?.robot_id)} onRobotChange={connect} />
       <main className="app-main">
-        {(["connecting", "unavailable"].includes(mode) || !robot) ? <ConnectionStateView mode={mode} message={connectionMessage} onRetry={() => connect()} onUseDemo={useDemo} /> : <>
+        {(["connecting", "unavailable"].includes(mode) || !robot) ? <ConnectionStateView mode={mode} message={connectionMessage} onRetry={() => connect(initialEpisodeTarget?.robotId)} onUseDemo={useDemo} /> : <>
           {active === "stack" && (stackSource === "demo" ? <StackMapView focusLayer={stackContextFocus} onOpenWikiLayer={openWikiLayer} onOpenEvidence={openEvidence} /> : stackSource === "live" ? <StackMapView topology={topology} topologySnapshots={topologySnapshots} robotId={robot.robot_id} focusLayer={stackContextFocus} onOpenWikiLayer={openWikiLayer} onOpenEvidence={openEvidence} /> : <ReadModelUnavailableView title="Stack Map" description="Live topology needs a versioned rolo topology read model." />)}
           {active === "fleet" && (mode === "demo" ? <ReadModelUnavailableView title="Fleet" description="The labeled demo fixture represents one robot and does not include a fleet aggregate." /> : fleet && fleetBlockers ? <FleetView fleet={fleet} blockers={fleetBlockers} sliceFleet={fleetSlice} blockerDetailSupported={apiFeatures.includes(ROLO_API_FEATURES.blockerDetail)} onSelectRobot={selectFleetRobot} onOpenEvidence={openEvidence} /> : fleetLoading ? <section className="content-view"><PageTitle title="Fleet" description="Aggregating validated robot overviews and pipeline blockers…" /><div className="panel read-model-unavailable" role="status"><Pulse size={26} /><div><strong>Loading Fleet</strong><p>No runtime telemetry is inferred while this read model is loading.</p></div></div></section> : <ReadModelUnavailableView title="Fleet" description={fleetMessage || "Open this surface to read the validated Fleet aggregate."} />)}
           {active === "overview" && <OverviewView robot={robot} pipeline={pipeline} overview={overview} mode={mode} evidenceItems={evidenceItems} onOpenEvidence={openEvidence} onNavigate={navigate} />}
           {active === "capabilities" && (capabilitySource === "demo" ? <DemoCapabilityView onOpenEvidence={setEvidence} /> : capabilitySource === "live" && capabilityList ? <LiveCapabilityView robotId={robot.robot_id} items={capabilityList} limitations={capabilityLimitations} apiFeatures={apiFeatures} onOpenEvidence={openEvidence} /> : <ReadModelUnavailableView title="Capabilities" description="Live capability coverage needs a versioned rolo capability read model." />)}
           {active === "lifecycle" && (lifecycleSource === "demo" ? <DemoLifecycleView pipeline={pipeline} onOpenEvidence={setEvidence} /> : lifecycleSource === "live" && lifecycleRuns ? <LiveLifecycleView pipeline={pipeline} runs={lifecycleRuns} robotId={robot.robot_id} onOpenEvidence={openEvidence} /> : <ReadModelUnavailableView title="Lifecycle" description="Live lifecycle requires trusted stage and run read models." />)}
-          {active === "episode" && (episodeSupported ? <EpisodeStudio robotId={robot.robot_id} onOpenEvidence={openEvidence} /> : <ReadModelUnavailableView title="Episode Studio" description="rolo has not advertised the versioned Episode read model for this robot connection." />)}
+          {active === "episode" && (episodeSupported ? <EpisodeStudio robotId={robot.robot_id} initialTarget={initialEpisodeTarget} onOpenEvidence={openEvidence} /> : <ReadModelUnavailableView title="Episode Studio" description="rolo has not advertised the versioned Episode read model for this robot connection." />)}
           {active === "wiki" && (mode === "demo" ? <ReadModelUnavailableView title="Robot Wiki" description="The labeled demo fixture does not include discovery Wiki evidence." /> : wiki && discoveryHistory ? <WikiView wiki={wiki} history={discoveryHistory} focusLayer={wikiContextFocus} onOpenStackLayer={openStackLayer} onClearFocus={() => setWikiContextFocus(null)} onOpenEvidence={openEvidence} /> : wikiLoading ? <section className="content-view"><PageTitle title="Robot Wiki" description="Reading manifest-verified discovery snapshots…" /><div className="panel read-model-unavailable" role="status"><Pulse size={26} /><div><strong>Loading Robot Wiki</strong><p>Current knowledge and verified history are being resolved independently.</p></div></div></section> : <ReadModelUnavailableView title="Robot Wiki" description={wikiMessage || "Open this surface to read a verified discovery Wiki."} />)}
           {active === "evidence" && (evidenceSource === "demo" ? <EvidenceView onOpenEvidence={openEvidence} /> : evidenceSource === "live" ? <EvidenceView live collection={evidenceList} robotId={robot.robot_id} onOpenEvidence={openEvidence} /> : <ReadModelUnavailableView title="Evidence" description="Live evidence resolution needs a versioned rolo evidence read model." />)}
         </>}

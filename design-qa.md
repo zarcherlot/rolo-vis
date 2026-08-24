@@ -1,11 +1,11 @@
-# E3 Episode Studio design QA
+# E3 + V1C Episode Studio design QA
 
 **Comparison target**
 
 - Source visual truth: `docs/design/selected-stack-map.png`.
-- Implementation evidence: `docs/design/e3-episode-studio-implementation.png`.
-- Combined comparison: `docs/design/e3-design-qa-comparison.png`.
-- Source pixels: 1486 × 1058. Implementation pixels: 1486 × 1058.
+- Implementation evidence: `docs/design/v1c-episode-studio-hardening.png`.
+- Combined comparison: `docs/design/v1c-design-qa-comparison.png`.
+- Source pixels: 1487 × 1058. Implementation pixels: 1486 × 1058.
 - CSS viewport: 1486 × 1058. Device scale factor: 1. No density normalization was required.
 - State: dark desktop workbench, live trusted MentorPi connection, one immutable partial Episode revision, declared COMMAND event selected.
 
@@ -33,7 +33,8 @@ tokens, evidence language, and inspector anatomy rather than pixel-identical con
   raster imagery, placeholder art, handcrafted SVG, or media-byte rendering.
 - Copy and content: declared, observed, inferred, human-confirmed, and verified language
   follows the approved consumer contract. Agent content is visibly unverified; degraded
-  synchronization and missing evidence remain explicit.
+  synchronization and missing evidence remain explicit. V1C adds a compact keyboard
+  hint without changing the reviewed hierarchy or introducing write-side language.
 
 **Focused region evidence**
 
@@ -51,6 +52,9 @@ verification remain separate.
    into its own grid cell.
 3. The revised 1486 × 1058 capture shows compact chips and unobstructed Clock/Sync
    facts. No actionable P0/P1/P2 issue remains.
+4. V1C added deep-link, focus, performance-budget, retry, and reduced-motion behavior.
+   The new side-by-side capture confirms that the only persistent visual addition is
+   the bounded keyboard hint below the timeline; it does not disturb panel geometry.
 
 **Interaction and responsive verification**
 
@@ -60,6 +64,12 @@ verification remain separate.
 - Selecting the Agent event exposed `Agent inference · unverified`, bounded metrics,
   limitations, and its evidence ID.
 - The shared Evidence drawer resolved `episode_event` evidence without console errors.
+- ArrowRight moved selection from sequence 0 to sequence 1, updated the inspector, and
+  replaced the URL event pin. Reload restored the same selected event and revision.
+- Home returned to the first event. The selected marker retains a visible focus ring.
+- The compiled CSS contains the `prefers-reduced-motion` override.
+- A deep link pinned to revision 99 showed the explicit rejection and retry state,
+  without exposing labeled demo data; returning to revision 1 restored the live view.
 - 900 × 900: single-column Episode shell, no body overflow.
 - 390 × 844: no body overflow; the 500 px metadata timeline scrolls inside its 341 px
   viewport while the selected-event inspector remains present.
@@ -76,7 +86,8 @@ verification remain separate.
 
 **Follow-up polish**
 
-- P3: after E3 product review, keyboard roving focus and reduced-motion timeline polish
-  can be completed with the V1C hardening work.
+- No blocking follow-up. Event-count stress remains protected by the 500-item display
+  cap and a 25 ms synchronous layout-projection test; the live review fixture contains
+  six events.
 
 final result: passed

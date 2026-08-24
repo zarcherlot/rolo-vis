@@ -134,8 +134,8 @@ Status: approved and promoted as the `0.19.0` MVP baseline.
 
 ## Phase 2 design: Episode contracts
 
-Status: E1–E2 producer contracts implemented; E3 frontend is ready for review on an
-independent post-baseline branch.
+Status: E1–E2 producer contracts implemented; E3 approved and V1C hardening is ready
+for review on an independent post-baseline branch.
 
 - rolo owns a new sanitized Episode read-model family; rolo-vis will not consume raw
   Episode artifacts, Canonical Operation output, or `robot_use` provider payloads.
@@ -150,6 +150,7 @@ independent post-baseline branch.
 Frontend acceptance and rollout order are recorded in
 `EPISODE_STUDIO_CONSUMER_CONTRACT.md`.
 
-E3 adds only feature-negotiated read surfaces. The `v0.19.0` MVP tag, its runtime
-navigation, and its compatibility ranges remain unchanged until Episode is reviewed
-and promoted separately.
+E3 adds only feature-negotiated read surfaces. V1C adds bounded 500-event projection,
+keyboard navigation, reduced-motion behavior, stable revision/event deep links, and a
+live `rolo-data` contract regression. The `v0.19.0` MVP tag and its compatibility
+ranges remain unchanged until Episode is promoted separately.

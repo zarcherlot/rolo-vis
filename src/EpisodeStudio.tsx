@@ -11,6 +11,15 @@ import {
   WarningCircle,
 } from "@phosphor-icons/react";
 import { roloClient } from "./roloClient";
+import {
+  appendTimelineEvents,
+  buildEpisodeDeepLink,
+  EPISODE_TIMELINE_PAGE_LIMIT,
+  EPISODE_VISIBLE_EVENT_LIMIT,
+  nextTimelineEventId,
+  projectTimelineLayout,
+  type EpisodeDeepLinkTarget,
+} from "./episodeNavigation";
 import "./episode.css";
 import "./episode-polish.css";
 import type {
@@ -151,26 +160,38 @@ function EpisodeTimeline({ detail, events, selectedEventId, visibleLanes, onSele
   visibleLanes: Set<EpisodeTimelineLane>;
   onSelectEvent: (eventId: string) => void;
 }) {
-  const maxOffset = Math.max(1, ...events.map((event) => event.offset_ms + (event.duration_ms || 0)));
-  const lanes = TIMELINE_LANES.filter((lane) => detail.available_lanes.includes(lane) && visibleLanes.has(lane));
+  const markerRefs = useRef(new Map<string, HTMLButtonElement>());
+  const layout = useMemo(() => projectTimelineLayout(events, TIMELINE_LANES.filter((lane) => detail.available_lanes.includes(lane)), visibleLanes), [detail.available_lanes, events, visibleLanes]);
+  const firstVisibleEventId = events.find((event) => visibleLanes.has(event.lane))?.event_id || "";
+  const moveSelection = (eventId: string, key: string) => {
+    const nextId = nextTimelineEventId(events, visibleLanes, eventId, key);
+    if (!nextId) return false;
+    onSelectEvent(nextId);
+    window.requestAnimationFrame(() => markerRefs.current.get(nextId)?.focus());
+    return true;
+  };
   return (
-    <div className="episode-timeline panel" aria-label="Episode metadata timeline">
-      <header className="episode-time-ruler"><span>Lane</span><div>{[0, .25, .5, .75, 1].map((fraction) => <time key={fraction} style={{ left: `${fraction * 100}%` }}>{formatOffset(Math.round(maxOffset * fraction))}</time>)}</div></header>
+    <div className="episode-timeline panel" aria-label="Episode metadata timeline" aria-describedby="episode-timeline-keyboard-help">
+      <span className="visually-hidden" id="episode-timeline-keyboard-help">Use arrow keys to move between visible events. Home and End move to the first and last visible event.</span>
+      <header className="episode-time-ruler"><span>Lane</span><div>{[0, .25, .5, .75, 1].map((fraction) => <time key={fraction} style={{ left: `${fraction * 100}%` }}>{formatOffset(Math.round(layout.maxOffset * fraction))}</time>)}</div></header>
       <div className="episode-lanes">
-        {lanes.map((lane) => {
-          const laneEvents = events.filter((event) => event.lane === lane);
+        {layout.lanes.map(({ lane, items }) => {
           return <div className="episode-lane" key={lane}>
-            <span><strong>{lane}</strong><small>{laneEvents.length}</small></span>
+            <span><strong>{lane}</strong><small>{items.length}</small></span>
             <div>
-              {laneEvents.map((event) => {
-                const left = Math.min(98, Math.max(0, (event.offset_ms / maxOffset) * 100));
-                const width = event.duration_ms ? Math.max(1.2, Math.min(18, (event.duration_ms / maxOffset) * 100)) : 1.2;
+              {items.map(({ event, left, width }) => {
                 return <button
                   key={event.event_id}
+                  ref={(node) => { if (node) markerRefs.current.set(event.event_id, node); else markerRefs.current.delete(event.event_id); }}
                   className={`episode-event-marker is-${event.authority.toLowerCase().replaceAll("_", "-")} ${selectedEventId === event.event_id ? "is-selected" : ""}`}
                   style={{ left: `${left}%`, width: `${width}%` }}
                   onClick={() => onSelectEvent(event.event_id)}
+                  onKeyDown={(keyboardEvent) => {
+                    if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End"].includes(keyboardEvent.key) && moveSelection(event.event_id, keyboardEvent.key)) keyboardEvent.preventDefault();
+                  }}
                   aria-label={`${event.lane} at ${formatOffset(event.offset_ms)}: ${event.title}`}
+                  aria-current={selectedEventId === event.event_id ? "true" : undefined}
+                  tabIndex={selectedEventId === event.event_id || (!selectedEventId && firstVisibleEventId === event.event_id) ? 0 : -1}
                   title={`${event.title} · ${AUTHORITY_LABELS[event.authority]}`}
                 ><span /></button>;
               })}
@@ -182,24 +203,27 @@ function EpisodeTimeline({ detail, events, selectedEventId, visibleLanes, onSele
   );
 }
 
-export function EpisodeStudio({ robotId, onOpenEvidence }: { robotId: string; onOpenEvidence: (evidenceId: string) => void }) {
+export function EpisodeStudio({ robotId, initialTarget, onOpenEvidence }: { robotId: string; initialTarget?: EpisodeDeepLinkTarget | null; onOpenEvidence: (evidenceId: string) => void }) {
   const [collection, setCollection] = useState<EpisodeCollection | null>(null);
   const [episodes, setEpisodes] = useState<EpisodeSummary[]>([]);
   const [collectionLoading, setCollectionLoading] = useState(true);
   const [collectionMessage, setCollectionMessage] = useState("");
-  const [selectedEpisodeId, setSelectedEpisodeId] = useState("");
+  const [selectedEpisodeId, setSelectedEpisodeId] = useState(() => initialTarget?.robotId === robotId ? initialTarget.episodeId : "");
   const [detail, setDetail] = useState<EpisodeDetail | null>(null);
   const [events, setEvents] = useState<EpisodeTimelineEvent[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailMessage, setDetailMessage] = useState("");
+  const [timelineNotice, setTimelineNotice] = useState("");
   const [timelineLoading, setTimelineLoading] = useState(false);
-  const [selectedEventId, setSelectedEventId] = useState("");
+  const [selectedEventId, setSelectedEventId] = useState(() => initialTarget?.robotId === robotId ? initialTarget.eventId || "" : "");
+  const [detailReload, setDetailReload] = useState(0);
   const [query, setQuery] = useState("");
   const [stateFilter, setStateFilter] = useState("all");
   const [visibleLanes, setVisibleLanes] = useState<Set<EpisodeTimelineLane>>(new Set(TIMELINE_LANES));
   const collectionRequest = useRef<AbortController | null>(null);
   const detailRequest = useRef<AbortController | null>(null);
+  const initialTargetConsumed = useRef(false);
 
   const loadCollection = useCallback(async () => {
     collectionRequest.current?.abort();
@@ -212,7 +236,7 @@ export function EpisodeStudio({ robotId, onOpenEvidence }: { robotId: string; on
       if (controller.signal.aborted) return;
       setCollection(value);
       setEpisodes(value.items);
-      setSelectedEpisodeId((current) => value.items.some((item) => item.episode_id === current) ? current : value.items[0]?.episode_id || "");
+      setSelectedEpisodeId((current) => current || (initialTarget?.robotId === robotId ? initialTarget.episodeId : "") || value.items[0]?.episode_id || "");
     } catch (error) {
       if (controller.signal.aborted) return;
       setCollection(null);
@@ -223,7 +247,7 @@ export function EpisodeStudio({ robotId, onOpenEvidence }: { robotId: string; on
       if (!controller.signal.aborted) setCollectionLoading(false);
       if (collectionRequest.current === controller) collectionRequest.current = null;
     }
-  }, [robotId]);
+  }, [robotId, initialTarget]);
 
   useEffect(() => {
     void loadCollection();
@@ -237,20 +261,37 @@ export function EpisodeStudio({ robotId, onOpenEvidence }: { robotId: string; on
     setNextCursor(null);
     setSelectedEventId("");
     setDetailMessage("");
+    setTimelineNotice("");
     if (!selectedEpisodeId) return;
     const summary = episodes.find((item) => item.episode_id === selectedEpisodeId);
-    if (!summary) return;
     const controller = new AbortController();
     detailRequest.current = controller;
     setDetailLoading(true);
     void roloClient.episode(robotId, selectedEpisodeId, { signal: controller.signal }).then(async (episodeDetail) => {
-      if (episodeDetail.revision !== summary.revision) throw new Error("Episode revision changed while opening Studio. Refresh the Episode list before continuing.");
-      const timeline = await roloClient.episodeTimelinePage(robotId, selectedEpisodeId, episodeDetail.revision, { signal: controller.signal }, { limit: 100 });
+      if (summary && episodeDetail.revision !== summary.revision) throw new Error("Episode revision changed while opening Studio. Refresh the Episode list before continuing.");
+      const deepTarget = !initialTargetConsumed.current && initialTarget?.robotId === robotId && initialTarget.episodeId === selectedEpisodeId ? initialTarget : null;
+      if (deepTarget && deepTarget.revision !== null && deepTarget.revision !== episodeDetail.revision) throw new Error(`Deep link pins revision ${deepTarget.revision}, but rolo published revision ${episodeDetail.revision}.`);
+      let timeline = await roloClient.episodeTimelinePage(robotId, selectedEpisodeId, episodeDetail.revision, { signal: controller.signal }, { limit: EPISODE_TIMELINE_PAGE_LIMIT });
+      let accumulated = timeline.items;
+      let cursor = timeline.next_cursor;
+      const seenCursors = new Set<string>();
+      while (deepTarget?.eventId && !accumulated.some((item) => item.event_id === deepTarget.eventId) && cursor && accumulated.length < EPISODE_VISIBLE_EVENT_LIMIT) {
+        if (seenCursors.has(cursor)) throw new Error("Episode timeline cursor repeated; the bounded deep-link lookup was rejected.");
+        seenCursors.add(cursor);
+        const limit = Math.min(EPISODE_TIMELINE_PAGE_LIMIT, EPISODE_VISIBLE_EVENT_LIMIT - accumulated.length);
+        timeline = await roloClient.episodeTimelinePage(robotId, selectedEpisodeId, episodeDetail.revision, { signal: controller.signal }, { limit, cursor });
+        accumulated = appendTimelineEvents(accumulated, timeline.items);
+        cursor = timeline.next_cursor;
+      }
       if (controller.signal.aborted) return;
+      initialTargetConsumed.current = true;
       setDetail(episodeDetail);
-      setEvents(timeline.items);
-      setNextCursor(timeline.next_cursor);
-      setSelectedEventId(timeline.items[0]?.event_id || "");
+      setEvents(accumulated);
+      setNextCursor(cursor);
+      const deepEventFound = deepTarget?.eventId && accumulated.some((item) => item.event_id === deepTarget.eventId);
+      setSelectedEventId(deepEventFound ? deepTarget.eventId || "" : accumulated[0]?.event_id || "");
+      if (deepTarget?.eventId && !deepEventFound) setTimelineNotice(`Event ${deepTarget.eventId} is not present in the bounded ${EPISODE_VISIBLE_EVENT_LIMIT}-event view.`);
+      else if (cursor && accumulated.length >= EPISODE_VISIBLE_EVENT_LIMIT) setTimelineNotice(`The visible timeline is capped at ${EPISODE_VISIBLE_EVENT_LIMIT} events.`);
       setVisibleLanes(new Set(episodeDetail.available_lanes));
     }).catch((error: unknown) => {
       if (!controller.signal.aborted) setDetailMessage(error instanceof Error ? error.message : "Episode Studio could not be read.");
@@ -259,18 +300,30 @@ export function EpisodeStudio({ robotId, onOpenEvidence }: { robotId: string; on
       if (detailRequest.current === controller) detailRequest.current = null;
     });
     return () => controller.abort();
-  }, [robotId, selectedEpisodeId, episodes]);
+  }, [robotId, selectedEpisodeId, episodes, initialTarget, detailReload]);
+
+  useEffect(() => {
+    if (!detail) return;
+    const next = buildEpisodeDeepLink(window.location.href, {
+      robotId,
+      episodeId: detail.episode_id,
+      revision: detail.revision,
+      eventId: selectedEventId || null,
+    });
+    window.history.replaceState(null, "", next);
+  }, [robotId, detail, selectedEventId]);
 
   const loadMoreTimeline = async () => {
-    if (!detail || !nextCursor || timelineLoading) return;
+    if (!detail || !nextCursor || timelineLoading || events.length >= EPISODE_VISIBLE_EVENT_LIMIT) return;
     setTimelineLoading(true);
     setDetailMessage("");
     try {
-      const page = await roloClient.episodeTimelinePage(robotId, detail.episode_id, detail.revision, undefined, { limit: 100, cursor: nextCursor });
-      const lastSequence = events.at(-1)?.sequence ?? -1;
-      if (page.items.some((item) => item.sequence <= lastSequence)) throw new Error("Episode timeline pages overlap; the revision-pinned view was rejected.");
-      setEvents((current) => [...current, ...page.items]);
+      const limit = Math.min(EPISODE_TIMELINE_PAGE_LIMIT, EPISODE_VISIBLE_EVENT_LIMIT - events.length);
+      const page = await roloClient.episodeTimelinePage(robotId, detail.episode_id, detail.revision, undefined, { limit, cursor: nextCursor });
+      const merged = appendTimelineEvents(events, page.items);
+      setEvents(merged);
       setNextCursor(page.next_cursor);
+      if (page.next_cursor && merged.length >= EPISODE_VISIBLE_EVENT_LIMIT) setTimelineNotice(`The visible timeline is capped at ${EPISODE_VISIBLE_EVENT_LIMIT} events. Narrow the lanes before reviewing this record.`);
     } catch (error) {
       setDetailMessage(error instanceof Error ? error.message : "The next timeline page could not be read.");
     } finally {
@@ -316,7 +369,7 @@ export function EpisodeStudio({ robotId, onOpenEvidence }: { robotId: string; on
 
         <div className="episode-studio-main">
           {detailLoading && <div className="panel episode-detail-state"><Pulse size={24} /><span><strong>Opening pinned revision</strong><small>Detail and timeline are resolved together.</small></span></div>}
-          {detailMessage && <div className="panel episode-detail-state is-error"><WarningCircle size={21} weight="fill" /><span><strong>Studio view rejected</strong><small>{detailMessage}</small></span></div>}
+          {detailMessage && <div className="panel episode-detail-state is-error" role="alert"><WarningCircle size={21} weight="fill" /><span><strong>Studio view rejected</strong><small>{detailMessage}</small></span><button className="secondary-button" onClick={() => setDetailReload((value) => value + 1)}>Retry pinned view</button></div>}
           {detail && <>
             <header className="episode-detail-heading panel">
               <div><span>{detail.operation || "Operation not declared"}</span><h3>{detail.task_label}</h3><code>{detail.episode_id} · revision {detail.revision}</code></div>
@@ -327,7 +380,8 @@ export function EpisodeStudio({ robotId, onOpenEvidence }: { robotId: string; on
             {detail.synchronization !== "SYNCED" && <div className="episode-sync-warning"><WarningCircle size={17} weight="fill" /><span><strong>{detail.synchronization} clock synchronization</strong><small>offset_ms remains the ordering authority; precise cross-sensor timing claims are withheld.</small></span></div>}
             <div className="episode-lane-filter" aria-label="Episode timeline lane filters">{detail.available_lanes.map((lane) => <button key={lane} className={visibleLanes.has(lane) ? "is-active" : ""} onClick={() => setVisibleLanes((current) => { const next = new Set(current); if (next.has(lane) && next.size > 1) next.delete(lane); else next.add(lane); return next; })}>{lane}<span>{events.filter((event) => event.lane === lane).length}</span></button>)}</div>
             <EpisodeTimeline detail={detail} events={events} selectedEventId={selectedEventId} visibleLanes={visibleLanes} onSelectEvent={setSelectedEventId} />
-            <div className="episode-timeline-footer"><span>Loaded {events.length} of {detail.event_count} sequence-ordered events</span>{nextCursor && <button className="secondary-button" disabled={timelineLoading} onClick={() => void loadMoreTimeline()}>{timelineLoading ? "Loading…" : "Load next pinned page"}</button>}</div>
+            <div className="episode-timeline-footer"><span>Loaded {events.length} of {detail.event_count} sequence-ordered events · keyboard: arrows / Home / End</span>{nextCursor && events.length < EPISODE_VISIBLE_EVENT_LIMIT && <button className="secondary-button" disabled={timelineLoading} onClick={() => void loadMoreTimeline()}>{timelineLoading ? "Loading…" : "Load next pinned page"}</button>}</div>
+            {timelineNotice && <div className="episode-timeline-notice" role="status"><Info size={16} /><span>{timelineNotice}</span></div>}
           </>}
         </div>
 

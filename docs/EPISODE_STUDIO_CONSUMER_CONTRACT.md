@@ -1,6 +1,6 @@
 # Episode Studio consumer contract
 
-Status: E3 implementation review  
+Status: V1C hardening review
 Frontend base: rolo-vis `v0.19.0`  
 Producer design: `rolo-episode-contract-design/v1`
 
@@ -111,12 +111,21 @@ robot/Episode identity.
 - evidence drilldown and finding authority labels;
 - asset metadata cards without content delivery.
 
-### V1C: hardening after E3 review
+### V1C: hardening after E3 review — implemented
 
 - backend reference fixture and `rolo-data` regression;
 - performance budget for 500 visible events and bounded pages;
 - keyboard timeline navigation and reduced-motion behavior;
 - stable deep link to robot, Episode, revision, and selected event.
+
+The stable read-only link uses bounded query state:
+
+```text
+?view=episode&robot={robot_id}&episode={episode_id}&revision={revision}&event={event_id}
+```
+
+Invalid identities or revisions fail closed. A deep-linked event may page forward only
+until the 500-event display budget is reached; it never triggers an unbounded scan.
 
 ### Deferred
 
@@ -138,6 +147,21 @@ robot/Episode identity.
 - Desktop, 900 px, and 390 px layouts were browser-verified without body overflow;
   the narrow timeline uses bounded local horizontal scrolling.
 - Visual comparison and browser evidence are recorded in `design-qa.md`.
+
+## V1C hardening evidence
+
+- Timeline pages remain bounded to 100 events and the accumulated interactive view is
+  capped at 500 events. Layout projection has a 25 ms synchronous budget in tests.
+- Arrow keys move through visible events in sequence order; Home and End select the
+  first and last visible event. Markers use a roving tab stop and visible focus ring.
+- `prefers-reduced-motion` disables Episode animation and transition movement.
+- The URL pins robot, Episode, revision, and selected event. Initial bootstrap requests
+  the linked robot and rejects a changed revision.
+- `npm run check:episode-live` validates the collection, detail, revision-pinned pages,
+  counts, and public safety contract against a running rolo backend. It passed against
+  the local MentorPi `rolo-data` projection with 6 events, 2 findings, and 1 asset.
+- Initial collection and pinned-detail failures expose explicit retry actions and never
+  substitute fixture data.
 
 ## Acceptance carried forward
 

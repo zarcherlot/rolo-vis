@@ -20,3 +20,53 @@
     grid-column: 1 / -1;
   }
 }
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.episode-event-marker:focus-visible {
+  z-index: 5;
+  outline: 2px solid #a9c8ff;
+  outline-offset: 3px;
+}
+
+.episode-detail-state.is-error {
+  flex-wrap: wrap;
+  padding: 16px;
+}
+
+.episode-detail-state.is-error > button {
+  margin-left: 10px;
+}
+
+.episode-timeline-notice {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 11px;
+  border: 1px solid rgba(110, 155, 255, .2);
+  border-radius: 7px;
+  color: #91a8c8;
+  background: rgba(39, 109, 255, .045);
+  font-size: 9px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .episode-view *,
+  .episode-view *::before,
+  .episode-view *::after {
+    scroll-behavior: auto !important;
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+  }
+}
