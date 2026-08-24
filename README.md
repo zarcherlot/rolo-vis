@@ -27,6 +27,8 @@
 - Sanitized target-evidence scope and freshness with read-only recollection guidance.
 - Bidirectional Wiki and Stack Map layer context without inferred entity relationships.
 - Evidence ledger with provenance and integrity status.
+- Episode Studio with revision-pinned timelines, diagnostic focus, neutral pair comparison,
+  and feature-negotiated immutable revision history.
 - Live rolo API probing with an explicit demo fallback when no robot runtime is reachable.
 
 ## Run

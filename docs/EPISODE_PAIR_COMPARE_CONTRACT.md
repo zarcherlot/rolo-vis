@@ -74,10 +74,10 @@ pair score. Agent inference counts never affect outcome or verification.
 The selected event remains scoped to the left Episode in V1. Pair selection must not
 silently change either pinned revision.
 
-E5B accepts two different `episode_id` values only. The public detail endpoint does not
-currently retrieve a historical revision, so a same-ID/different-revision URL is
-rejected. The pure E5A model remains revision-aware for a future revision-addressable
-detail contract.
+Since E7/v0.22.0, the selector also accepts one `episode_id` with two distinct positive
+revision pins when rolo advertises `workbench.episode-revision-history/v1`. Each side is
+independently resolved through the historical detail and timeline contracts. Older rolo
+connections keep E5B's two-Episode current-revision behavior and never probe history.
 
 ## Delivery slices
 

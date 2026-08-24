@@ -61,6 +61,19 @@ export const EPISODE_BASELINE = {
   requiredFeature: "workbench.episode-read-model/v1",
 } as const;
 
+export const EPISODE_REVISION_BASELINE = {
+  id: "rolo-vis-episode-revision-history/2026-08",
+  status: "baseline",
+  mode: "read-only",
+  extends: EPISODE_BASELINE.id,
+  release: "0.22.0",
+  frontendMinimum: "b836dcd",
+  producerMinimum: "48da032",
+  producerMainMerge: "4efd11df",
+  requiredFeature: "workbench.episode-read-model/v1",
+  requiredRevisionFeature: "workbench.episode-revision-history/v1",
+} as const;
+
 export function supportsSchema(
   family: keyof typeof MVP_SCHEMA_COMPATIBILITY,
   model: "collection" | "summary" | "detail",
