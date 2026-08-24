@@ -1009,6 +1009,59 @@ export interface EpisodeRevisionCollection {
   limitations: string[];
 }
 
+export interface EpisodeCohortMember {
+  schema_version: "rolo-episode-cohort-member/v1";
+  robot_id: string;
+  episode_id: string;
+  revision: number;
+  task_label: string;
+  started_at: string;
+  ended_at: string;
+  duration_ms: number;
+  state: Exclude<EpisodeState, "RUNNING">;
+  outcome: EpisodeOutcome;
+  verification: EpisodeVerification;
+  coverage: EpisodeCoverage;
+  immutable: true;
+  is_current: true;
+  event_count: number;
+  asset_count: number;
+  finding_count: number;
+  evidence_count: number;
+  source_kind: "current_episode_publication";
+  limitations: string[];
+}
+
+export interface EpisodeCohortExclusions {
+  schema_version: "rolo-episode-cohort-exclusions/v1";
+  running: number;
+  mutable: number;
+}
+
+export interface EpisodeCohort {
+  schema_version: "rolo-episode-cohort/v1";
+  robot_id: string;
+  reference_episode_id: string;
+  reference_revision: number;
+  operation: string;
+  test_case_id: string;
+  expected_behavior_sha256: string;
+  window_days: 7 | 30 | 90;
+  window_started_at: string;
+  window_ended_at: string;
+  items: EpisodeCohortMember[];
+  population_count: number;
+  included_count: number;
+  excluded_count: number;
+  truncated_count: number;
+  exclusions: EpisodeCohortExclusions;
+  coverage: "COMPLETE" | "BOUNDED_PARTIAL";
+  limit: number;
+  as_of: string;
+  source_kind: "published_episode_cohort";
+  limitations: string[];
+}
+
 export interface EpisodeTimelinePage {
   schema_version: "rolo-episode-timeline-page/v1";
   robot_id: string;

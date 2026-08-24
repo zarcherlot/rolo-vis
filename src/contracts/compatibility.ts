@@ -36,6 +36,9 @@ export const EPISODE_SCHEMA_COMPATIBILITY = {
   findingSummary: ["rolo-episode-finding-summary/v1"],
   revisionCollection: ["rolo-episode-revision-collection/v1"],
   revisionSummary: ["rolo-episode-revision-summary/v1"],
+  cohort: ["rolo-episode-cohort/v1"],
+  cohortMember: ["rolo-episode-cohort-member/v1"],
+  cohortExclusions: ["rolo-episode-cohort-exclusions/v1"],
 } as const;
 
 export const EPISODE_READONLY_BASELINE = {
