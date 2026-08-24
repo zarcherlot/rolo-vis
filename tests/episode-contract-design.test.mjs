@@ -27,7 +27,7 @@ test("Episode design keeps outcome, verification, and authority independent", as
   }
 });
 
-test("Episode Studio is exposed only through the negotiated E3 feature", async () => {
+test("Episode Studio is exposed only through the negotiated feature and successor compatibility boundary", async () => {
   const app = await read("../src/App.tsx");
   const client = await read("../src/roloClient.ts");
   const compatibility = await read("../src/contracts/compatibility.ts");
@@ -35,7 +35,8 @@ test("Episode Studio is exposed only through the negotiated E3 feature", async (
   assert.match(app, /<EpisodeStudio/);
   assert.match(client, /episodeReadModel: "workbench\.episode-read-model\/v1"/);
   assert.match(client, /episodeCollection|episodeTimelinePage|\/episodes/);
-  assert.doesNotMatch(compatibility, /episode:/);
+  assert.match(compatibility, /EPISODE_SCHEMA_COMPATIBILITY/);
+  assert.match(compatibility, /status: "candidate"/);
 });
 
 test("Episode v1 explicitly defers media and write-side surfaces", async () => {

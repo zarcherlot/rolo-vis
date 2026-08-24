@@ -1,6 +1,6 @@
 # Episode Studio consumer contract
 
-Status: V1C hardening review
+Status: V1C approved; E4 read-only baseline candidate review
 Frontend base: rolo-vis `v0.19.0`  
 Producer design: `rolo-episode-contract-design/v1`
 
@@ -118,6 +118,15 @@ robot/Episode identity.
 - keyboard timeline navigation and reduced-motion behavior;
 - stable deep link to robot, Episode, revision, and selected event.
 
+### E4: read-only baseline candidate — implemented
+
+- Episode v1 schema allowlist is executable and isolated from the `v0.19.0` MVP matrix;
+- the reviewed frontend minimum is pinned to `d712f32`;
+- promotion gates require a committed producer, clean verification, live `rolo-data`
+  regression, and browser review;
+- no version bump or tag is created until the producer is committed and the baseline
+  candidate is separately promoted. Producer minimum is now rolo `e2217bb`.
+
 The stable read-only link uses bounded query state:
 
 ```text
@@ -170,5 +179,5 @@ until the 500-event display budget is reached; it never triggers an unbounded sc
 - A reference fixture represents physical, simulated/replayed, degraded-clock, missing
   evidence, Agent inference, and verified outcome states.
 - Product review confirms that metadata-only assets are useful before media delivery.
-- Episode navigation remains absent from the MVP baseline and from live surfaces until
-  the feature is advertised.
+- Episode navigation remains absent from the tagged `v0.19.0` MVP baseline. On the
+  successor candidate it appears only when the feature is advertised.

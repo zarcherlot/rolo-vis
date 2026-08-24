@@ -19,6 +19,7 @@ import {
   isStringArray,
   requireContract,
 } from "./guards.ts";
+import { supportsEpisodeSchema } from "./compatibility.ts";
 
 const IDENTIFIER = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
 const DIGEST = /^[0-9a-f]{64}$/;
@@ -100,7 +101,8 @@ function parseEpisodeSummaryBase(
   path: string,
   schemaVersion: "rolo-episode-summary/v1" | "rolo-episode-detail/v1",
 ): EpisodeSummary {
-  requireContract(isRecord(value) && value.schema_version === schemaVersion, "unsupported Episode summary schema", path);
+  const compatibilityModel = schemaVersion === "rolo-episode-summary/v1" ? "summary" : "detail";
+  requireContract(isRecord(value) && value.schema_version === schemaVersion && supportsEpisodeSchema(compatibilityModel, value.schema_version), "unsupported Episode summary schema", path);
   requireContract(isIdentifier(value.robot_id) && isIdentifier(value.episode_id), "invalid Episode identity", path);
   requireContract(Number.isInteger(value.revision) && Number(value.revision) >= 1, "invalid Episode revision", path);
   requireContract(typeof value.task_label === "string" && value.task_label.length >= 1 && value.task_label.length <= 256, "invalid Episode task label", path);
@@ -138,7 +140,7 @@ function parseEpisodeAsset(value: unknown, path: string, identity: EpisodeIdenti
     "clock_domain", "synchronization", "media_type", "byte_count", "digest",
     "data_classification", "evidence_id", "availability", "limitations",
   ], path);
-  requireContract(value.schema_version === "rolo-episode-asset-summary/v1", "unsupported Episode asset schema", path);
+  requireContract(supportsEpisodeSchema("assetSummary", value.schema_version), "unsupported Episode asset schema", path);
   requireIdentity(value, identity, path);
   requireContract(isIdentifier(value.asset_id) && isIdentifier(value.modality) && typeof value.source_label === "string" && value.source_label.length > 0, "invalid Episode asset identity", path);
   requireContract(isAwareTimestamp(value.captured_at) && isNonNegativeInteger(value.offset_ms), "invalid Episode asset time", path);
@@ -172,7 +174,7 @@ function parseEpisodeFinding(value: unknown, path: string, identity: EpisodeIden
     "supporting_evidence_ids", "supporting_asset_ids", "contradicting_evidence_ids",
     "confidence", "verification", "limitations",
   ], path);
-  requireContract(value.schema_version === "rolo-episode-finding-summary/v1", "unsupported Episode finding schema", path);
+  requireContract(supportsEpisodeSchema("findingSummary", value.schema_version), "unsupported Episode finding schema", path);
   requireIdentity(value, identity, path);
   requireContract(isIdentifier(value.finding_id) && typeof value.title === "string" && typeof value.summary === "string", "invalid Episode finding identity", path);
   requireContract(Object.hasOwn(FINDING_AUTHORITIES, String(value.kind)), "invalid Episode finding kind", path);
@@ -196,7 +198,7 @@ function parseEpisodeEvent(value: unknown, path: string, identity: EpisodeIdenti
     "title", "summary", "severity", "authority", "evidence_ids", "asset_ids",
     "related_event_ids", "metrics", "limitations",
   ], path);
-  requireContract(value.schema_version === "rolo-episode-timeline-event/v1", "unsupported Episode event schema", path);
+  requireContract(supportsEpisodeSchema("timelineEvent", value.schema_version), "unsupported Episode event schema", path);
   requireIdentity(value, identity, path);
   requireContract(isIdentifier(value.event_id) && isNonNegativeInteger(value.sequence) && isNonNegativeInteger(value.offset_ms), "invalid Episode event order", path);
   requireContract(isAwareTimestamp(value.occurred_at) && (value.duration_ms === null || isNonNegativeInteger(value.duration_ms)), "invalid Episode event time", path);
@@ -220,7 +222,7 @@ export function parseEpisodeCollection(
   requireSafePublicContent(value, path);
   requireContract(isRecord(value), "Episode collection must be an object", path);
   requireOnlyKeys(value, ["schema_version", "robot_id", "items", "total", "limit", "offset", "next_offset", "as_of", "source_kind", "limitations"], path);
-  requireContract(value.schema_version === "rolo-episode-collection/v1" && value.robot_id === robotId, "unsupported Episode collection or robot identity", path);
+  requireContract(supportsEpisodeSchema("collection", value.schema_version) && value.robot_id === robotId, "unsupported Episode collection or robot identity", path);
   requireContract(Array.isArray(value.items), "invalid Episode collection items", path);
   const items = value.items.map((item, index) => parseEpisodeSummary(item, `${path}/items/${index}`));
   requireContract(items.every((item) => item.robot_id === robotId) && new Set(items.map((item) => item.episode_id)).size === items.length, "invalid or duplicate Episode collection identity", path);
@@ -263,7 +265,7 @@ export function parseEpisodeTimelinePage(
   requireSafePublicContent(value, path);
   requireContract(isRecord(value), "Episode timeline page must be an object", path);
   requireOnlyKeys(value, ["schema_version", "robot_id", "episode_id", "revision", "items", "limit", "cursor", "next_cursor", "as_of", "immutable", "limitations"], path);
-  requireContract(value.schema_version === "rolo-episode-timeline-page/v1", "unsupported Episode timeline schema", path);
+  requireContract(supportsEpisodeSchema("timelinePage", value.schema_version), "unsupported Episode timeline schema", path);
   requireIdentity(value, identity, path);
   requireContract(value.limit === expected.limit && value.cursor === (expected.cursor ?? null), "Episode timeline page does not match the pinned request", path);
   requireContract(Array.isArray(value.items) && value.items.length <= expected.limit, "invalid Episode timeline items", path);

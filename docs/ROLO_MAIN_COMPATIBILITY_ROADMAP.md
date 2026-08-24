@@ -154,3 +154,19 @@ E3 adds only feature-negotiated read surfaces. V1C adds bounded 500-event projec
 keyboard navigation, reduced-motion behavior, stable revision/event deep links, and a
 live `rolo-data` contract regression. The `v0.19.0` MVP tag and its compatibility
 ranges remain unchanged until Episode is promoted separately.
+
+## Phase 2 E4: Episode read-only baseline candidate
+
+Status: approved; producer durability gate satisfied by rolo `e2217bb`.
+
+- `EPISODE_SCHEMA_COMPATIBILITY` freezes the seven reviewed v1 public read models
+  without mutating `MVP_SCHEMA_COMPATIBILITY` or the `v0.19.0` tag.
+- `EPISODE_BASELINE_CANDIDATE` pins frontend minimum `d712f32`, read-only mode, and
+  the required `workbench.episode-read-model/v1` feature.
+- Parsers resolve accepted schema names through the compatibility allowlist while
+  preserving exact field, identity, revision, authority, and unsafe-content checks.
+- The rolo E1–E2 producer is pinned to `e2217bb`; clean two-repository verification and
+  the live `rolo-data` regression passed before promotion work began.
+- Episode pair comparison is the next planned read-only contract design after this
+  candidate is promoted; media, live stream, replay, export, and write actions remain
+  outside the candidate.

@@ -26,6 +26,26 @@ export const MVP_BASELINE = {
   frontendMinimum: "d5d856e",
 } as const;
 
+export const EPISODE_SCHEMA_COMPATIBILITY = {
+  collection: ["rolo-episode-collection/v1"],
+  summary: ["rolo-episode-summary/v1"],
+  detail: ["rolo-episode-detail/v1"],
+  timelinePage: ["rolo-episode-timeline-page/v1"],
+  timelineEvent: ["rolo-episode-timeline-event/v1"],
+  assetSummary: ["rolo-episode-asset-summary/v1"],
+  findingSummary: ["rolo-episode-finding-summary/v1"],
+} as const;
+
+export const EPISODE_BASELINE_CANDIDATE = {
+  id: "rolo-vis-episode-readonly/2026-08",
+  status: "candidate",
+  mode: "read-only",
+  extends: MVP_BASELINE.id,
+  frontendMinimum: "d712f32",
+  producerMinimum: "e2217bb",
+  requiredFeature: "workbench.episode-read-model/v1",
+} as const;
+
 export function supportsSchema(
   family: keyof typeof MVP_SCHEMA_COMPATIBILITY,
   model: "collection" | "summary" | "detail",
@@ -33,4 +53,11 @@ export function supportsSchema(
 ): boolean {
   const versions = MVP_SCHEMA_COMPATIBILITY[family][model as keyof (typeof MVP_SCHEMA_COMPATIBILITY)[typeof family]];
   return Array.isArray(versions) && versions.includes(schemaVersion as never);
+}
+
+export function supportsEpisodeSchema(
+  model: keyof typeof EPISODE_SCHEMA_COMPATIBILITY,
+  schemaVersion: unknown,
+): boolean {
+  return EPISODE_SCHEMA_COMPATIBILITY[model].includes(schemaVersion as never);
 }
