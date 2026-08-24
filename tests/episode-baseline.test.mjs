@@ -5,6 +5,7 @@ import { readFile } from "node:fs/promises";
 import {
   EPISODE_BASELINE,
   EPISODE_READONLY_BASELINE,
+  EPISODE_REVISION_BASELINE,
   EPISODE_SCHEMA_COMPATIBILITY,
   MVP_SCHEMA_COMPATIBILITY,
   supportsEpisodeSchema,
@@ -27,6 +28,13 @@ test("Episode diagnostic baseline succeeds v0.20 without mutating the v0.19 MVP 
   assert.equal(EPISODE_BASELINE.requiredFeature, "workbench.episode-read-model/v1");
   assert.deepEqual(EPISODE_SCHEMA_COMPATIBILITY.timelineEvent, ["rolo-episode-timeline-event/v1"]);
   assert.deepEqual(EPISODE_SCHEMA_COMPATIBILITY.revisionCollection, ["rolo-episode-revision-collection/v1"]);
+  assert.equal(EPISODE_REVISION_BASELINE.status, "baseline");
+  assert.equal(EPISODE_REVISION_BASELINE.extends, EPISODE_BASELINE.id);
+  assert.equal(EPISODE_REVISION_BASELINE.release, "0.22.0");
+  assert.equal(EPISODE_REVISION_BASELINE.frontendMinimum, "b836dcd");
+  assert.equal(EPISODE_REVISION_BASELINE.producerMinimum, "48da032");
+  assert.equal(EPISODE_REVISION_BASELINE.producerMainMerge, "4efd11df");
+  assert.equal(EPISODE_REVISION_BASELINE.requiredRevisionFeature, "workbench.episode-revision-history/v1");
 });
 
 test("Episode compatibility accepts only the reviewed v1 family", () => {
@@ -39,12 +47,12 @@ test("Episode compatibility accepts only the reviewed v1 family", () => {
 
 test("Episode diagnostic baseline keeps media and write surfaces outside the plugin", async () => {
   const [baseline, manifest, studio] = await Promise.all([
-    read("../docs/EPISODE_DIAGNOSTIC_BASELINE.md"),
+    read("../docs/EPISODE_REVISION_HISTORY_BASELINE.md"),
     read("../rolo.plugin.json"),
     read("../src/EpisodeStudio.tsx"),
   ]);
-  assert.match(baseline, /Version: `0\.21\.0`/);
-  assert.match(baseline, /E7 is the next contract boundary/);
+  assert.match(baseline, /Version: `0\.22\.0`/);
+  assert.match(baseline, /revision-addressable historical detail/);
   assert.doesNotMatch(manifest, /episode\.(media|replay|export|write)/);
   assert.doesNotMatch(studio, /roloClient\.(invoke|cancel|replay|export|collect|recollect)/);
 });

@@ -1,6 +1,6 @@
 # Episode revision history consumer contract
 
-Status: E7 review candidate
+Status: approved and promoted as the v0.22.0 read-only baseline
 
 Backend feature: `workbench.episode-revision-history/v1`
 
@@ -46,5 +46,5 @@ half-specified comparison is rejected.
 ## Deferred authority
 
 E7 adds no write, replay, recollection, media, export, external handoff, or robot-action
-surface. It is not part of the v0.21 MVP baseline; baseline promotion requires the backend
-and frontend candidates to merge, remote checks to pass, and live two-revision evidence.
+surface. It extends the v0.21 MVP baseline as v0.22.0 after the backend and frontend
+candidates merged, all remote checks passed, and live two-revision evidence succeeded.
