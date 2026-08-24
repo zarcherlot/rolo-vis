@@ -53,18 +53,26 @@ import type {
 } from "./demoData";
 import { ROLO_API_FEATURES, RoloApiError, roloClient } from "./roloClient";
 import type {
+  AdaptBaselineStatus,
   AdaptExecutionClass,
   AdaptMigrationStatus,
   AdaptSemanticLayer,
   CapabilityBinding,
   CapabilityDetail,
+  CapabilityInferredBinding,
   CapabilitySummary,
+  CapabilitySummaryV2,
   DiscoverySnapshotCollection,
+  DiscoverySnapshotSummaryV2,
+  DiscoverySnapshotSummaryV3,
   EvidenceAuthority,
   EvidenceCollection,
   EvidenceRecord,
   FleetBlockerCollection,
+  FleetBlockerDetail,
+  FleetBlockerSummaryV2,
   FleetCollection,
+  FleetSliceStability,
   LifecycleRunCollection,
   LifecycleRunDetail,
   OperationDisposition,
@@ -72,6 +80,11 @@ import type {
   RobotOverview,
   RobotTopology,
   RobotWikiSnapshot,
+  SliceActivationOutcome,
+  SliceRunDetail,
+  SliceReviewPacket,
+  SliceStabilityComparison,
+  SliceStabilityReport,
   TargetOperationSlice,
   TopologyDiff,
   TopologyPathExplanation,
@@ -114,21 +127,25 @@ import {
 } from "./capabilityFilters";
 import type { CapabilityFilterState } from "./capabilityFilters";
 import { summarizeLifecycleAssessment } from "./lifecycleAssessment";
+import { filterSliceObservations } from "./sliceStability";
 import { getOverviewPresentation, getSurfaceSource } from "./workbenchPolicy";
 import type { WorkbenchMode } from "./workbenchPolicy";
+import { EpisodeStudio } from "./EpisodeStudio";
+import { buildWorkbenchViewLink, readEpisodeDeepLink } from "./episodeNavigation";
 
-type NavId = "fleet" | "overview" | "stack" | "capabilities" | "lifecycle" | "wiki" | "evidence";
+type NavId = "fleet" | "overview" | "stack" | "capabilities" | "lifecycle" | "episode" | "wiki" | "evidence";
 type ViewRobot = DemoRobot | (RobotCapability & { status: "online" });
 type RobotOption = DemoRobot | RobotCapability;
 type OpenEvidence = (item: EvidenceItem | string) => void;
 type StackContextFocus = { layer: ContextWikiLayer; requestId: number };
 
-const NAV_ITEMS: Array<{ id: NavId; label: string; icon: typeof House }> = [
+const NAV_ITEMS: Array<{ id: NavId; label: string; icon: typeof House; feature?: string }> = [
   { id: "fleet", label: "Fleet", icon: Robot },
   { id: "overview", label: "Overview", icon: House },
   { id: "stack", label: "Stack Map", icon: GitBranch },
   { id: "capabilities", label: "Capabilities", icon: Stack },
   { id: "lifecycle", label: "Lifecycle", icon: Clock },
+  { id: "episode", label: "Episode Studio", icon: Pulse, feature: ROLO_API_FEATURES.episodeReadModel },
   { id: "wiki", label: "Robot Wiki", icon: BookOpenText },
   { id: "evidence", label: "Evidence", icon: FileText },
 ];
@@ -268,12 +285,13 @@ function RoloNode({ data, selected }: NodeProps<Node<TopologyNodeData>>) {
 
 const nodeTypes = { rolo: RoloNode };
 
-function Sidebar({ active, onChange }: { active: NavId; onChange: (value: NavId) => void }) {
+function Sidebar({ active, apiFeatures, onChange }: { active: NavId; apiFeatures: string[]; onChange: (value: NavId) => void }) {
+  const visibleItems = NAV_ITEMS.filter((item) => !item.feature || apiFeatures.includes(item.feature));
   return (
     <aside className="sidebar" aria-label="Primary navigation">
       <div className="sidebar-brand"><img src="/assets/rolo-mark.png" alt="rolo" /></div>
       <nav>
-        {NAV_ITEMS.map(({ id, label, icon: Icon }) => (
+        {visibleItems.map(({ id, label, icon: Icon }) => (
           <button
             key={id}
             className={`nav-button ${active === id ? "is-active" : ""}`}
@@ -410,20 +428,35 @@ function PageTitle({ eyebrow, title, description, action }: PageTitleProps) {
   );
 }
 
+function isTriageBlocker(item: FleetBlockerCollection["items"][number]): item is FleetBlockerSummaryV2 {
+  return item.schema_version === "rolo-fleet-blocker-summary/v2";
+}
+
 function FleetView({
   fleet,
   blockers,
+  sliceFleet,
+  blockerDetailSupported,
   onSelectRobot,
   onOpenEvidence,
 }: {
   fleet: FleetCollection;
   blockers: FleetBlockerCollection;
+  sliceFleet: FleetSliceStability | null;
+  blockerDetailSupported: boolean;
   onSelectRobot: (robotId: string) => void;
   onOpenEvidence: OpenEvidence;
 }) {
   const [query, setQuery] = useState("");
   const [stateFilter, setStateFilter] = useState("all");
   const [stageFilter, setStageFilter] = useState("all");
+  const [categoryFilter, setCategoryFilter] = useState("all");
+  const [selectedBlockerId, setSelectedBlockerId] = useState("");
+  const [blockerDetail, setBlockerDetail] = useState<FleetBlockerDetail | null>(null);
+  const [blockerDetailMessage, setBlockerDetailMessage] = useState("");
+  const [blockerDetailLoading, setBlockerDetailLoading] = useState(false);
+  const blockerDetailRequest = useRef<AbortController | null>(null);
+  const triageAvailable = blockers.schema_version === "rolo-fleet-blocker-collection/v2";
   const normalizedQuery = query.trim().toLowerCase();
   const filteredRobots = fleet.items.filter((item) =>
     (stateFilter === "all" || item.state === stateFilter)
@@ -431,8 +464,40 @@ function FleetView({
   );
   const filteredBlockers = blockers.items.filter((item) =>
     (stageFilter === "all" || item.stage === stageFilter)
+    && (categoryFilter === "all" || (isTriageBlocker(item) && item.category === categoryFilter))
     && (!normalizedQuery || `${item.robot_id} ${item.message} ${item.owner}`.toLowerCase().includes(normalizedQuery)),
   );
+  useEffect(() => () => blockerDetailRequest.current?.abort(), []);
+  const closeBlockerDetail = () => {
+    blockerDetailRequest.current?.abort();
+    blockerDetailRequest.current = null;
+    setSelectedBlockerId("");
+    setBlockerDetail(null);
+    setBlockerDetailMessage("");
+    setBlockerDetailLoading(false);
+  };
+  const openBlockerDetail = (blockerId: string) => {
+    if (!blockerDetailSupported || !triageAvailable) {
+      const blocker = blockers.items.find((item) => item.blocker_id === blockerId);
+      if (blocker?.evidence_ids[0]) onOpenEvidence(blocker.evidence_ids[0]);
+      else if (blocker) onSelectRobot(blocker.robot_id);
+      return;
+    }
+    blockerDetailRequest.current?.abort();
+    const controller = new AbortController();
+    blockerDetailRequest.current = controller;
+    setSelectedBlockerId(blockerId);
+    setBlockerDetail(null);
+    setBlockerDetailMessage("");
+    setBlockerDetailLoading(true);
+    void roloClient.blockerDetail(blockerId, { signal: controller.signal })
+      .then((value) => { if (!controller.signal.aborted) setBlockerDetail(value); })
+      .catch((error) => { if (!controller.signal.aborted) setBlockerDetailMessage(error instanceof Error ? error.message : "Blocker detail is unavailable."); })
+      .finally(() => {
+        if (!controller.signal.aborted) setBlockerDetailLoading(false);
+        if (blockerDetailRequest.current === controller) blockerDetailRequest.current = null;
+      });
+  };
   const summary = [
     { label: "Ready", value: fleet.ready, state: "ready" },
     { label: "Attention", value: fleet.attention, state: "attention" },
@@ -451,10 +516,17 @@ function FleetView({
       <div className="fleet-summary">
         {summary.map((item) => <div className={`panel fleet-summary-card fleet-summary-${item.state}`} key={item.label}><span>{item.label}</span><strong>{item.value}</strong></div>)}
       </div>
+      {sliceFleet && <section className="panel fleet-slice-readiness" aria-label="Fleet Canary readiness">
+        <header><div><span>Adapt Slice observation</span><h3>Fleet Canary readiness</h3></div><small>{sliceFleet.observed_robot_count} of {sliceFleet.robot_count} robots have Slice evidence</small></header>
+        <div className="fleet-slice-summary"><span><strong>{sliceFleet.recommendation_counts.READY_FOR_REVIEW || 0}</strong><small>ready for review</small></span><span><strong>{sliceFleet.recommendation_counts.HOLD || 0}</strong><small>hold</small></span><span><strong>{sliceFleet.recommendation_counts.INSUFFICIENT_DATA || 0}</strong><small>sample limited</small></span></div>
+        <div className="fleet-slice-robots">{sliceFleet.items.map((item) => <button key={item.robot_id} onClick={() => onSelectRobot(item.robot_id)}><span><strong>{item.robot_id}</strong><small>{item.observation_count} decisions · {item.successful_canary_count} successful Canary</small></span><em className={`is-${item.recommendation.toLowerCase().replaceAll("_", "-")}`}>{item.recommendation.replaceAll("_", " ")}</em><small>{item.fallback_count} fallback · {item.diagnostic_count} diagnostics</small><ArrowRight size={13} /></button>)}</div>
+        <footer><ShieldCheck size={14} /><span>{sliceFleet.limitations[0]}</span></footer>
+      </section>}
       <div className="fleet-toolbar">
         <label className="search-box"><MagnifyingGlass size={17} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search robots, adapters, blockers…" /></label>
         <label className="select-control"><Funnel size={15} /><select value={stateFilter} onChange={(event) => setStateFilter(event.target.value)}><option value="all">All robot states</option><option value="READY">Ready</option><option value="ATTENTION">Attention</option><option value="DEGRADED">Degraded</option><option value="NOT_READY">Not ready</option></select></label>
         <label className="select-control"><GitBranch size={15} /><select value={stageFilter} onChange={(event) => setStageFilter(event.target.value)}><option value="all">All blocker stages</option><option value="adapt">Adapt</option><option value="diagnose">Diagnose</option><option value="verify">Verify</option></select></label>
+        {triageAvailable && <label className="select-control"><WarningCircle size={15} /><select value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)}><option value="all">All blocker categories</option><option value="MISSING_VERIFIED_EVIDENCE">Missing verified evidence</option><option value="EVIDENCE_UNAVAILABLE_OR_INVALID">Unavailable / invalid evidence</option><option value="POLICY_OR_AUTHORIZATION">Policy / authorization</option><option value="DEPENDENCY_OR_PREREQUISITE">Dependency / prerequisite</option><option value="PIPELINE_BLOCKER">Other pipeline blockers</option></select></label>}
       </div>
       <div className="fleet-layout">
         <section className="panel fleet-robots">
@@ -474,11 +546,24 @@ function FleetView({
         </section>
         <aside className="panel blocker-inbox">
           <header><div><span>Blocker Inbox</span><h3>{filteredBlockers.length} visible blockers</h3></div><small>Validated pipeline assessments</small></header>
+          {!triageAvailable && <div className="blocker-compat-note" role="status"><Info size={15} /><span><strong>Basic blocker compatibility</strong><small>This rolo version does not expose normalized categories or resolution details. No triage meaning is inferred.</small></span></div>}
+          {(selectedBlockerId || blockerDetailMessage) && <section className="blocker-triage-detail" aria-label="Blocker resolution detail">
+            <header><div><span>Resolution evidence</span><h4>{blockerDetail?.blocker.robot_id || "Loading blocker"}</h4></div><button className="icon-button" aria-label="Close blocker detail" onClick={closeBlockerDetail}><X size={14} /></button></header>
+            {blockerDetailLoading ? <div className="blocker-detail-state"><Pulse size={18} /><span><strong>Validating blocker context</strong><small>Reading stage impact and bounded evidence requirements.</small></span></div> : blockerDetail ? <>
+              <div className="blocker-detail-verdict"><span><small>{blockerDetail.blocker.category.replaceAll("_", " ")}</small><strong>{blockerDetail.resolution_state}</strong></span><em>{blockerDetail.blocker.stage} · {blockerDetail.stage_status.replaceAll("_", " ")}</em></div>
+              <p>{blockerDetail.blocker.message}</p>
+              <section><span>Impact</span><p>{blockerDetail.blocker.impact}</p></section>
+              <section className="blocker-resolution-list"><span>Required to clear</span>{blockerDetail.resolution_requirements.map((requirement) => <article key={requirement.requirement_id}><CheckCircle size={14} /><span><strong>{requirement.kind.replaceAll("_", " ")}</strong><small>{requirement.statement}</small></span><em>{requirement.status}</em>{requirement.evidence_id && <button onClick={() => onOpenEvidence(requirement.evidence_id!)}>Open evidence <ArrowRight size={11} /></button>}</article>)}</section>
+              <section className="blocker-reproduction"><span>Read-only reproduction path</span><code>{blockerDetail.canonical_cli_argv.join(" ")}</code></section>
+              <footer><Info size={13} /><span>{blockerDetail.limitations.join(" ")}</span></footer>
+            </> : <div className="blocker-detail-state is-warning"><WarningCircle size={18} /><span><strong>Blocker detail unavailable</strong><small>{blockerDetailMessage}</small></span></div>}
+          </section>}
           {filteredBlockers.map((item) => (
-            <button key={item.blocker_id} onClick={() => item.evidence_ids[0] ? onOpenEvidence(item.evidence_ids[0]) : onSelectRobot(item.robot_id)}>
+            <button key={item.blocker_id} className={selectedBlockerId === item.blocker_id ? "is-selected" : ""} onClick={() => openBlockerDetail(item.blocker_id)}>
               <span className="blocker-inbox-heading"><strong>{item.robot_id}</strong><em>{item.stage}</em></span>
+              {isTriageBlocker(item) && <span className="blocker-category">{item.category.replaceAll("_", " ")}</span>}
               <p>{item.message}</p>
-              <dl><div><dt>Owner</dt><dd>{item.owner.replaceAll("_", " ")}</dd></div><div><dt>Evidence</dt><dd>{item.evidence_ids.length || "No bound artifact"}</dd></div></dl>
+              <dl><div><dt>Owner</dt><dd>{item.owner.replaceAll("_", " ")}</dd></div><div><dt>Evidence</dt><dd>{item.evidence_ids.length || "No bound artifact"}</dd></div>{isTriageBlocker(item) && <div><dt>Clear conditions</dt><dd>{item.resolution_requirement_count}</dd></div>}</dl>
               <span className="blocker-action">{item.recommended_action}<ArrowRight size={13} /></span>
             </button>
           ))}
@@ -1063,6 +1148,27 @@ function BindingTrustPanel({
   );
 }
 
+function isCapabilitySummaryV2(capability: CapabilitySummary): capability is CapabilitySummaryV2 {
+  return capability.schema_version === "rolo-capability-summary/v2";
+}
+
+function InferredBindingPanel({ bindings }: { bindings: CapabilityInferredBinding[] }) {
+  return (
+    <section className="inferred-binding-panel" aria-label="Unverified Agent inferences">
+      <header><div><Robot size={18} weight="fill" /><span><strong>Agent-inferred routes</strong><small>Advisory lane · never included in readiness</small></span></div><em>{bindings.length} UNVERIFIED</em></header>
+      {bindings.map((binding) => <article key={binding.inference_id} className="inferred-binding-card">
+        <div><span className={`mini-chip authority-${binding.authority.toLowerCase()}`}>{binding.authority} ROUTE</span><strong>OPERATION MAPPING UNVERIFIED</strong></div>
+        <code>{binding.endpoint}</code>
+        <dl><div><dt>Kind</dt><dd>{binding.kind.replaceAll("_", " ")}</dd></div><div><dt>Interface</dt><dd>{binding.interface_type || "Not collected"}</dd></div><div><dt>Observed</dt><dd>{binding.observed_at ? new Date(binding.observed_at).toLocaleString() : "Not observed"}</dd></div></dl>
+        <p>The endpoint may be observed, but its mapping to this canonical Operation was inferred by an Agent and remains unverified.</p>
+        {binding.limitations.map((limitation) => <small key={limitation}>{limitation}</small>)}
+      </article>)}
+      {!bindings.length && <div className="empty-state"><Robot size={25} /><strong>No Agent-inferred route</strong><span>No advisory route mapping is exposed for this Operation.</span></div>}
+      <footer><Info size={15} /><span>These records do not count as Available, Verified, Applicable, or ordinary bindings.</span></footer>
+    </section>
+  );
+}
+
 function CapabilityReadinessPanel({
   capability,
   bindings,
@@ -1075,7 +1181,7 @@ function CapabilityReadinessPanel({
     [bindings, capability],
   );
   return (
-    <section className="capability-readiness-panel">
+    <section className="capability-readiness-panel" aria-label="Capability readiness">
       <header><div><span>Independent read-model signals</span><h4>Capability readiness lens</h4></div><small>{signals.filter((signal) => signal.state === "established").length} of {signals.length} established</small></header>
       <div className="capability-readiness-signals">
         {signals.map((signal, index) => {
@@ -1086,6 +1192,155 @@ function CapabilityReadinessPanel({
       <footer><Info size={15} /><span>Signals are independent read-model facts, not a causal workflow. AVAILABLE, endpoint presence, and gated acknowledgement do not prove task or physical outcome success.</span></footer>
     </section>
   );
+}
+
+function SliceStabilityView({
+  robotId,
+  report,
+  baseline,
+  supported,
+  baselineSupported,
+  detailSupported,
+  comparison,
+  reviewPacket,
+  comparisonSupported,
+  reviewSupported,
+  loading,
+  onRetry,
+}: {
+  robotId: string;
+  report: SliceStabilityReport | null;
+  baseline: AdaptBaselineStatus | null;
+  supported: boolean;
+  baselineSupported: boolean;
+  detailSupported: boolean;
+  comparison: SliceStabilityComparison | null;
+  reviewPacket: SliceReviewPacket | null;
+  comparisonSupported: boolean;
+  reviewSupported: boolean;
+  loading: boolean;
+  onRetry: () => void;
+}) {
+  const [outcomeFilter, setOutcomeFilter] = useState<SliceActivationOutcome | "ALL">("ALL");
+  const [diagnosticsOnly, setDiagnosticsOnly] = useState(false);
+  const [selectedRunId, setSelectedRunId] = useState("");
+  const [runDetail, setRunDetail] = useState<SliceRunDetail | null>(null);
+  const [runDetailMessage, setRunDetailMessage] = useState("");
+  const [runDetailLoading, setRunDetailLoading] = useState(false);
+  const detailRequest = useRef<AbortController | null>(null);
+  const filteredObservations = useMemo(
+    () => filterSliceObservations(report?.observations || [], {
+      outcome: outcomeFilter,
+      diagnosticsOnly,
+    }),
+    [diagnosticsOnly, outcomeFilter, report?.observations],
+  );
+  const recent = filteredObservations.slice(0, 8);
+
+  useEffect(() => {
+    detailRequest.current?.abort();
+    setSelectedRunId("");
+    setRunDetail(null);
+    setRunDetailMessage("");
+    setRunDetailLoading(false);
+  }, [report, robotId]);
+  useEffect(() => () => detailRequest.current?.abort(), []);
+
+  const openRunDetail = (runId: string) => {
+    if (!detailSupported) return;
+    detailRequest.current?.abort();
+    const controller = new AbortController();
+    detailRequest.current = controller;
+    setSelectedRunId(runId);
+    setRunDetail(null);
+    setRunDetailMessage("");
+    setRunDetailLoading(true);
+    void roloClient.sliceRunDetail(robotId, runId, { signal: controller.signal })
+      .then((value) => {
+        if (!controller.signal.aborted) setRunDetail(value);
+      })
+      .catch((error) => {
+        if (!controller.signal.aborted) setRunDetailMessage(error instanceof Error ? error.message : "Slice run detail is unavailable.");
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setRunDetailLoading(false);
+        if (detailRequest.current === controller) detailRequest.current = null;
+      });
+  };
+
+  if (!supported) return <div className="adapt-context-state"><Info size={24} /><span><strong>Stability evidence is not advertised</strong><small>This rolo baseline does not expose the optional Slice stability contract.</small></span></div>;
+  if (!report) return <div className="adapt-context-state is-warning"><WarningCircle size={24} /><span><strong>Stability evidence is unavailable</strong><small>No validated Slice observation report was returned.</small></span><button className="secondary-button" disabled={loading} onClick={onRetry}>Retry</button></div>;
+
+  const recommendationCopy = report.recommendation === "READY_FOR_REVIEW"
+    ? "The observed Canary window is ready for a human review. No rollout change is automatic."
+    : report.recommendation === "HOLD"
+      ? "Stop expanding Canary scope and inspect the blocking runs below. Existing configuration is unchanged."
+      : "Keep the current Shadow / Canary scope until the successful sample threshold is met.";
+  return <section className="adapt-stability-view" aria-label="Slice stability and Canary observations">
+    <header className={`adapt-stability-recommendation is-${report.recommendation.toLowerCase().replaceAll("_", "-")}`}>
+      {report.recommendation === "READY_FOR_REVIEW" ? <CheckCircle size={22} weight="fill" /> : report.recommendation === "HOLD" ? <WarningCircle size={22} weight="fill" /> : <Pulse size={22} />}
+      <span><small>Stability recommendation</small><strong>{report.recommendation.replaceAll("_", " ")}</strong><p>{recommendationCopy}</p></span>
+      <em>{report.successful_canary_count} / {report.min_successful_canary_runs} successful Canary runs</em>
+    </header>
+    {baselineSupported && <section className={`adapt-baseline-status is-${baseline?.status.toLowerCase() || "unavailable"}`} aria-label="Protected Adapt baseline status">
+      <div>{baseline?.status === "MATCHED" ? <ShieldCheck size={19} weight="fill" /> : <WarningCircle size={19} weight="fill" />}<span><small>Protected product baseline</small><strong>{baseline?.status || "UNAVAILABLE"}</strong><p>{baseline?.limitations[0] || "The optional baseline status did not resolve."}</p></span></div>
+      {baseline && <dl><div><dt>Operations</dt><dd>{baseline.current.operation_count}</dd></div><div><dt>Dispositions</dt><dd>{baseline.current.disposition_count}</dd></div><div><dt>Registry</dt><dd><code>{baseline.current.registry_sha256.slice(0, 12)}…</code></dd></div><div><dt>Changed fields</dt><dd>{baseline.changed_fields.length ? baseline.changed_fields.join(", ") : "None"}</dd></div></dl>}
+    </section>}
+    {(comparisonSupported || reviewSupported) && <div className="adapt-review-intelligence">
+      {comparisonSupported && <section className="adapt-window-comparison" aria-label="Slice observation window comparison">
+        <header><div><span>Non-overlapping windows</span><h4>Observation change</h4></div><em>{comparison?.status.replaceAll("_", " ") || "UNAVAILABLE"}</em></header>
+        {comparison ? <><div className="adapt-window-grid">{[comparison.recent, comparison.previous].map((window) => <article key={window.label}><span>{window.label}</span><strong>{window.observation_count} / {window.requested_observations}</strong><small>{window.newest_run_id ? `${window.newest_run_id} → ${window.oldest_run_id}` : "No observed Slice decisions"}</small><dl><div><dt>Successful</dt><dd>{window.successful_canary_count}</dd></div><div><dt>Fallbacks</dt><dd>{window.fallback_count}</dd></div><div><dt>Failures</dt><dd>{window.agent_failed_count + window.gate_failed_count}</dd></div><div><dt>Reduction</dt><dd>{Math.round(window.average_effective_context_reduction_ratio * 100)}%</dd></div></dl></article>)}</div><div className="adapt-window-signals"><span>Descriptive signals</span>{comparison.regression_signals.length ? comparison.regression_signals.map((signal) => <code key={signal}>{signal.replaceAll("_", " ")}</code>) : <small>{comparison.previous.observation_count ? "No regression signal in the compared metrics." : "A previous complete window is required before trend signals are shown."}</small>}</div><footer><Info size={13} /><span>{comparison.limitations[0]}</span></footer></> : <div className="adapt-context-empty"><Info size={18} /><span><strong>Window comparison unavailable</strong><small>No compatible comparison read model was returned.</small></span></div>}
+      </section>}
+      {reviewSupported && <section className={`adapt-review-packet is-${reviewPacket?.status.toLowerCase().replaceAll("_", "-") || "unavailable"}`} aria-label="Slice human review packet">
+        <header><div><span>Secret-free evidence summary</span><h4>Human review packet</h4></div><em>{reviewPacket?.status.replaceAll("_", " ") || "UNAVAILABLE"}</em></header>
+        {reviewPacket ? <><div className="adapt-review-checks">{reviewPacket.checks.map((check) => <article key={check.check_id} className={`is-${check.status.toLowerCase().replaceAll("_", "-")}`}>{check.status === "PASS" ? <CheckCircle size={16} weight="fill" /> : check.status === "BLOCKING" ? <WarningCircle size={16} weight="fill" /> : <Clock size={16} />}<span><strong>{check.label}</strong><small>{check.summary}</small></span><em>{check.status.replaceAll("_", " ")}</em></article>)}</div><div className="adapt-review-evidence"><span>Bounded evidence index</span><strong>{reviewPacket.evidence_run_ids.length} immutable Run references</strong><small>{reviewPacket.contains_secret_payloads ? "Payload classification violation" : "No SECRET payload bodies included"}</small></div><footer><ShieldCheck size={13} /><span>{reviewPacket.limitations.join(" ")}</span></footer></> : <div className="adapt-context-empty"><Info size={18} /><span><strong>Review packet unavailable</strong><small>No compatible review summary was returned.</small></span></div>}
+      </section>}
+    </div>}
+    <div className="adapt-stability-summary">
+      <div><span>Observed runs</span><strong>{report.observation_count}</strong><small>latest {report.max_runs} maximum</small></div>
+      <div><span>Selected Canary</span><strong>{report.selected_canary_count}</strong><small>{report.activated_count} activated</small></div>
+      <div><span>Fallbacks</span><strong>{report.fallback_count}</strong><small>automatic context fallback</small></div>
+      <div><span>Agent / gate failures</span><strong>{report.agent_failed_count + report.gate_failed_count}</strong><small>{report.agent_failed_count} agent · {report.gate_failed_count} gate</small></div>
+      <div><span>Context budget</span><strong>{report.context_budget_exceeded_count}</strong><small>runs over budget</small></div>
+      <div><span>Effective reduction</span><strong>{Math.round(report.average_effective_context_reduction_ratio * 100)}%</strong><small>{Math.round(report.average_potential_context_reduction_ratio * 100)}% potential average</small></div>
+    </div>
+    <div className="adapt-stability-body">
+      <section className="adapt-stability-runs">
+        <header><div><span>Immutable run evidence</span><h4>Recent Slice decisions</h4></div><small>{recent.length} of {filteredObservations.length} shown · newest first</small></header>
+        {report.observation_count > 0 && <div className="adapt-stability-filters">
+          <label><span>Outcome</span><select aria-label="Filter Slice outcomes" value={outcomeFilter} onChange={(event) => setOutcomeFilter(event.target.value as SliceActivationOutcome | "ALL")}><option value="ALL">All outcomes</option><option value="SHADOW_ONLY">Shadow only</option><option value="NOT_SELECTED">Not selected</option><option value="ACTIVATED">Activated</option><option value="FALLBACK">Fallback</option></select></label>
+          <button className={`secondary-button ${diagnosticsOnly ? "is-active" : ""}`} aria-pressed={diagnosticsOnly} onClick={() => setDiagnosticsOnly((value) => !value)}><WarningCircle size={14} />Diagnostics only</button>
+        </div>}
+        {recent.length ? recent.map((observation) => <article key={observation.run_id} className={`adapt-stability-run is-${observation.outcome.toLowerCase().replaceAll("_", "-")}`}>
+          <div><code>{observation.run_id}</code><small>{observation.mode} · {observation.outcome.replaceAll("_", " ")}</small></div>
+          <dl><div><dt>Agent</dt><dd>{observation.agent_run_status || "Not recorded"}</dd></div><div><dt>Gate</dt><dd>{observation.gate_status || "Not recorded"}</dd></div><div><dt>Context effect</dt><dd>{observation.affects_agent_context ? "Active" : "None"}</dd></div><div><dt>Reduction</dt><dd>{Math.round(observation.effective_context_reduction_ratio * 100)}%</dd></div></dl>
+          {detailSupported && <button className="icon-button" aria-label={`Inspect Slice decision ${observation.run_id}`} onClick={() => openRunDetail(observation.run_id)}><ArrowRight size={14} /></button>}
+          {(observation.fallback_reason || observation.alert_codes.length > 0) && <p><WarningCircle size={13} />{observation.fallback_reason || observation.alert_codes.join(" · ")}</p>}
+        </article>) : <div className="adapt-context-empty"><Clock size={20} /><span><strong>{report.observation_count ? "No runs match the current filters" : "No Slice decisions observed"}</strong><small>{report.observation_count ? "Clear the outcome or diagnostic filter to widen the observation set." : "Legacy runs without a Slice decision are intentionally excluded. The current recommendation remains sample-limited."}</small></span></div>}
+        {(selectedRunId || runDetailMessage) && <section className="adapt-slice-run-detail" aria-label="Slice activation decision detail">
+          <header><div><span>Decision authority explanation</span><h4>{selectedRunId}</h4></div><button className="icon-button" aria-label="Close Slice run detail" onClick={() => { detailRequest.current?.abort(); setSelectedRunId(""); setRunDetail(null); setRunDetailMessage(""); setRunDetailLoading(false); }}><X size={15} /></button></header>
+          {runDetailLoading ? <div className="adapt-context-state"><Pulse size={20} /><span><strong>Validating immutable decision</strong><small>Joining activation, Shadow divergence, and bounded run metrics.</small></span></div> : runDetail ? <>
+            <div className="adapt-slice-decision-summary"><div><span>Mode / outcome</span><strong>{runDetail.activation.mode} · {runDetail.activation.outcome.replaceAll("_", " ")}</strong></div><div><span>Selected by</span><strong>{runDetail.activation.selected_by.join(" · ") || "Not selected"}</strong></div><div><span>Context operation limit</span><strong>{runDetail.activation.max_context_operations}</strong></div><div><span>Affects Agent context</span><strong>{runDetail.activation.affects_agent_context ? "Yes" : "No"}</strong></div></div>
+            <div className="adapt-slice-authority-grid">
+              <section><span>Authoritative / release operations</span><strong>{runDetail.activation.release_authority_operations.length}</strong><p>{runDetail.activation.release_authority_operations.map((operation) => <code key={operation}>{operation}</code>)}</p></section>
+              <section><span>Requested context operations</span><strong>{runDetail.activation.requested_context_operations.length}</strong><p>{runDetail.activation.requested_context_operations.map((operation) => <code key={operation}>{operation}</code>)}</p></section>
+              <section><span>Effective context operations</span><strong>{runDetail.activation.effective_context_operations.length}</strong><p>{runDetail.activation.effective_context_operations.map((operation) => <code key={operation}>{operation}</code>)}</p></section>
+            </div>
+            {runDetail.activation.alerts.length > 0 && <section className="adapt-slice-alerts"><span>Activation diagnostics</span>{runDetail.activation.alerts.map((alert) => <article key={alert.code} className={`is-${alert.severity.toLowerCase()}`}><header><code>{alert.code}</code><strong>{alert.severity}</strong></header><p>{alert.message}</p>{alert.operations.length > 0 && <small>{alert.operations.join(" · ")}</small>}</article>)}</section>}
+            <section className="adapt-shadow-divergence"><header><div><span>Shadow divergence</span><strong>{runDetail.shadow ? "Validated" : "Legacy run · not recorded"}</strong></div><small>Comparison only · never release authority</small></header>{runDetail.shadow && <dl><div><dt>Eligible outside Shadow</dt><dd>{runDetail.shadow.eligible_not_in_shadow.length}</dd><p>{runDetail.shadow.eligible_not_in_shadow.map((operation) => <code key={operation}>{operation}</code>)}</p></div><div><dt>Shadow outside eligibility</dt><dd>{runDetail.shadow.shadow_not_in_eligible.length}</dd><p>{runDetail.shadow.shadow_not_in_eligible.map((operation) => <code key={operation}>{operation}</code>)}</p></div></dl>}</section>
+            <footer><ShieldCheck size={14} /><span>{runDetail.limitations.join(" ")}</span></footer>
+          </> : <div className="adapt-context-state is-warning"><WarningCircle size={20} /><span><strong>Slice decision detail is unavailable</strong><small>{runDetailMessage}</small></span></div>}
+        </section>}
+      </section>
+      <aside className="adapt-stability-reasons">
+        <span>Recommendation evidence</span>
+        {report.recommendation_reasons.map((reason) => <p key={reason}><i />{reason.replaceAll("_", " ").toLowerCase()}</p>)}
+        <dl><div><dt>Shadow only</dt><dd>{report.outcome_counts.SHADOW_ONLY || 0}</dd></div><div><dt>Not selected</dt><dd>{report.outcome_counts.NOT_SELECTED || 0}</dd></div><div><dt>Activated</dt><dd>{report.outcome_counts.ACTIVATED || 0}</dd></div><div><dt>Fallback</dt><dd>{report.outcome_counts.FALLBACK || 0}</dd></div></dl>
+        {Object.keys(report.alert_counts).length > 0 && <section><span>Observed alerts</span>{Object.entries(report.alert_counts).map(([code, count]) => <p key={code}><code>{code}</code><strong>{count}</strong></p>)}</section>}
+      </aside>
+    </div>
+    <footer><ShieldCheck size={15} /><span>Read-only recommendation · influences release: no. Registry, Bundle, Catalog, allowlists, and activation mode remain under separate authority.</span></footer>
+  </section>;
 }
 
 function LiveCapabilityView({
@@ -1116,9 +1371,13 @@ function LiveCapabilityView({
   const [adaptLoading, setAdaptLoading] = useState(false);
   const [adaptMessage, setAdaptMessage] = useState("");
   const [targetSlice, setTargetSlice] = useState<TargetOperationSlice | null>(null);
+  const [sliceStability, setSliceStability] = useState<SliceStabilityReport | null>(null);
+  const [sliceComparison, setSliceComparison] = useState<SliceStabilityComparison | null>(null);
+  const [sliceReviewPacket, setSliceReviewPacket] = useState<SliceReviewPacket | null>(null);
+  const [adaptBaseline, setAdaptBaseline] = useState<AdaptBaselineStatus | null>(null);
   const [operationGovernance, setOperationGovernance] = useState<OperationDisposition[]>([]);
   const [adaptTargetFocus, setAdaptTargetFocus] = useState(false);
-  const [adaptView, setAdaptView] = useState<"target" | "governance">("target");
+  const [adaptView, setAdaptView] = useState<"target" | "governance" | "stability">("target");
   const [governanceQuery, setGovernanceQuery] = useState("");
   const [governanceSemanticLayer, setGovernanceSemanticLayer] = useState<AdaptSemanticLayer | "ALL">("ALL");
   const [governanceExecutionClass, setGovernanceExecutionClass] = useState<AdaptExecutionClass | "ALL">("ALL");
@@ -1146,6 +1405,11 @@ function LiveCapabilityView({
   const governanceFilterCount = activeGovernanceFilterCount(filters);
   const targetSliceSupported = apiFeatures.includes(ROLO_API_FEATURES.targetOperationSlice);
   const operationGovernanceSupported = apiFeatures.includes(ROLO_API_FEATURES.operationGovernance);
+  const sliceStabilitySupported = apiFeatures.includes(ROLO_API_FEATURES.sliceStability);
+  const adaptBaselineSupported = apiFeatures.includes(ROLO_API_FEATURES.adaptBaselineStatus);
+  const sliceRunDetailSupported = apiFeatures.includes(ROLO_API_FEATURES.sliceRunDetail);
+  const sliceComparisonSupported = apiFeatures.includes(ROLO_API_FEATURES.sliceStabilityComparison);
+  const sliceReviewSupported = apiFeatures.includes(ROLO_API_FEATURES.sliceReviewPacket);
   const adaptContextSupported = targetSliceSupported;
   const adaptLens = useMemo(
     () => targetSlice ? buildAdaptContextLens(targetSlice, operationGovernance) : null,
@@ -1185,19 +1449,39 @@ function LiveCapabilityView({
     const governanceRequest = operationGovernanceSupported
       ? roloClient.operationGovernance({ signal: controller.signal })
       : Promise.resolve(null);
-    void Promise.allSettled([sliceRequest, governanceRequest]).then(([sliceResult, governanceResult]) => {
+    const stabilityRequest = sliceStabilitySupported
+      ? roloClient.sliceStability(robotId, { signal: controller.signal })
+      : Promise.resolve(null);
+    const baselineRequest = adaptBaselineSupported
+      ? roloClient.adaptBaseline({ signal: controller.signal })
+      : Promise.resolve(null);
+    const comparisonRequest = sliceComparisonSupported
+      ? roloClient.sliceStabilityComparison(robotId, { signal: controller.signal })
+      : Promise.resolve(null);
+    const reviewRequest = sliceReviewSupported
+      ? roloClient.sliceReviewPacket(robotId, { signal: controller.signal })
+      : Promise.resolve(null);
+    void Promise.allSettled([sliceRequest, governanceRequest, stabilityRequest, baselineRequest, comparisonRequest, reviewRequest]).then(([sliceResult, governanceResult, stabilityResult, baselineResult, comparisonResult, reviewResult]) => {
       if (controller.signal.aborted) return;
       const messages: string[] = [];
       if (sliceResult.status === "fulfilled") setTargetSlice(sliceResult.value);
       else messages.push(sliceResult.reason instanceof Error ? sliceResult.reason.message : "Target operation slice is unavailable.");
       if (governanceResult.status === "fulfilled") setOperationGovernance(governanceResult.value?.items || []);
       else messages.push(governanceResult.reason instanceof Error ? governanceResult.reason.message : "Operation governance is unavailable.");
+      if (stabilityResult.status === "fulfilled") setSliceStability(stabilityResult.value);
+      else messages.push(stabilityResult.reason instanceof Error ? stabilityResult.reason.message : "Slice stability evidence is unavailable.");
+      if (baselineResult.status === "fulfilled") setAdaptBaseline(baselineResult.value);
+      else messages.push(baselineResult.reason instanceof Error ? baselineResult.reason.message : "Adapt protected baseline is unavailable.");
+      if (comparisonResult.status === "fulfilled") setSliceComparison(comparisonResult.value);
+      else messages.push(comparisonResult.reason instanceof Error ? comparisonResult.reason.message : "Slice window comparison is unavailable.");
+      if (reviewResult.status === "fulfilled") setSliceReviewPacket(reviewResult.value);
+      else messages.push(reviewResult.reason instanceof Error ? reviewResult.reason.message : "Slice review packet is unavailable.");
       setAdaptMessage(messages.join(" "));
     }).finally(() => {
       if (!controller.signal.aborted) setAdaptLoading(false);
       if (adaptRequest.current === controller) adaptRequest.current = null;
     });
-  }, [operationGovernanceSupported, robotId, targetSliceSupported]);
+  }, [adaptBaselineSupported, operationGovernanceSupported, robotId, sliceComparisonSupported, sliceReviewSupported, sliceStabilitySupported, targetSliceSupported]);
 
   const closeAdaptContext = () => {
     adaptRequest.current?.abort();
@@ -1221,6 +1505,10 @@ function LiveCapabilityView({
     setAdaptLoading(false);
     setAdaptMessage("");
     setTargetSlice(null);
+    setSliceStability(null);
+    setSliceComparison(null);
+    setSliceReviewPacket(null);
+    setAdaptBaseline(null);
     setOperationGovernance([]);
     setAdaptTargetFocus(false);
     setAdaptView("target");
@@ -1352,6 +1640,7 @@ function LiveCapabilityView({
           </div>
           <nav className="adapt-view-tabs" aria-label="Adapt context view">
             <button className={adaptView === "target" ? "is-active" : ""} aria-pressed={adaptView === "target"} onClick={() => setAdaptView("target")}><Target size={14} />Target work <span>{adaptLens.targetOperations.length}</span></button>
+            {sliceStabilitySupported && <button className={adaptView === "stability" ? "is-active" : ""} aria-pressed={adaptView === "stability"} onClick={() => setAdaptView("stability")}><Broadcast size={14} />Stability <span>{sliceStability?.observation_count || 0}</span></button>}
             <button className={adaptView === "governance" ? "is-active" : ""} aria-pressed={adaptView === "governance"} onClick={() => setAdaptView("governance")}><ShieldCheck size={14} />Governance ledger <span>{operationGovernance.length}</span></button>
           </nav>
           {adaptView === "target" ? <div className="adapt-context-body">
@@ -1368,7 +1657,7 @@ function LiveCapabilityView({
                 <section><span>Deferred reasons</span>{adaptLens.deferred.length ? adaptLens.deferred.map((item) => <div key={item.reason}><code>{item.reason.replaceAll("_", " ")}</code><strong>{item.count}</strong></div>) : <p>No deferred operations are reported.</p>}</section>
                 <dl><div><dt>Discovery</dt><dd>{targetSlice.discovery_id}</dd></div><div><dt>Slice digest</dt><dd><code>{targetSlice.slice_sha256.slice(0, 12)}…</code></dd></div><div><dt>Registry digest</dt><dd><code>{targetSlice.registry_sha256.slice(0, 12)}…</code></dd></div><div><dt>Governance ledger</dt><dd>{operationGovernance.length ? `${operationGovernance.length} operations` : "Not available"}</dd></div></dl>
               </aside>
-            </div> : <section className="adapt-governance-matrix">
+            </div> : adaptView === "stability" ? <SliceStabilityView robotId={robotId} report={sliceStability} baseline={adaptBaseline} supported={sliceStabilitySupported} baselineSupported={adaptBaselineSupported} detailSupported={sliceRunDetailSupported} comparison={sliceComparison} reviewPacket={sliceReviewPacket} comparisonSupported={sliceComparisonSupported} reviewSupported={sliceReviewSupported} loading={adaptLoading} onRetry={loadAdaptContext} /> : <section className="adapt-governance-matrix">
               <header>
                 <div><span>Operation disposition ledger</span><h4>Cross-layer governance explorer</h4><p>Search migration intent and execution ownership without changing Registry truth.</p></div>
                 <small>{governanceResultPage.total} of {governanceSummary.total} records</small>
@@ -1425,7 +1714,7 @@ function LiveCapabilityView({
               <header><code>{family.family}</code><span>{family.items.length} {family.items.length === 1 ? "operation" : "operations"}</span></header>
               {family.items.map((item) => (
                 <button key={item.operation} className={`operation-row ${selected?.operation === item.operation ? "is-selected" : ""}`} onClick={() => { setSelectedOperation(item.operation); setTab("overview"); }}>
-                  <span className="operation-main"><code>{item.operation}</code><small>{item.layer} · {item.applicability.replace("_", " ")}</small><small className="operation-governance-line">{item.access} · {item.risk} · {item.data_classification}</small></span>
+                  <span className="operation-main"><code>{item.operation}</code><small>{item.layer} · {item.applicability.replace("_", " ")}</small>{isCapabilitySummaryV2(item) && item.candidate_origin === "HEURISTIC_AGENT" && <small className="operation-inference-label">Agent inferred · unverified</small>}<small className="operation-governance-line">{item.access} · {item.risk} · {item.data_classification}</small></span>
                   <span className={`mini-chip lifecycle-${item.lifecycle.toLowerCase()}`}>{item.lifecycle}</span>
                   <span className={`mini-chip availability-${item.availability.toLowerCase()}`}>{item.availability}</span>
                   <ArrowRight size={15} />
@@ -1458,6 +1747,9 @@ function LiveCapabilityView({
                 <div><span>Contract</span><strong>v{detailItem.contract_version}</strong></div>
                 <div><span>Last verified</span><strong>{detailItem.last_verified_at ? new Date(detailItem.last_verified_at).toLocaleString() : "Not verified"}</strong></div>
               </div>
+              {isCapabilitySummaryV2(detailItem) && detailItem.candidate_origin === "HEURISTIC_AGENT" && <section className="capability-inference-notice">
+                <Robot size={20} weight="fill" /><span><strong>Agent suggestion · discovered-unverified</strong><small>{detailItem.inferred_binding_count} inferred route{detailItem.inferred_binding_count === 1 ? "" : "s"} are available in a separate advisory lane. They do not contribute to the readiness signals below.</small></span>
+              </section>}
               {selectedAdaptContext && <section className={`operation-adapt-context ${selectedAdaptContext.inCurrentSlice ? "is-current" : ""}`}>
                 <header><div><span>External Adapt governance</span><h4>Operation context</h4></div><strong>{selectedAdaptContext.inCurrentSlice ? selectedAdaptContext.role : "OUTSIDE CURRENT SLICE"}</strong></header>
                 <dl>
@@ -1500,7 +1792,7 @@ function LiveCapabilityView({
               </div>
               <div className="contract-time-semantics"><Clock size={16} /><span><strong>Time semantics</strong>{detail.contract.time_semantics}</span></div>
             </div>}
-            {tab === "binding" && detail && <BindingTrustPanel bindings={detail.bindings} onOpenEvidence={onOpenEvidence} />}
+            {tab === "binding" && detail && <div className="capability-binding-lanes"><BindingTrustPanel bindings={detail.bindings} onOpenEvidence={onOpenEvidence} />{detail.schema_version === "rolo-capability-detail/v2" && <InferredBindingPanel bindings={detail.inferred_bindings} />}</div>}
             {tab === "evidence" && <div className="capability-evidence-list">{detailItem.evidence_ids.length ? detailItem.evidence_ids.map((id) => <button key={id} onClick={() => onOpenEvidence(id)}><ShieldCheck size={17} /><code>{id}</code><ArrowRight size={14} /></button>) : <div className="empty-state"><FileText size={26} /><strong>No gated evidence record</strong><span>Contract validation alone is not runtime or outcome evidence.</span></div>}</div>}
             {detailItem.evidence_ids[0] && <button className="primary-button detail-cta" onClick={() => onOpenEvidence(detailItem.evidence_ids[0])}>View primary evidence</button>}
           </>}
@@ -1674,6 +1966,13 @@ function LiveLifecycleView({
   );
 }
 
+function hasHeuristicSummary(
+  item: DiscoverySnapshotCollection["items"][number],
+): item is DiscoverySnapshotSummaryV2 | DiscoverySnapshotSummaryV3 {
+  return item.schema_version === "rolo-discovery-snapshot-summary/v2"
+    || item.schema_version === "rolo-discovery-snapshot-summary/v3";
+}
+
 function WikiView({
   wiki,
   history,
@@ -1703,6 +2002,19 @@ function WikiView({
   const selectedSection = wiki.sections.find((section) => section.heading === selectedHeading) || wiki.sections[0];
   const selectedDiscovery = history.items.find((item) => item.discovery_id === selectedDiscoveryId)
     || history.items[0];
+  const heuristicSummary = selectedDiscovery && hasHeuristicSummary(selectedDiscovery)
+    ? selectedDiscovery.heuristic_summary
+    : null;
+  const targetEvidence = selectedDiscovery?.schema_version === "rolo-discovery-snapshot-summary/v3"
+    ? selectedDiscovery.target_evidence
+    : null;
+  const heuristicMessage = heuristicSummary?.status === "AGENT_COMPLETED"
+    ? "Agent analysis completed. This does not verify any Operation, runtime route, task result, or physical outcome."
+    : heuristicSummary?.status === "FALLBACK"
+      ? "Agent analysis did not complete. The bounded fallback remains advisory and does not establish Capability readiness."
+      : heuristicSummary?.status === "DISABLED"
+        ? "Heuristic Agent analysis was disabled for this discovery snapshot."
+        : "This rolo version does not expose a sanitized heuristic summary. No Agent state is inferred.";
   const narrativeLabel = wiki.content_origin === "GENERATED_MATCH"
     ? "Generated text matches snapshot"
     : wiki.content_origin === "HUMAN_EDITED" ? "Human-maintained text" : "Narrative unavailable";
@@ -1745,6 +2057,26 @@ function WikiView({
               <div><dt>Semantic bindings</dt><dd>{selectedDiscovery.semantic_bindings}</dd></div>
               <div><dt>Warnings</dt><dd>{selectedDiscovery.warning_count}</dd></div>
             </dl>
+            <section className={`wiki-heuristic-summary ${heuristicSummary ? `is-${heuristicSummary.status.toLowerCase().replaceAll("_", "-")}` : "is-unavailable"}`} aria-label="Heuristic discovery summary">
+              <header>
+                <div><Robot size={17} weight="fill" /><span><strong>Heuristic analysis</strong><small>{heuristicSummary ? `${heuristicSummary.mode} mode · advisory only` : "safe summary unavailable"}</small></span></div>
+                <em>{heuristicSummary?.status.replaceAll("_", " ") || "UNAVAILABLE"}</em>
+              </header>
+              {heuristicSummary && <dl>
+                <div><dt>Inferred Operations</dt><dd>{heuristicSummary.inferred_operation_count}</dd></div>
+                <div><dt>Missing evidence</dt><dd>{heuristicSummary.missing_evidence_count}</dd></div>
+                <div><dt>Release influence</dt><dd>{heuristicSummary.influences_release ? "Blocked" : "None"}</dd></div>
+              </dl>}
+              <p>{heuristicMessage}</p>
+            </section>
+            <section className={`wiki-target-evidence ${targetEvidence ? `is-${targetEvidence.freshness.toLowerCase()}` : "is-unavailable"}`} aria-label="Target evidence summary">
+              <header><div><Crosshair size={17} weight="fill" /><span><strong>Target-bound evidence</strong><small>{targetEvidence ? `${targetEvidence.deployment_scope} · read-only collection` : "safe summary unavailable"}</small></span></div><em>{targetEvidence?.freshness || "UNAVAILABLE"}</em></header>
+              {targetEvidence ? <>
+                <dl><div><dt>Deployment</dt><dd>{targetEvidence.deployment_scope}</dd></div><div><dt>Collected</dt><dd>{new Date(targetEvidence.collected_at).toLocaleString()}</dd></div><div><dt>Refresh</dt><dd>{targetEvidence.refresh_required ? "Recollection required" : "Not required"}</dd></div></dl>
+                <p>{targetEvidence.refresh_required ? targetEvidence.refresh_reason : "Verified target evidence remains inside the collector replay window."}</p>
+                {targetEvidence.refresh_required && <div className="target-evidence-prompt"><WarningCircle size={15} weight="fill" /><span><strong>Recollect evidence</strong><small>Run the bounded target evidence workflow outside this read-only workbench, then create a new discovery snapshot.</small></span></div>}
+              </> : <p>{selectedDiscovery?.schema_version === "rolo-discovery-snapshot-summary/v3" ? "This snapshot has no target-bound evidence summary." : "This rolo version does not expose target evidence scope or freshness. No state is inferred."}</p>}
+            </section>
             {selectedDiscovery.limitations.length > 0 && <section className="wiki-discovery-limitations" aria-label="Snapshot limitations">
               <header><div><WarningCircle size={16} weight="fill" /><span>Diagnostic limitations</span></div><strong>{selectedDiscovery.limitations.length}</strong></header>
               <ul>{selectedDiscovery.limitations.map((limitation, index) => <li key={`${index}-${limitation}`}>{limitation}</li>)}</ul>
@@ -1783,10 +2115,10 @@ function WikiView({
           {selectedSection ? <div>{selectedSection.lines.map((line, index) => <p key={`${selectedSection.heading}-${index}`}>{line}</p>)}</div> : <div className="empty-state"><BookOpenText size={27} /><strong>No narrative content</strong><span>Machine observations remain available in the verified panels.</span></div>}
         </article>
         <aside className="panel wiki-insights">
-          <header><span>Advisory insights</span><small>{wiki.insights.length} manifest-verified records</small></header>
+          <header><span>Advisory insights</span><small>{wiki.insights.length} integrity-checked advisory records</small></header>
           {wiki.insights.map((insight) => (
             <button key={insight.evidence_id} onClick={() => onOpenEvidence(insight.evidence_id)}>
-              <span className="wiki-insight-meta"><strong>{insight.category}</strong><em>{insight.confidence} confidence</em></span>
+              <span className="wiki-insight-meta"><strong>{insight.category}</strong><span className={`wiki-insight-source is-${insight.source.toLowerCase().replaceAll("_", "-")}`}>{insight.source === "ADAPT_AGENT_SKILL" ? "Agent suggestion · unverified" : "Rule-derived"}</span><em>{insight.confidence} confidence</em></span>
               <p>{insight.statement}</p>
               <small>Verify: {insight.verification}</small>
               <span className="wiki-evidence-link"><ShieldCheck size={14} /> Open evidence</span>
@@ -1929,11 +2261,18 @@ function EvidenceView({
 
 function EvidenceDrawer({ evidence, onClose }: { evidence: EvidenceItem | null; onClose: () => void }) {
   if (!evidence) return null;
+  const integrityStatement = evidence.integrity === "verified"
+    ? "The reference is bound to a hash-verified release."
+    : evidence.kind === "OBSERVED"
+      ? "The bounded observation was validated, but it is not an independent Verify-stage result."
+      : evidence.kind === "GATED"
+        ? "The gated record was validated without claiming a hash-verified release."
+        : "The declaration passed schema validation but does not prove runtime presence.";
   return (
     <div className="drawer-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
       <aside className="evidence-drawer" aria-label="Evidence details">
         <div className="drawer-header"><div><span>{evidence.kind}</span><h3>{evidence.title}</h3></div><button onClick={onClose} aria-label="Close evidence"><X size={20} /></button></div>
-        <div className={`evidence-verdict verdict-${evidence.integrity}`}><CheckCircle size={24} weight="fill" /><div><strong>Integrity {evidence.integrity}</strong><span>{evidence.integrity === "verified" ? "The reference is bound to a hash-verified release." : "The declaration passed schema validation but does not prove runtime presence."}</span></div></div>
+        <div className={`evidence-verdict verdict-${evidence.integrity}`}><CheckCircle size={24} weight="fill" /><div><strong>Integrity {evidence.integrity}</strong><span>{integrityStatement}</span></div></div>
         <dl className="drawer-facts"><div><dt>Evidence ID</dt><dd>{evidence.id}</dd></div><div><dt>Source</dt><dd>{evidence.source}</dd></div><div><dt>Observed</dt><dd>{evidence.time}</dd></div><div><dt>Classification</dt><dd>{evidence.classification || "INTERNAL"}</dd></div></dl>
         <div className="drawer-section"><h4>Evidence statement</h4><p>{evidence.summary || `${evidence.title}. This record was produced by a bounded read-only source.`}</p></div>
         <div className="drawer-section"><h4>Sanitized reference</h4><code>{evidence.ref}</code></div>
@@ -1946,7 +2285,8 @@ function EvidenceDrawer({ evidence, onClose }: { evidence: EvidenceItem | null; 
 }
 
 function AppContent() {
-  const [active, setActive] = useState<NavId>("stack");
+  const [initialEpisodeTarget] = useState(() => readEpisodeDeepLink(window.location.href));
+  const [active, setActive] = useState<NavId>(() => initialEpisodeTarget ? "episode" : "stack");
   const [stackContextFocus, setStackContextFocus] = useState<StackContextFocus | null>(null);
   const [wikiContextFocus, setWikiContextFocus] = useState<WikiLayer | null>(null);
   const [mode, setMode] = useState<WorkbenchMode>("connecting");
@@ -1968,6 +2308,7 @@ function AppContent() {
   const [wikiMessage, setWikiMessage] = useState("");
   const [fleet, setFleet] = useState<FleetCollection | null>(null);
   const [fleetBlockers, setFleetBlockers] = useState<FleetBlockerCollection | null>(null);
+  const [fleetSlice, setFleetSlice] = useState<FleetSliceStability | null>(null);
   const [fleetRequested, setFleetRequested] = useState(false);
   const [fleetLoading, setFleetLoading] = useState(false);
   const [fleetMessage, setFleetMessage] = useState("");
@@ -1986,9 +2327,11 @@ function AppContent() {
     setWikiMessage("");
     setFleet(null);
     setFleetBlockers(null);
+    setFleetSlice(null);
     setFleetRequested(false);
     setFleetLoading(false);
     setFleetMessage("");
+    setApiFeatures([]);
     const controller = new AbortController();
     const timeout = window.setTimeout(() => controller.abort(), 5000);
     try {
@@ -2062,6 +2405,7 @@ function AppContent() {
     setWikiMessage("");
     setFleet(null);
     setFleetBlockers(null);
+    setFleetSlice(null);
     setFleetRequested(false);
     setFleetLoading(false);
     setFleetMessage("");
@@ -2069,7 +2413,13 @@ function AppContent() {
     setMode("demo");
   }, []);
 
-  useEffect(() => { void connect(); }, [connect]);
+  useEffect(() => { void connect(initialEpisodeTarget?.robotId); }, [connect, initialEpisodeTarget]);
+  useEffect(() => {
+    if (active === "episode" && !apiFeatures.includes(ROLO_API_FEATURES.episodeReadModel) && ["live", "partial", "demo"].includes(mode)) {
+      setActive("stack");
+      window.history.replaceState(null, "", buildWorkbenchViewLink(window.location.href, "stack"));
+    }
+  }, [active, apiFeatures, mode]);
   useEffect(() => {
     if (active !== "wiki" || !robot || (wiki && discoveryHistory) || wikiLoading || wikiRequestRobotId === robot.robot_id || !["live", "partial"].includes(mode)) return;
     let current = true;
@@ -2107,13 +2457,18 @@ function AppContent() {
     setFleetRequested(true);
     setFleetLoading(true);
     setFleetMessage("");
+    const sliceFleetRequest = apiFeatures.includes(ROLO_API_FEATURES.fleetSliceStability)
+      ? roloClient.fleetSliceStability({ signal: controller.signal }).catch(() => null)
+      : Promise.resolve(null);
     void Promise.all([
       roloClient.fleet({ signal: controller.signal }),
       roloClient.blockers({ signal: controller.signal }),
-    ]).then(([fleetSnapshot, blockerSnapshot]) => {
+      sliceFleetRequest,
+    ]).then(([fleetSnapshot, blockerSnapshot, sliceFleetSnapshot]) => {
       if (!current) return;
       setFleet(fleetSnapshot);
       setFleetBlockers(blockerSnapshot);
+      setFleetSlice(sliceFleetSnapshot);
     }).catch((error: unknown) => {
       if (current) setFleetMessage(error instanceof Error ? error.message : "The Fleet workspace could not be read.");
     }).finally(() => { if (current) setFleetLoading(false); });
@@ -2123,7 +2478,7 @@ function AppContent() {
       setFleetRequested(false);
       setFleetLoading(false);
     };
-  }, [active, mode, fleet, fleetBlockers]);
+  }, [active, mode, fleet, fleetBlockers, apiFeatures]);
   useEffect(() => {
     const handleKey = (event: KeyboardEvent) => { if (event.key === "Escape") setEvidence(null); };
     window.addEventListener("keydown", handleKey);
@@ -2161,6 +2516,7 @@ function AppContent() {
     setStackContextFocus(null);
     setWikiContextFocus(null);
     setActive(view);
+    window.history.replaceState(null, "", buildWorkbenchViewLink(window.location.href, view));
   }, []);
   const openStackLayer = useCallback((layer: ContextWikiLayer) => {
     setWikiContextFocus(null);
@@ -2185,17 +2541,19 @@ function AppContent() {
   const evidenceSource = getSurfaceSource(mode, "evidence", { evidence: Boolean(evidenceList) });
   const lifecycleSource = getSurfaceSource(mode, "lifecycle", { lifecycle: Boolean(pipeline.length && lifecycleRuns) });
   const capabilitySource = getSurfaceSource(mode, "capabilities", { capabilities: Boolean(capabilityList) });
+  const episodeSupported = apiFeatures.includes(ROLO_API_FEATURES.episodeReadModel);
   return (
     <div className="app-shell">
-      <Sidebar active={active} onChange={navigate} />
+      <Sidebar active={active} apiFeatures={apiFeatures} onChange={navigate} />
       <Topbar robot={robot} robots={robots} activeLabel={activeLabel} mode={mode} snapshot={overview?.observed_at} onRetry={() => connect(robot?.robot_id)} onRobotChange={connect} />
       <main className="app-main">
-        {(["connecting", "unavailable"].includes(mode) || !robot) ? <ConnectionStateView mode={mode} message={connectionMessage} onRetry={() => connect()} onUseDemo={useDemo} /> : <>
+        {(["connecting", "unavailable"].includes(mode) || !robot) ? <ConnectionStateView mode={mode} message={connectionMessage} onRetry={() => connect(initialEpisodeTarget?.robotId)} onUseDemo={useDemo} /> : <>
           {active === "stack" && (stackSource === "demo" ? <StackMapView focusLayer={stackContextFocus} onOpenWikiLayer={openWikiLayer} onOpenEvidence={openEvidence} /> : stackSource === "live" ? <StackMapView topology={topology} topologySnapshots={topologySnapshots} robotId={robot.robot_id} focusLayer={stackContextFocus} onOpenWikiLayer={openWikiLayer} onOpenEvidence={openEvidence} /> : <ReadModelUnavailableView title="Stack Map" description="Live topology needs a versioned rolo topology read model." />)}
-          {active === "fleet" && (mode === "demo" ? <ReadModelUnavailableView title="Fleet" description="The labeled demo fixture represents one robot and does not include a fleet aggregate." /> : fleet && fleetBlockers ? <FleetView fleet={fleet} blockers={fleetBlockers} onSelectRobot={selectFleetRobot} onOpenEvidence={openEvidence} /> : fleetLoading ? <section className="content-view"><PageTitle title="Fleet" description="Aggregating validated robot overviews and pipeline blockers…" /><div className="panel read-model-unavailable" role="status"><Pulse size={26} /><div><strong>Loading Fleet</strong><p>No runtime telemetry is inferred while this read model is loading.</p></div></div></section> : <ReadModelUnavailableView title="Fleet" description={fleetMessage || "Open this surface to read the validated Fleet aggregate."} />)}
+          {active === "fleet" && (mode === "demo" ? <ReadModelUnavailableView title="Fleet" description="The labeled demo fixture represents one robot and does not include a fleet aggregate." /> : fleet && fleetBlockers ? <FleetView fleet={fleet} blockers={fleetBlockers} sliceFleet={fleetSlice} blockerDetailSupported={apiFeatures.includes(ROLO_API_FEATURES.blockerDetail)} onSelectRobot={selectFleetRobot} onOpenEvidence={openEvidence} /> : fleetLoading ? <section className="content-view"><PageTitle title="Fleet" description="Aggregating validated robot overviews and pipeline blockers…" /><div className="panel read-model-unavailable" role="status"><Pulse size={26} /><div><strong>Loading Fleet</strong><p>No runtime telemetry is inferred while this read model is loading.</p></div></div></section> : <ReadModelUnavailableView title="Fleet" description={fleetMessage || "Open this surface to read the validated Fleet aggregate."} />)}
           {active === "overview" && <OverviewView robot={robot} pipeline={pipeline} overview={overview} mode={mode} evidenceItems={evidenceItems} onOpenEvidence={openEvidence} onNavigate={navigate} />}
           {active === "capabilities" && (capabilitySource === "demo" ? <DemoCapabilityView onOpenEvidence={setEvidence} /> : capabilitySource === "live" && capabilityList ? <LiveCapabilityView robotId={robot.robot_id} items={capabilityList} limitations={capabilityLimitations} apiFeatures={apiFeatures} onOpenEvidence={openEvidence} /> : <ReadModelUnavailableView title="Capabilities" description="Live capability coverage needs a versioned rolo capability read model." />)}
           {active === "lifecycle" && (lifecycleSource === "demo" ? <DemoLifecycleView pipeline={pipeline} onOpenEvidence={setEvidence} /> : lifecycleSource === "live" && lifecycleRuns ? <LiveLifecycleView pipeline={pipeline} runs={lifecycleRuns} robotId={robot.robot_id} onOpenEvidence={openEvidence} /> : <ReadModelUnavailableView title="Lifecycle" description="Live lifecycle requires trusted stage and run read models." />)}
+          {active === "episode" && (episodeSupported ? <EpisodeStudio robotId={robot.robot_id} initialTarget={initialEpisodeTarget} onOpenEvidence={openEvidence} /> : <ReadModelUnavailableView title="Episode Studio" description="rolo has not advertised the versioned Episode read model for this robot connection." />)}
           {active === "wiki" && (mode === "demo" ? <ReadModelUnavailableView title="Robot Wiki" description="The labeled demo fixture does not include discovery Wiki evidence." /> : wiki && discoveryHistory ? <WikiView wiki={wiki} history={discoveryHistory} focusLayer={wikiContextFocus} onOpenStackLayer={openStackLayer} onClearFocus={() => setWikiContextFocus(null)} onOpenEvidence={openEvidence} /> : wikiLoading ? <section className="content-view"><PageTitle title="Robot Wiki" description="Reading manifest-verified discovery snapshots…" /><div className="panel read-model-unavailable" role="status"><Pulse size={26} /><div><strong>Loading Robot Wiki</strong><p>Current knowledge and verified history are being resolved independently.</p></div></div></section> : <ReadModelUnavailableView title="Robot Wiki" description={wikiMessage || "Open this surface to read a verified discovery Wiki."} />)}
           {active === "evidence" && (evidenceSource === "demo" ? <EvidenceView onOpenEvidence={openEvidence} /> : evidenceSource === "live" ? <EvidenceView live collection={evidenceList} robotId={robot.robot_id} onOpenEvidence={openEvidence} /> : <ReadModelUnavailableView title="Evidence" description="Live evidence resolution needs a versioned rolo evidence read model." />)}
         </>}

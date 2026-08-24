@@ -37,6 +37,160 @@ const TARGET_OPERATION_SLICE = {
   deferred_summary: { NO_ROUTE: 2 },
 };
 
+const SLICE_STABILITY = {
+  schema_version: "robot-target-operation-slice-stability/v1",
+  robot_id: "AMR-07",
+  max_runs: 50,
+  min_successful_canary_runs: 10,
+  observation_count: 1,
+  selected_canary_count: 1,
+  activated_count: 1,
+  fallback_count: 0,
+  successful_canary_count: 1,
+  agent_failed_count: 0,
+  gate_failed_count: 0,
+  context_budget_exceeded_count: 0,
+  average_potential_context_reduction_ratio: 0.5,
+  average_effective_context_reduction_ratio: 0.5,
+  outcome_counts: { ACTIVATED: 1 },
+  alert_counts: { ELIGIBLE_NOT_IN_SLICE: 1 },
+  recommendation: "INSUFFICIENT_DATA",
+  recommendation_reasons: ["MINIMUM_SUCCESSFUL_CANARY_RUNS_NOT_MET"],
+  observations: [{
+    run_id: "run-20260821-001",
+    decision_ref: "artifact://adapt/AMR-07/runs/run-20260821-001/slice-activation-decision.json",
+    mode: "CANARY",
+    outcome: "ACTIVATED",
+    selected: true,
+    affects_agent_context: true,
+    agent_run_status: "SUCCEEDED",
+    gate_status: "PASSED",
+    authoritative_operation_count: 20,
+    requested_operation_count: 10,
+    effective_operation_count: 10,
+    potential_context_reduction_ratio: 0.5,
+    effective_context_reduction_ratio: 0.5,
+    prompt_token_estimate: 2000,
+    boot_context_token_estimate: 4000,
+    boot_context_budget_tokens: 8000,
+    context_budget_exceeded: false,
+    alert_codes: ["ELIGIBLE_NOT_IN_SLICE"],
+    fallback_reason: null,
+  }],
+  influences_release: false,
+};
+
+const ADAPT_BASELINE = {
+  schema_version: "rolo-adapt-baseline-status/v1",
+  status: "MATCHED",
+  pinned: {
+    schema_version: "robot-adapt-baseline-snapshot/v1",
+    operation_count: 294,
+    disposition_count: 294,
+    contract_catalog_sha256: "1".repeat(64),
+    registry_sha256: "2".repeat(64),
+    operation_identity_sha256: "3".repeat(64),
+  },
+  current: {
+    schema_version: "robot-adapt-baseline-snapshot/v1",
+    operation_count: 294,
+    disposition_count: 294,
+    contract_catalog_sha256: "1".repeat(64),
+    registry_sha256: "2".repeat(64),
+    operation_identity_sha256: "3".repeat(64),
+  },
+  changed_fields: [],
+  source_kind: "protected_product_baseline",
+  influences_release: false,
+  limitations: ["Product baseline only."],
+};
+
+const SLICE_RUN_DETAIL = {
+  schema_version: "rolo-adapt-slice-run-detail/v1",
+  robot_id: "AMR-07",
+  run_id: "run-20260821-001",
+  observation: SLICE_STABILITY.observations[0],
+  activation: {
+    schema_version: "robot-target-operation-slice-activation/v1",
+    robot_id: "AMR-07",
+    run_id: "run-20260821-001",
+    slice_sha256: "b".repeat(64),
+    mode: "CANARY",
+    selected: true,
+    selected_by: ["run_id"],
+    outcome: "ACTIVATED",
+    authoritative_eligible_operations: ["app.agent-native", "app.target"],
+    requested_context_operations: ["app.target"],
+    effective_context_operations: ["app.target"],
+    release_authority_operations: ["app.agent-native", "app.target"],
+    max_context_operations: 20,
+    alerts: [{
+      code: "ELIGIBLE_NOT_IN_SLICE",
+      severity: "WARNING",
+      message: "One eligible operation is outside the Slice.",
+      operations: ["app.agent-native"],
+    }],
+    fallback_reason: null,
+    affects_agent_context: true,
+    influences_release: false,
+  },
+  shadow: {
+    schema_version: "robot-target-operation-slice-shadow/v1",
+    robot_id: "AMR-07",
+    discovery_id: "discovery-1",
+    slice_sha256: "b".repeat(64),
+    authoritative_eligible_operations: ["app.agent-native", "app.target"],
+    shadow_target_adapter_operations: ["app.target"],
+    eligible_not_in_shadow: ["app.agent-native"],
+    shadow_not_in_eligible: [],
+    influences_release: false,
+  },
+  source_kind: "immutable_adapt_run_artifacts",
+  integrity_status: "validated",
+  influences_release: false,
+  limitations: ["Agent context only."],
+};
+
+const SLICE_COMPARISON = {
+  schema_version: "rolo-adapt-slice-stability-comparison/v1",
+  robot_id: "AMR-07",
+  status: "PARTIAL",
+  recent: { label: "RECENT", requested_observations: 2, observation_count: 1, newest_run_id: "run-2", oldest_run_id: "run-2", successful_canary_count: 1, fallback_count: 0, agent_failed_count: 0, gate_failed_count: 0, context_budget_exceeded_count: 0, average_effective_context_reduction_ratio: 0.5 },
+  previous: { label: "PREVIOUS", requested_observations: 2, observation_count: 1, newest_run_id: "run-1", oldest_run_id: "run-1", successful_canary_count: 0, fallback_count: 1, agent_failed_count: 0, gate_failed_count: 0, context_budget_exceeded_count: 0, average_effective_context_reduction_ratio: 0.4 },
+  delta: { successful_canary_count: 1, fallback_count: -1, agent_failed_count: 0, gate_failed_count: 0, context_budget_exceeded_count: 0, average_effective_context_reduction_ratio: 0.1 },
+  regression_signals: [],
+  source_kind: "immutable_adapt_run_artifacts",
+  influences_release: false,
+  limitations: ["Descriptive only."],
+};
+
+const FLEET_SLICE = {
+  schema_version: "rolo-adapt-fleet-slice-stability/v1",
+  max_runs_per_robot: 20,
+  min_successful_canary_runs: 10,
+  robot_count: 1,
+  observed_robot_count: 1,
+  recommendation_counts: { INSUFFICIENT_DATA: 1 },
+  items: [{ robot_id: "AMR-07", recommendation: "INSUFFICIENT_DATA", observation_count: 1, successful_canary_count: 1, fallback_count: 0, diagnostic_count: 0 }],
+  source_kind: "immutable_adapt_run_artifacts",
+  influences_release: false,
+  limitations: ["Human review required."],
+};
+
+const SLICE_REVIEW_PACKET = {
+  schema_version: "rolo-adapt-slice-review-packet/v1",
+  robot_id: "AMR-07",
+  status: "INCOMPLETE",
+  baseline_status: "MATCHED",
+  stability_recommendation: "INSUFFICIENT_DATA",
+  checks: [{ check_id: "human_rollout_decision", label: "Human rollout decision", status: "HUMAN_REQUIRED", summary: "Review required." }],
+  evidence_run_ids: ["run-20260821-001"],
+  evidence_refs: ["artifact://adapt/AMR-07/runs/run-20260821-001/slice-activation-decision.json"],
+  contains_secret_payloads: false,
+  influences_release: false,
+  limitations: ["Summary only."],
+};
+
 const OPERATION_GOVERNANCE_COLLECTION = {
   schema_version: "rolo-operation-governance-collection/v1",
   items: [{
@@ -290,10 +444,10 @@ const WIKI = {
 };
 
 const DISCOVERY_HISTORY = {
-  schema_version: "rolo-discovery-snapshot-collection/v1",
+  schema_version: "rolo-discovery-snapshot-collection/v2",
   robot_id: "AMR-07",
   items: [{
-    schema_version: "rolo-discovery-snapshot-summary/v1",
+    schema_version: "rolo-discovery-snapshot-summary/v2",
     robot_id: "AMR-07",
     discovery_id: "discovery-20260820",
     status: "PARTIAL",
@@ -310,6 +464,14 @@ const DISCOVERY_HISTORY = {
     confidence: 0.8,
     integrity_status: "verified",
     limitations: ["Discovery coverage does not prove task success."],
+    heuristic_summary: {
+      schema_version: "rolo-discovery-heuristic-summary/v1",
+      mode: "shadow",
+      status: "AGENT_COMPLETED",
+      inferred_operation_count: 4,
+      missing_evidence_count: 2,
+      influences_release: false,
+    },
   }],
   total: 1,
   limit: 100,
@@ -321,6 +483,30 @@ const DISCOVERY_HISTORY = {
   source_kind: "verified_discovery_history",
   integrity_status: "verified",
   limitations: ["Only manifest-verified discovery reports are included."],
+};
+
+const { heuristic_summary: _ignoredHeuristic, ...DISCOVERY_SUMMARY_V1 } = DISCOVERY_HISTORY.items[0];
+const DISCOVERY_HISTORY_V1 = {
+  ...DISCOVERY_HISTORY,
+  schema_version: "rolo-discovery-snapshot-collection/v1",
+  items: [{ ...DISCOVERY_SUMMARY_V1, schema_version: "rolo-discovery-snapshot-summary/v1" }],
+};
+
+const DISCOVERY_HISTORY_V3 = {
+  ...DISCOVERY_HISTORY,
+  schema_version: "rolo-discovery-snapshot-collection/v3",
+  items: [{
+    ...DISCOVERY_HISTORY.items[0],
+    schema_version: "rolo-discovery-snapshot-summary/v3",
+    target_evidence: {
+      schema_version: "rolo-discovery-target-evidence-summary/v1",
+      deployment_scope: "REMOTE",
+      freshness: "STALE",
+      collected_at: "2026-08-19T23:50:00Z",
+      refresh_required: true,
+      refresh_reason: "Verified target evidence is older than the collector replay window.",
+    },
+  }],
 };
 
 const FLEET = {
@@ -359,14 +545,47 @@ const FLEET = {
 };
 
 const FLEET_BLOCKERS = {
-  schema_version: "rolo-fleet-blocker-collection/v1",
+  schema_version: "rolo-fleet-blocker-collection/v2",
   items: [{
-    schema_version: "rolo-fleet-blocker-summary/v1",
+    schema_version: "rolo-fleet-blocker-summary/v2",
     blocker_id: "blocker_123",
     robot_id: "AMR-07",
     stage: "adapt",
     message: "Run adapt discovery",
-    recommended_action: "Run adapt discovery",
+    recommended_action: "Resolve the reported Adapt blocker, then reassess the pipeline.",
+    owner: "adapter_agent",
+    category: "PIPELINE_BLOCKER",
+    classification_basis: "normalized_pipeline_message",
+    impact: "Prevents Adapt from advancing while the validated pipeline assessment reports this blocker.",
+    resolution_requirement_count: 1,
+    evidence_ids: [],
+    observed_at: "2026-08-20T00:00:00Z",
+    freshness: "fresh",
+    source_kind: "pipeline_assessment",
+    confidence: 1,
+    integrity_status: "validated",
+  }],
+  total: 1,
+  limit: 100,
+  offset: 0,
+  next_offset: null,
+  observed_at: "2026-08-20T00:00:00Z",
+  freshness: "fresh",
+  source_kind: "computed_pipeline_blockers",
+  confidence: 1,
+  integrity_status: "validated",
+  limitations: ["Normalized triage only."],
+};
+
+const FLEET_BLOCKERS_V1 = {
+  schema_version: "rolo-fleet-blocker-collection/v1",
+  items: [{
+    schema_version: "rolo-fleet-blocker-summary/v1",
+    blocker_id: "blocker_legacy",
+    robot_id: "AMR-07",
+    stage: "adapt",
+    message: "Run adapt discovery",
+    recommended_action: "Inspect the validated pipeline assessment.",
     owner: "adapter_agent",
     evidence_ids: [],
     observed_at: "2026-08-20T00:00:00Z",
@@ -384,6 +603,27 @@ const FLEET_BLOCKERS = {
   source_kind: "computed_pipeline_blockers",
   confidence: 1,
   integrity_status: "validated",
+};
+
+const FLEET_BLOCKER_DETAIL = {
+  schema_version: "rolo-fleet-blocker-detail/v1",
+  blocker: FLEET_BLOCKERS.items[0],
+  stage_status: "BLOCKED",
+  stage_summary: "Adapt is blocked",
+  expected_stage_statuses: ["READY", "COMPLETE"],
+  resolution_requirements: [{
+    requirement_id: "fresh_pipeline_assessment",
+    kind: "FRESH_ASSESSMENT",
+    statement: "A newer Adapt assessment must no longer report this blocker.",
+    evidence_id: null,
+    status: "REQUIRED",
+  }],
+  canonical_cli_argv: ["robotctl", "pipeline-status", "--robot", "AMR-07"],
+  resolution_state: "OPEN",
+  contains_secret_payloads: false,
+  source_kind: "pipeline_assessment",
+  integrity_status: "validated",
+  limitations: ["No remediation is executed."],
 };
 
 const EVIDENCE_COLLECTION = {
@@ -463,6 +703,42 @@ const CAPABILITY_DETAIL = {
   bindings: [],
   observed_at: "2026-08-20T00:00:00Z",
   freshness: "fresh",
+};
+
+const CAPABILITY_SUMMARY_V2 = {
+  ...CAPABILITY_SUMMARY,
+  schema_version: "rolo-capability-summary/v2",
+  applicability: "NOT_OBSERVED",
+  availability: "UNAVAILABLE",
+  registration: "NOT_REGISTERED",
+  inferred_binding_count: 1,
+  candidate_origin: "HEURISTIC_AGENT",
+  candidate_verification_status: "DISCOVERED_UNVERIFIED",
+};
+
+const CAPABILITY_COLLECTION_V2 = {
+  ...CAPABILITY_COLLECTION,
+  schema_version: "rolo-capability-collection/v2",
+  items: [CAPABILITY_SUMMARY_V2],
+};
+
+const CAPABILITY_DETAIL_V2 = {
+  ...CAPABILITY_DETAIL,
+  schema_version: "rolo-capability-detail/v2",
+  capability: CAPABILITY_SUMMARY_V2,
+  inferred_bindings: [{
+    schema_version: "rolo-capability-inferred-binding/v1",
+    inference_id: "inference_123",
+    origin: "HEURISTIC_AGENT",
+    verification_status: "DISCOVERED_UNVERIFIED",
+    authority: "OBSERVED",
+    kind: "ros_topic",
+    endpoint: "/agent_route",
+    interface_type: "geometry_msgs/msg/Twist",
+    observed_at: "2026-08-20T00:00:00Z",
+    reference_digest: "c".repeat(64),
+    limitations: ["Operation mapping remains unverified."],
+  }],
 };
 
 const RUN_SUMMARY = {
@@ -691,6 +967,141 @@ test("RoloClient keeps the optional Adapt slice out of bootstrap and loads it on
     assert.equal(requests.at(-1),
       "http://rolo.test/v1/robots/AMR-07/adapt/operation-slice",
     );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("RoloClient loads and validates Slice stability only on demand", async () => {
+  const originalFetch = globalThis.fetch;
+  const requests = [];
+  globalThis.fetch = async (url) => {
+    requests.push(url);
+    return { ok: true, json: async () => SLICE_STABILITY };
+  };
+
+  try {
+    const report = await new RoloClient("http://rolo.test").sliceStability("AMR-07");
+    assert.equal(report.recommendation, "INSUFFICIENT_DATA");
+    assert.equal(
+      report.observations[0].decision_ref,
+      "artifact://adapt/AMR-07/runs/run-20260821-001/slice-activation-decision.json",
+    );
+    assert.equal(report.influences_release, false);
+    assert.deepEqual(requests, [
+      "http://rolo.test/v1/robots/AMR-07/adapt/slice-stability",
+    ]);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("RoloClient rejects Slice stability that claims release authority", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => ({
+    ok: true,
+    json: async () => ({ ...SLICE_STABILITY, influences_release: true }),
+  });
+
+  try {
+    await assert.rejects(
+      () => new RoloClient("http://rolo.test").sliceStability("AMR-07"),
+      RoloContractError,
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("RoloClient validates the protected Adapt baseline independently of robot state", async () => {
+  const originalFetch = globalThis.fetch;
+  const requests = [];
+  globalThis.fetch = async (url) => {
+    requests.push(url);
+    return { ok: true, json: async () => ADAPT_BASELINE };
+  };
+
+  try {
+    const baseline = await new RoloClient("http://rolo.test").adaptBaseline();
+    assert.equal(baseline.status, "MATCHED");
+    assert.equal(baseline.current.operation_count, 294);
+    assert.deepEqual(requests, ["http://rolo.test/v1/adapt/baseline"]);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("RoloClient joins one immutable Slice decision with its Shadow divergence", async () => {
+  const originalFetch = globalThis.fetch;
+  const requests = [];
+  globalThis.fetch = async (url) => {
+    requests.push(url);
+    return { ok: true, json: async () => SLICE_RUN_DETAIL };
+  };
+
+  try {
+    const detail = await new RoloClient("http://rolo.test").sliceRunDetail(
+      "AMR-07",
+      "run-20260821-001",
+    );
+    assert.equal(detail.activation.affects_agent_context, true);
+    assert.deepEqual(detail.activation.release_authority_operations, ["app.agent-native", "app.target"]);
+    assert.deepEqual(detail.shadow.eligible_not_in_shadow, ["app.agent-native"]);
+    assert.deepEqual(requests, [
+      "http://rolo.test/v1/robots/AMR-07/adapt/slice-runs/run-20260821-001",
+    ]);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("RoloClient rejects a Slice decision that changes release authority", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => ({
+    ok: true,
+    json: async () => ({
+      ...SLICE_RUN_DETAIL,
+      activation: {
+        ...SLICE_RUN_DETAIL.activation,
+        release_authority_operations: ["app.target"],
+      },
+    }),
+  });
+
+  try {
+    await assert.rejects(
+      () => new RoloClient("http://rolo.test").sliceRunDetail("AMR-07", "run-20260821-001"),
+      RoloContractError,
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("RoloClient validates Fleet, window comparison, and human review summaries", async () => {
+  const originalFetch = globalThis.fetch;
+  const requests = [];
+  globalThis.fetch = async (url) => {
+    requests.push(url);
+    if (url.endsWith("/v1/adapt/slice-fleet")) return { ok: true, json: async () => FLEET_SLICE };
+    if (url.endsWith("/slice-stability/comparison")) return { ok: true, json: async () => SLICE_COMPARISON };
+    return { ok: true, json: async () => SLICE_REVIEW_PACKET };
+  };
+
+  try {
+    const client = new RoloClient("http://rolo.test");
+    const fleet = await client.fleetSliceStability();
+    const comparison = await client.sliceStabilityComparison("AMR-07");
+    const packet = await client.sliceReviewPacket("AMR-07");
+    assert.equal(fleet.observed_robot_count, 1);
+    assert.equal(comparison.recent.newest_run_id, "run-2");
+    assert.equal(packet.contains_secret_payloads, false);
+    assert.equal(packet.checks[0].status, "HUMAN_REQUIRED");
+    assert.deepEqual(requests, [
+      "http://rolo.test/v1/adapt/slice-fleet",
+      "http://rolo.test/v1/robots/AMR-07/adapt/slice-stability/comparison",
+      "http://rolo.test/v1/robots/AMR-07/adapt/slice-review",
+    ]);
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -1034,7 +1445,26 @@ test("RoloClient reads a trust-separated Robot Wiki", async () => {
     assert.equal(wiki.content_origin, "HUMAN_EDITED");
     assert.equal(wiki.content_integrity, "unverified");
     assert.equal(wiki.insights[0].evidence_id, "ev_abcdef123456789012");
+    assert.equal(wiki.insights[0].source, "DETERMINISTIC_RULE");
     assert.deepEqual(urls, ["http://rolo.test/v1/robots/AMR-07/wiki"]);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("RoloClient preserves Agent Wiki provenance as unverified advisory content", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => ({
+    ok: true,
+    json: async () => ({
+      ...WIKI,
+      insights: [{ ...WIKI.insights[0], source: "ADAPT_AGENT_SKILL" }],
+    }),
+  });
+  try {
+    const wiki = await new RoloClient("http://rolo.test").wiki("AMR-07");
+    assert.equal(wiki.content_integrity, "unverified");
+    assert.equal(wiki.insights[0].source, "ADAPT_AGENT_SKILL");
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -1051,7 +1481,190 @@ test("RoloClient reads manifest-verified discovery history", async () => {
     const history = await new RoloClient("http://rolo.test").discoveries("AMR-07");
     assert.equal(history.items[0].is_latest, true);
     assert.equal(history.items[0].operation_candidates, 14);
+    assert.equal(history.items[0].heuristic_summary.status, "AGENT_COMPLETED");
+    assert.equal(history.items[0].heuristic_summary.influences_release, false);
     assert.deepEqual(urls, ["http://rolo.test/v1/robots/AMR-07/discoveries?limit=100&offset=0"]);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("RoloClient preserves discovery history v1 without inventing Agent state", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => ({ ok: true, json: async () => DISCOVERY_HISTORY_V1 });
+  try {
+    const history = await new RoloClient("http://rolo.test").discoveries("AMR-07");
+    assert.equal(history.schema_version, "rolo-discovery-snapshot-collection/v1");
+    assert.equal(history.items[0].schema_version, "rolo-discovery-snapshot-summary/v1");
+    assert.equal("heuristic_summary" in history.items[0], false);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("RoloClient reads bounded target evidence freshness without collector metadata", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => ({ ok: true, json: async () => DISCOVERY_HISTORY_V3 });
+  try {
+    const history = await new RoloClient("http://rolo.test").discoveries("AMR-07");
+    const target = history.items[0].target_evidence;
+    assert.equal(target.deployment_scope, "REMOTE");
+    assert.equal(target.freshness, "STALE");
+    assert.equal(target.refresh_required, true);
+    assert.equal("collector_id" in target, false);
+    assert.equal("expires_at" in target, false);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("RoloClient rejects unsafe or inconsistent target evidence summaries", async () => {
+  const originalFetch = globalThis.fetch;
+  const unsafeOverrides = [
+    { collector_id: "private-collector" },
+    { expires_at: "2026-08-20T00:05:00Z" },
+    { freshness: "FRESH", refresh_required: true },
+    { deployment_scope: "CLOUD" },
+  ];
+  try {
+    for (const override of unsafeOverrides) {
+      globalThis.fetch = async () => ({
+        ok: true,
+        json: async () => ({
+          ...DISCOVERY_HISTORY_V3,
+          items: [{
+            ...DISCOVERY_HISTORY_V3.items[0],
+            target_evidence: {
+              ...DISCOVERY_HISTORY_V3.items[0].target_evidence,
+              ...override,
+            },
+          }],
+        }),
+      });
+      await assert.rejects(
+        () => new RoloClient("http://rolo.test").discoveries("AMR-07"),
+        (error) => error instanceof RoloContractError && error.path.includes("/target_evidence"),
+      );
+    }
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("RoloClient keeps Agent candidate routes in an unverified capability lane", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url) => ({
+    ok: true,
+    json: async () => url.includes("/capabilities/tool.catalog") ? CAPABILITY_DETAIL_V2 : CAPABILITY_COLLECTION_V2,
+  });
+  try {
+    const client = new RoloClient("http://rolo.test");
+    const coverage = await client.capabilities("AMR-07");
+    const detail = await client.capability("AMR-07", "tool.catalog");
+    assert.equal(coverage.items[0].binding_count, 0);
+    assert.equal(coverage.items[0].inferred_binding_count, 1);
+    assert.equal(coverage.items[0].availability, "UNAVAILABLE");
+    assert.equal(detail.bindings.length, 0);
+    assert.equal(detail.inferred_bindings[0].verification_status, "DISCOVERED_UNVERIFIED");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("RoloClient rejects unsafe Agent candidate provenance", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => ({
+    ok: true,
+    json: async () => ({
+      ...CAPABILITY_COLLECTION_V2,
+      items: [{ ...CAPABILITY_SUMMARY_V2, candidate_origin: "AGENT_VERIFIED" }],
+    }),
+  });
+  try {
+    await assert.rejects(
+      () => new RoloClient("http://rolo.test").capabilities("AMR-07"),
+      (error) => error instanceof RoloContractError && error.path.includes("/items/0"),
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("RoloClient accepts every bounded heuristic discovery status", async () => {
+  const originalFetch = globalThis.fetch;
+  const summaries = [
+    { mode: "shadow", status: "AGENT_COMPLETED", inferred_operation_count: 4, missing_evidence_count: 2 },
+    { mode: "enabled", status: "FALLBACK", inferred_operation_count: 1, missing_evidence_count: 3 },
+    { mode: "disabled", status: "DISABLED", inferred_operation_count: 0, missing_evidence_count: 0 },
+  ];
+  try {
+    for (const summary of summaries) {
+      globalThis.fetch = async () => ({
+        ok: true,
+        json: async () => ({
+          ...DISCOVERY_HISTORY,
+          items: [{
+            ...DISCOVERY_HISTORY.items[0],
+            heuristic_summary: {
+              ...DISCOVERY_HISTORY.items[0].heuristic_summary,
+              ...summary,
+            },
+          }],
+        }),
+      });
+      const history = await new RoloClient("http://rolo.test").discoveries("AMR-07");
+      assert.equal(history.items[0].heuristic_summary.status, summary.status);
+    }
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("RoloClient fails closed on unsafe heuristic discovery authority", async () => {
+  const originalFetch = globalThis.fetch;
+  const invalidSummaries = [
+    { status: "MODEL_GUESS" },
+    { mode: "experimental" },
+    { influences_release: true },
+    { inferred_operation_count: -1 },
+    { heuristic_analysis_ref: "artifact://private/summary.json" },
+  ];
+  try {
+    for (const override of invalidSummaries) {
+      globalThis.fetch = async () => ({
+        ok: true,
+        json: async () => ({
+          ...DISCOVERY_HISTORY,
+          items: [{
+            ...DISCOVERY_HISTORY.items[0],
+            heuristic_summary: {
+              ...DISCOVERY_HISTORY.items[0].heuristic_summary,
+              ...override,
+            },
+          }],
+        }),
+      });
+      await assert.rejects(
+        () => new RoloClient("http://rolo.test").discoveries("AMR-07"),
+        (error) => error instanceof RoloContractError && error.path.includes("/heuristic_summary"),
+      );
+    }
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("RoloClient rejects mixed discovery collection and item schemas", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => ({
+    ok: true,
+    json: async () => ({ ...DISCOVERY_HISTORY_V1, items: DISCOVERY_HISTORY.items }),
+  });
+  try {
+    await assert.rejects(
+      () => new RoloClient("http://rolo.test").discoveries("AMR-07"),
+      (error) => error instanceof RoloContractError && error.path.includes("/discoveries"),
+    );
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -1099,6 +1712,35 @@ test("RoloClient reads validated Fleet and Blocker Inbox aggregates", async () =
   }
 });
 
+test("RoloClient preserves Fleet blocker v1 as an explicit basic compatibility contract", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => ({ ok: true, json: async () => FLEET_BLOCKERS_V1 });
+  try {
+    const blockers = await new RoloClient("http://rolo.test").blockers();
+    assert.equal(blockers.schema_version, "rolo-fleet-blocker-collection/v1");
+    assert.equal(blockers.items[0].schema_version, "rolo-fleet-blocker-summary/v1");
+    assert.equal("category" in blockers.items[0], false);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("RoloClient rejects mixed Fleet blocker collection and item schemas", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => ({
+    ok: true,
+    json: async () => ({ ...FLEET_BLOCKERS_V1, items: FLEET_BLOCKERS.items }),
+  });
+  try {
+    await assert.rejects(
+      () => new RoloClient("http://rolo.test").blockers(),
+      (error) => error instanceof RoloContractError && error.path.startsWith("/v1/blockers"),
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("RoloClient rejects raw paths in the Blocker Inbox", async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () => ({
@@ -1125,6 +1767,25 @@ test("RoloClient rejects unsafe Robot Wiki references", async () => {
     await assert.rejects(
       () => new RoloClient("http://rolo.test").wiki("AMR-07"),
       (error) => error instanceof RoloContractError && error.path.endsWith("/wiki"),
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("RoloClient rejects an unknown Robot Wiki insight source", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => ({
+    ok: true,
+    json: async () => ({
+      ...WIKI,
+      insights: [{ ...WIKI.insights[0], source: "MODEL_GUESS" }],
+    }),
+  });
+  try {
+    await assert.rejects(
+      () => new RoloClient("http://rolo.test").wiki("AMR-07"),
+      (error) => error instanceof RoloContractError && error.path.includes("/insights/0"),
     );
   } finally {
     globalThis.fetch = originalFetch;
@@ -1241,6 +1902,53 @@ test("live Stack Map delegates path explanation to the trusted API", async () =>
   assert.doesNotMatch(stackMap, /breadth.first|shortestPath|new Map\(sourceEdges/);
 });
 
+test("Fleet Blocker Inbox separates triage category from resolution evidence", async () => {
+  const source = await readFile(new URL("../src/App.tsx", import.meta.url), "utf8");
+  const start = source.indexOf("function FleetView");
+  const end = source.indexOf("function StackMapView", start);
+  assert.ok(start >= 0 && end > start);
+  const fleet = source.slice(start, end);
+
+  assert.match(fleet, /All blocker categories|classification|categoryFilter/);
+  assert.match(fleet, /Required to clear|resolution_requirements/);
+  assert.match(fleet, /Read-only reproduction path|canonical_cli_argv/);
+  assert.match(fleet, /Basic blocker compatibility|No triage meaning is inferred/);
+  assert.match(fleet, /rolo-fleet-blocker-collection\/v2|triageAvailable/);
+  assert.match(fleet, /contains_secret_payloads|limitations\.join/);
+  assert.doesNotMatch(fleet, /fetch\([^)]*artifact|invoke|execute remediation/i);
+});
+
+test("Wiki insight cards distinguish rule-derived records from unverified Agent suggestions", async () => {
+  const source = await readFile(new URL("../src/App.tsx", import.meta.url), "utf8");
+  const start = source.indexOf("function WikiView");
+  const end = source.indexOf("function EvidenceRow", start);
+  assert.ok(start >= 0 && end > start);
+  const wiki = source.slice(start, end);
+
+  assert.match(wiki, /Rule-derived/);
+  assert.match(wiki, /Agent suggestion · unverified/);
+  assert.match(wiki, /insight\.source === "ADAPT_AGENT_SKILL"/);
+  assert.doesNotMatch(wiki, /Agent verified|Verified Agent/);
+});
+
+test("RoloClient reads a blocker resolution detail without remediation authority", async () => {
+  const originalFetch = globalThis.fetch;
+  const urls = [];
+  globalThis.fetch = async (url) => {
+    urls.push(String(url));
+    return { ok: true, json: async () => FLEET_BLOCKER_DETAIL };
+  };
+  try {
+    const detail = await new RoloClient("http://rolo.test").blockerDetail("blocker_123");
+    assert.equal(detail.blocker.category, "PIPELINE_BLOCKER");
+    assert.equal(detail.resolution_requirements[0].status, "REQUIRED");
+    assert.equal(detail.contains_secret_payloads, false);
+    assert.deepEqual(urls, ["http://rolo.test/v1/blockers/blocker_123"]);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("Wiki snapshot detail exposes every selected discovery limitation", async () => {
   const source = await readFile(new URL("../src/App.tsx", import.meta.url), "utf8");
   const start = source.indexOf("function WikiView");
@@ -1253,9 +1961,70 @@ test("Wiki snapshot detail exposes every selected discovery limitation", async (
   assert.match(liveWiki, /Diagnostic limitations/);
 });
 
+test("Wiki snapshot keeps heuristic analysis in an advisory release-neutral lane", async () => {
+  const source = await readFile(new URL("../src/App.tsx", import.meta.url), "utf8");
+  const wikiStart = source.indexOf("function WikiView");
+  const wikiEnd = source.indexOf("function EvidenceRow", wikiStart);
+  const capabilityStart = source.indexOf("function LiveCapabilityView");
+  const capabilityEnd = source.indexOf("function DemoLifecycleView", capabilityStart);
+  assert.ok(wikiStart >= 0 && wikiEnd > wikiStart && capabilityStart >= 0 && capabilityEnd > capabilityStart);
+  const liveWiki = source.slice(wikiStart, wikiEnd);
+  const liveCapabilities = source.slice(capabilityStart, capabilityEnd);
+
+  assert.match(liveWiki, /Heuristic analysis/);
+  assert.match(liveWiki, /Agent analysis completed\. This does not verify any Operation/);
+  assert.match(liveWiki, /Release influence/);
+  assert.match(liveWiki, /influences_release/);
+  assert.doesNotMatch(liveCapabilities, /heuristic_summary|heuristicSummary/);
+});
+
+test("Capability UI keeps Agent inferences outside ordinary readiness and bindings", async () => {
+  const source = await readFile(new URL("../src/App.tsx", import.meta.url), "utf8");
+  const start = source.indexOf("function LiveCapabilityView");
+  const end = source.indexOf("function DemoLifecycleView", start);
+  const readinessStart = source.indexOf("function CapabilityReadinessPanel");
+  assert.ok(start >= 0 && end > start && readinessStart >= 0);
+  const liveCapabilities = source.slice(start, end);
+
+  assert.match(liveCapabilities, /Agent inferred · unverified/);
+  assert.match(liveCapabilities, /bindings=\{detail\.bindings\}/);
+  assert.match(liveCapabilities, /InferredBindingPanel bindings=\{detail\.inferred_bindings\}/);
+  assert.doesNotMatch(liveCapabilities, /CapabilityReadinessPanel[^>]+inferred_bindings/);
+});
+
+test("Wiki target evidence prompt is read-only and exposes no remediation call", async () => {
+  const source = await readFile(new URL("../src/App.tsx", import.meta.url), "utf8");
+  const start = source.indexOf("function WikiView");
+  const end = source.indexOf("function EvidenceRow", start);
+  assert.ok(start >= 0 && end > start);
+  const liveWiki = source.slice(start, end);
+
+  assert.match(liveWiki, /Target-bound evidence/);
+  assert.match(liveWiki, /Recollect evidence/);
+  assert.match(liveWiki, /outside this read-only workbench/);
+  assert.doesNotMatch(liveWiki, /roloClient\.(collect|recollect|targetEvidence)/);
+});
+
+test("Adapt Stability keeps baseline, filtering, and run authority drilldown separate", async () => {
+  const source = await readFile(new URL("../src/App.tsx", import.meta.url), "utf8");
+  const start = source.indexOf("function SliceStabilityView");
+  const end = source.indexOf("function LiveCapabilityView", start);
+  assert.ok(start >= 0 && end > start);
+  const stability = source.slice(start, end);
+
+  assert.match(stability, /Protected product baseline|adaptBaseline/);
+  assert.match(stability, /filterSliceObservations|Diagnostics only/);
+  assert.match(stability, /roloClient\.sliceRunDetail/);
+  assert.match(stability, /Authoritative \/ release operations/);
+  assert.match(stability, /Comparison only · never release authority/);
+  assert.match(stability, /Non-overlapping windows|Observation change/);
+  assert.match(stability, /Secret-free evidence summary|Human review packet/);
+  assert.match(stability, /No SECRET payload bodies included/);
+});
+
 test("plugin manifest declares every trusted read-model endpoint", async () => {
   const manifest = JSON.parse(await readFile(new URL("../rolo.plugin.json", import.meta.url), "utf8"));
-  assert.equal(manifest.version, "0.18.0");
+  assert.equal(manifest.version, "0.21.0");
   assert.deepEqual(
     new Set(manifest.api.required_endpoints),
     new Set([
@@ -1275,6 +2044,9 @@ test("plugin manifest declares every trusted read-model endpoint", async () => {
       "/v1/robots/{robot_id}/runs/{run_id}",
       "/v1/robots/{robot_id}/wiki",
       "/v1/robots/{robot_id}/discoveries",
+      "/v1/robots/{robot_id}/episodes",
+      "/v1/robots/{robot_id}/episodes/{episode_id}",
+      "/v1/robots/{robot_id}/episodes/{episode_id}/timeline",
       "/v1/robots/{robot_id}/evidence",
       "/v1/evidence/{evidence_id}",
     ]),

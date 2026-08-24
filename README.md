@@ -15,6 +15,7 @@
 - Read-only contract schema inspector for required fields, constraints, units, frames, and execution semantics.
 - Binding trust inspector for endpoint authority, provenance, evidence coverage, digests, and limitations.
 - Capability readiness lens that keeps contract, applicability, registration, binding, availability, and verification signals independent.
+- Agent-inferred capability routes shown in a separate discovered-unverified lane that never contributes to readiness.
 - Feature-negotiated Adapt context lens for on-demand target-operation slices, execution classes, deferred reasons, governance mappings, and bounded Capability Explorer focus.
 - Bounded operation-governance matrix with cross-layer summaries, combined filters, pagination, and Registry detail navigation.
 - Governance filters for risk, access, lifecycle, and data classification with row-level policy context.
@@ -23,6 +24,7 @@
 - Immutable lifecycle run details with independent gate checks and verified handoffs.
 - Robot Wiki with manifest-verified discovery summaries, advisory insights, and evidence-linked changes.
 - Manifest-verified discovery history with bounded probe coverage and capability-candidate summaries.
+- Sanitized target-evidence scope and freshness with read-only recollection guidance.
 - Bidirectional Wiki and Stack Map layer context without inferred entity relationships.
 - Evidence ledger with provenance and integrity status.
 - Live rolo API probing with an explicit demo fallback when no robot runtime is reachable.
@@ -52,6 +54,12 @@ Robot Wiki keeps its trust lanes explicit: machine insights and discovery diffs 
 ```powershell
 npm run build
 npm run test:sites
+```
+
+For the complete MVP release-candidate gate, run:
+
+```powershell
+npm run verify:baseline
 ```
 
 The selected visual target is stored at `docs/design/selected-stack-map.png`, and the product scope is in `docs/WEB_VISUALIZATION_PRODUCT_PROPOSAL.md`.

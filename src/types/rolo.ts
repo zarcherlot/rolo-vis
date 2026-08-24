@@ -54,6 +54,203 @@ export interface TargetOperationSlice {
   deferred_summary: Record<string, number>;
 }
 
+export type SliceActivationOutcome = "SHADOW_ONLY" | "NOT_SELECTED" | "ACTIVATED" | "FALLBACK";
+export type SliceStabilityRecommendation = "INSUFFICIENT_DATA" | "HOLD" | "READY_FOR_REVIEW";
+
+export interface SliceRunObservation {
+  run_id: string;
+  decision_ref: string;
+  mode: "SHADOW" | "CANARY";
+  outcome: SliceActivationOutcome;
+  selected: boolean;
+  affects_agent_context: boolean;
+  agent_run_status: string | null;
+  gate_status: string | null;
+  authoritative_operation_count: number;
+  requested_operation_count: number;
+  effective_operation_count: number;
+  potential_context_reduction_ratio: number;
+  effective_context_reduction_ratio: number;
+  prompt_token_estimate: number | null;
+  boot_context_token_estimate: number | null;
+  boot_context_budget_tokens: number | null;
+  context_budget_exceeded: boolean;
+  alert_codes: string[];
+  fallback_reason: string | null;
+}
+
+export interface SliceStabilityReport {
+  schema_version: "robot-target-operation-slice-stability/v1";
+  robot_id: string;
+  max_runs: number;
+  min_successful_canary_runs: number;
+  observation_count: number;
+  selected_canary_count: number;
+  activated_count: number;
+  fallback_count: number;
+  successful_canary_count: number;
+  agent_failed_count: number;
+  gate_failed_count: number;
+  context_budget_exceeded_count: number;
+  average_potential_context_reduction_ratio: number;
+  average_effective_context_reduction_ratio: number;
+  outcome_counts: Record<string, number>;
+  alert_counts: Record<string, number>;
+  recommendation: SliceStabilityRecommendation;
+  recommendation_reasons: string[];
+  observations: SliceRunObservation[];
+  influences_release: false;
+}
+
+export interface SliceObservationWindow {
+  label: "RECENT" | "PREVIOUS";
+  requested_observations: number;
+  observation_count: number;
+  newest_run_id: string | null;
+  oldest_run_id: string | null;
+  successful_canary_count: number;
+  fallback_count: number;
+  agent_failed_count: number;
+  gate_failed_count: number;
+  context_budget_exceeded_count: number;
+  average_effective_context_reduction_ratio: number;
+}
+
+export interface SliceStabilityComparison {
+  schema_version: "rolo-adapt-slice-stability-comparison/v1";
+  robot_id: string;
+  status: "NO_PREVIOUS_WINDOW" | "PARTIAL" | "COMPARABLE";
+  recent: SliceObservationWindow;
+  previous: SliceObservationWindow;
+  delta: {
+    successful_canary_count: number;
+    fallback_count: number;
+    agent_failed_count: number;
+    gate_failed_count: number;
+    context_budget_exceeded_count: number;
+    average_effective_context_reduction_ratio: number;
+  };
+  regression_signals: string[];
+  source_kind: "immutable_adapt_run_artifacts";
+  influences_release: false;
+  limitations: string[];
+}
+
+export interface FleetSliceRobotSummary {
+  robot_id: string;
+  recommendation: SliceStabilityRecommendation;
+  observation_count: number;
+  successful_canary_count: number;
+  fallback_count: number;
+  diagnostic_count: number;
+}
+
+export interface FleetSliceStability {
+  schema_version: "rolo-adapt-fleet-slice-stability/v1";
+  max_runs_per_robot: number;
+  min_successful_canary_runs: number;
+  robot_count: number;
+  observed_robot_count: number;
+  recommendation_counts: Record<string, number>;
+  items: FleetSliceRobotSummary[];
+  source_kind: "immutable_adapt_run_artifacts";
+  influences_release: false;
+  limitations: string[];
+}
+
+export interface SliceReviewCheck {
+  check_id: string;
+  label: string;
+  status: "PASS" | "PENDING" | "BLOCKING" | "HUMAN_REQUIRED";
+  summary: string;
+}
+
+export interface SliceReviewPacket {
+  schema_version: "rolo-adapt-slice-review-packet/v1";
+  robot_id: string;
+  status: "BLOCKED" | "INCOMPLETE" | "READY_FOR_HUMAN_REVIEW";
+  baseline_status: "MATCHED" | "DRIFTED";
+  stability_recommendation: SliceStabilityRecommendation;
+  checks: SliceReviewCheck[];
+  evidence_run_ids: string[];
+  evidence_refs: string[];
+  contains_secret_payloads: false;
+  influences_release: false;
+  limitations: string[];
+}
+
+export interface AdaptBaselineSnapshot {
+  schema_version: "robot-adapt-baseline-snapshot/v1";
+  operation_count: number;
+  disposition_count: number;
+  contract_catalog_sha256: string;
+  registry_sha256: string;
+  operation_identity_sha256: string;
+}
+
+export interface AdaptBaselineStatus {
+  schema_version: "rolo-adapt-baseline-status/v1";
+  status: "MATCHED" | "DRIFTED";
+  pinned: AdaptBaselineSnapshot;
+  current: AdaptBaselineSnapshot;
+  changed_fields: string[];
+  source_kind: "protected_product_baseline";
+  influences_release: false;
+  limitations: string[];
+}
+
+export interface SliceActivationAlert {
+  code: string;
+  severity: "WARNING" | "BLOCKING";
+  message: string;
+  operations: string[];
+}
+
+export interface SliceActivationDecision {
+  schema_version: "robot-target-operation-slice-activation/v1";
+  robot_id: string;
+  run_id: string | null;
+  slice_sha256: string;
+  mode: "SHADOW" | "CANARY";
+  selected: boolean;
+  selected_by: string[];
+  outcome: SliceActivationOutcome;
+  authoritative_eligible_operations: string[];
+  requested_context_operations: string[];
+  effective_context_operations: string[];
+  release_authority_operations: string[];
+  max_context_operations: number;
+  alerts: SliceActivationAlert[];
+  fallback_reason: string | null;
+  affects_agent_context: boolean;
+  influences_release: false;
+}
+
+export interface TargetOperationSliceShadowReport {
+  schema_version: "robot-target-operation-slice-shadow/v1";
+  robot_id: string;
+  discovery_id: string;
+  slice_sha256: string;
+  authoritative_eligible_operations: string[];
+  shadow_target_adapter_operations: string[];
+  eligible_not_in_shadow: string[];
+  shadow_not_in_eligible: string[];
+  influences_release: false;
+}
+
+export interface SliceRunDetail {
+  schema_version: "rolo-adapt-slice-run-detail/v1";
+  robot_id: string;
+  run_id: string;
+  observation: SliceRunObservation;
+  activation: SliceActivationDecision;
+  shadow: TargetOperationSliceShadowReport | null;
+  source_kind: "immutable_adapt_run_artifacts";
+  integrity_status: "validated";
+  influences_release: false;
+  limitations: string[];
+}
+
 export interface RobotCapability {
   schema_version: string;
   robot_id: string;
@@ -170,7 +367,7 @@ export interface EvidenceRecord {
   title: string;
   summary: string;
   authority: EvidenceAuthority;
-  source_kind: "robot_manifest" | "gated_artifact" | "pipeline_artifact" | "lifecycle_run" | "lifecycle_gate" | "lifecycle_handoff" | "wiki_insight" | "wiki_diff";
+  source_kind: "robot_manifest" | "gated_artifact" | "pipeline_artifact" | "lifecycle_run" | "lifecycle_gate" | "lifecycle_handoff" | "wiki_insight" | "wiki_diff" | "episode_record" | "episode_event" | "episode_asset" | "episode_finding";
   integrity_status: "validated" | "verified";
   classification: "INTERNAL";
   observed_at: string;
@@ -199,8 +396,7 @@ export type CapabilityApplicability = "APPLICABLE" | "NOT_OBSERVED" | "UNKNOWN";
 export type CapabilityAvailability = "VERIFIED" | "AVAILABLE" | "UNAVAILABLE" | "UNKNOWN";
 export type CapabilityRegistration = "BUILTIN" | "REGISTERED" | "NOT_REGISTERED" | "STALE";
 
-export interface CapabilitySummary {
-  schema_version: "rolo-capability-summary/v1";
+interface CapabilitySummaryBase {
   operation: string;
   layer: CapabilityLayer;
   description: string;
@@ -318,10 +514,8 @@ export interface TopologyPathExplanation {
   limitations: string[];
 }
 
-export interface CapabilityCollection {
-  schema_version: "rolo-capability-collection/v1";
+interface CapabilityCollectionBase {
   robot_id: string;
-  items: CapabilitySummary[];
   total: number;
   limit: number;
   offset: number;
@@ -367,15 +561,26 @@ export interface CapabilityContract {
   requires_quiescence: boolean;
 }
 
-export interface CapabilityDetail {
-  schema_version: "rolo-capability-detail/v1";
+interface CapabilityDetailBase {
   robot_id: string;
-  capability: CapabilitySummary;
   contract: CapabilityContract;
   bindings: CapabilityBinding[];
   observed_at: string;
   freshness: "fresh" | "unknown";
 }
+
+export interface CapabilityDetailV1 extends CapabilityDetailBase {
+  schema_version: "rolo-capability-detail/v1";
+  capability: CapabilitySummaryV1;
+}
+
+export interface CapabilityDetailV2 extends CapabilityDetailBase {
+  schema_version: "rolo-capability-detail/v2";
+  capability: CapabilitySummaryV2;
+  inferred_bindings: CapabilityInferredBinding[];
+}
+
+export type CapabilityDetail = CapabilityDetailV1 | CapabilityDetailV2;
 
 export type LifecycleRunStatus = "RUNNING" | "SUCCEEDED" | "FAILED" | "GATED" | "UNKNOWN";
 export type LifecycleGateStatus = "PASSED" | "FAILED" | "NOT_AVAILABLE";
@@ -511,8 +716,25 @@ export interface RobotWikiSnapshot {
   limitations: string[];
 }
 
-export interface DiscoverySnapshotSummary {
-  schema_version: "rolo-discovery-snapshot-summary/v1";
+export interface DiscoveryHeuristicSummary {
+  schema_version: "rolo-discovery-heuristic-summary/v1";
+  mode: "disabled" | "shadow" | "enabled";
+  status: "AGENT_COMPLETED" | "FALLBACK" | "DISABLED";
+  inferred_operation_count: number;
+  missing_evidence_count: number;
+  influences_release: false;
+}
+
+export interface DiscoveryTargetEvidenceSummary {
+  schema_version: "rolo-discovery-target-evidence-summary/v1";
+  deployment_scope: "LOCAL" | "REMOTE";
+  freshness: "FRESH" | "STALE";
+  collected_at: string;
+  refresh_required: boolean;
+  refresh_reason: string | null;
+}
+
+interface DiscoverySnapshotSummaryBase {
   robot_id: string;
   discovery_id: string;
   status: "SUCCEEDED" | "PARTIAL" | "UNAVAILABLE" | "FAILED";
@@ -531,10 +753,64 @@ export interface DiscoverySnapshotSummary {
   limitations: string[];
 }
 
-export interface DiscoverySnapshotCollection {
-  schema_version: "rolo-discovery-snapshot-collection/v1";
+export interface CapabilityInferredBinding {
+  schema_version: "rolo-capability-inferred-binding/v1";
+  inference_id: string;
+  origin: "HEURISTIC_AGENT";
+  verification_status: "DISCOVERED_UNVERIFIED";
+  authority: "OBSERVED" | "DECLARED";
+  kind: string;
+  endpoint: string;
+  interface_type: string | null;
+  observed_at: string | null;
+  reference_digest: string;
+  limitations: string[];
+}
+
+export interface CapabilityCollectionV1 extends CapabilityCollectionBase {
+  schema_version: "rolo-capability-collection/v1";
+  items: CapabilitySummaryV1[];
+}
+
+export interface CapabilityCollectionV2 extends CapabilityCollectionBase {
+  schema_version: "rolo-capability-collection/v2";
+  items: CapabilitySummaryV2[];
+}
+
+export type CapabilityCollection = CapabilityCollectionV1 | CapabilityCollectionV2;
+
+export interface CapabilitySummaryV1 extends CapabilitySummaryBase {
+  schema_version: "rolo-capability-summary/v1";
+}
+
+export interface CapabilitySummaryV2 extends CapabilitySummaryBase {
+  schema_version: "rolo-capability-summary/v2";
+  inferred_binding_count: number;
+  candidate_origin: "DETERMINISTIC" | "HEURISTIC_AGENT" | null;
+  candidate_verification_status: "DISCOVERED_UNVERIFIED" | null;
+}
+
+export type CapabilitySummary = CapabilitySummaryV1 | CapabilitySummaryV2;
+
+export interface DiscoverySnapshotSummaryV1 extends DiscoverySnapshotSummaryBase {
+  schema_version: "rolo-discovery-snapshot-summary/v1";
+}
+
+export interface DiscoverySnapshotSummaryV2 extends DiscoverySnapshotSummaryBase {
+  schema_version: "rolo-discovery-snapshot-summary/v2";
+  heuristic_summary: DiscoveryHeuristicSummary;
+}
+
+export interface DiscoverySnapshotSummaryV3 extends DiscoverySnapshotSummaryBase {
+  schema_version: "rolo-discovery-snapshot-summary/v3";
+  heuristic_summary: DiscoveryHeuristicSummary;
+  target_evidence: DiscoveryTargetEvidenceSummary | null;
+}
+
+export type DiscoverySnapshotSummary = DiscoverySnapshotSummaryV1 | DiscoverySnapshotSummaryV2 | DiscoverySnapshotSummaryV3;
+
+interface DiscoverySnapshotCollectionBase {
   robot_id: string;
-  items: DiscoverySnapshotSummary[];
   total: number;
   limit: number;
   offset: number;
@@ -544,6 +820,171 @@ export interface DiscoverySnapshotCollection {
   freshness: "unknown";
   source_kind: "verified_discovery_history";
   integrity_status: "verified";
+  limitations: string[];
+}
+
+export interface DiscoverySnapshotCollectionV1 extends DiscoverySnapshotCollectionBase {
+  schema_version: "rolo-discovery-snapshot-collection/v1";
+  items: DiscoverySnapshotSummaryV1[];
+}
+
+export interface DiscoverySnapshotCollectionV2 extends DiscoverySnapshotCollectionBase {
+  schema_version: "rolo-discovery-snapshot-collection/v2";
+  items: DiscoverySnapshotSummaryV2[];
+}
+
+export interface DiscoverySnapshotCollectionV3 extends DiscoverySnapshotCollectionBase {
+  schema_version: "rolo-discovery-snapshot-collection/v3";
+  items: DiscoverySnapshotSummaryV3[];
+}
+
+export type DiscoverySnapshotCollection = DiscoverySnapshotCollectionV1 | DiscoverySnapshotCollectionV2 | DiscoverySnapshotCollectionV3;
+
+export type EpisodeState = "RUNNING" | "COMPLETED" | "FAILED" | "CANCELLED" | "PARTIAL";
+export type EpisodeOutcome = "SUCCEEDED" | "FAILED" | "CANCELLED" | "UNKNOWN";
+export type EpisodeVerification = "VERIFIED" | "UNVERIFIED" | "NOT_AVAILABLE";
+export type EpisodeCoverage = "METADATA_ONLY" | "PARTIAL" | "COMPLETE";
+export type EpisodeTimelineLane = "COMMAND" | "STATE" | "TELEMETRY" | "OBSERVATION" | "ALERT" | "AGENT" | "CONFIGURATION" | "CHECKPOINT" | "GATE" | "OUTCOME";
+export type EpisodeAuthority = "DECLARED" | "OBSERVED" | "INFERRED" | "HUMAN_CONFIRMED" | "VERIFIED";
+export type EpisodeSynchronization = "SYNCED" | "DEGRADED" | "UNSYNCED" | "UNKNOWN";
+export type EpisodeWorldKind = "PHYSICAL" | "SIMULATED" | "REPLAYED";
+export type EpisodeEvidenceKind = "RAW" | "NORMALIZED" | "RENDERED" | "GUI_SCREENSHOT";
+export type EpisodeFindingKind = "OBSERVED_FACT" | "CANDIDATE_CAUSE" | "HUMAN_CONFIRMATION" | "VERIFIED_OUTCOME";
+export type EpisodeSeverity = "INFO" | "WARNING" | "ERROR" | "CRITICAL";
+export type EpisodeAssetAvailability = "AVAILABLE" | "MISSING" | "REDACTED";
+
+interface EpisodeSummaryBase {
+  robot_id: string;
+  episode_id: string;
+  revision: number;
+  task_label: string;
+  state: EpisodeState;
+  outcome: EpisodeOutcome;
+  verification: EpisodeVerification;
+  coverage: EpisodeCoverage;
+  started_at: string;
+  ended_at: string | null;
+  execution_id: string | null;
+  test_case_id: string | null;
+  lifecycle_run_id: string | null;
+  operation: string | null;
+  event_count: number;
+  asset_count: number;
+  finding_count: number;
+  evidence_ids: string[];
+  source_kind: "published_episode_projection";
+  limitations: string[];
+}
+
+export interface EpisodeSummary extends EpisodeSummaryBase {
+  schema_version: "rolo-episode-summary/v1";
+}
+
+export interface EpisodeAssetSummary {
+  schema_version: "rolo-episode-asset-summary/v1";
+  robot_id: string;
+  episode_id: string;
+  revision: number;
+  asset_id: string;
+  modality: string;
+  source_label: string;
+  captured_at: string;
+  offset_ms: number;
+  world_kind: EpisodeWorldKind;
+  evidence_kind: EpisodeEvidenceKind;
+  frame: string | null;
+  clock_domain: string;
+  synchronization: EpisodeSynchronization;
+  media_type: string;
+  byte_count: number | null;
+  digest: string | null;
+  data_classification: "PUBLIC" | "INTERNAL" | "SENSITIVE" | "SECRET";
+  evidence_id: string | null;
+  availability: EpisodeAssetAvailability;
+  limitations: string[];
+}
+
+export interface EpisodeFindingSummary {
+  schema_version: "rolo-episode-finding-summary/v1";
+  robot_id: string;
+  episode_id: string;
+  revision: number;
+  finding_id: string;
+  kind: EpisodeFindingKind;
+  authority: EpisodeAuthority;
+  title: string;
+  summary: string;
+  start_offset_ms: number;
+  end_offset_ms: number;
+  supporting_evidence_ids: string[];
+  supporting_asset_ids: string[];
+  contradicting_evidence_ids: string[];
+  confidence: number | null;
+  verification: EpisodeVerification;
+  limitations: string[];
+}
+
+export interface EpisodeTimelineEvent {
+  schema_version: "rolo-episode-timeline-event/v1";
+  robot_id: string;
+  episode_id: string;
+  revision: number;
+  event_id: string;
+  sequence: number;
+  offset_ms: number;
+  occurred_at: string;
+  duration_ms: number | null;
+  clock_domain: string;
+  synchronization: EpisodeSynchronization;
+  lane: EpisodeTimelineLane;
+  title: string;
+  summary: string;
+  severity: EpisodeSeverity;
+  authority: EpisodeAuthority;
+  evidence_ids: string[];
+  asset_ids: string[];
+  related_event_ids: string[];
+  metrics: Record<string, number>;
+  limitations: string[];
+}
+
+export interface EpisodeDetail extends EpisodeSummaryBase {
+  schema_version: "rolo-episode-detail/v1";
+  as_of: string;
+  immutable: boolean;
+  clock_domain: string;
+  synchronization: EpisodeSynchronization;
+  available_lanes: EpisodeTimelineLane[];
+  expected_behavior: string | null;
+  observed_behavior: string | null;
+  assets: EpisodeAssetSummary[];
+  findings: EpisodeFindingSummary[];
+}
+
+export interface EpisodeCollection {
+  schema_version: "rolo-episode-collection/v1";
+  robot_id: string;
+  items: EpisodeSummary[];
+  total: number;
+  limit: number;
+  offset: number;
+  next_offset: number | null;
+  as_of: string;
+  source_kind: "published_episode_projection";
+  limitations: string[];
+}
+
+export interface EpisodeTimelinePage {
+  schema_version: "rolo-episode-timeline-page/v1";
+  robot_id: string;
+  episode_id: string;
+  revision: number;
+  items: EpisodeTimelineEvent[];
+  limit: number;
+  cursor: string | null;
+  next_cursor: string | null;
+  as_of: string;
+  immutable: boolean;
   limitations: string[];
 }
 
@@ -584,8 +1025,7 @@ export interface FleetCollection {
   integrity_status: "validated";
 }
 
-export interface FleetBlockerSummary {
-  schema_version: "rolo-fleet-blocker-summary/v1";
+interface FleetBlockerSummaryBase {
   blocker_id: string;
   robot_id: string;
   stage: "adapt" | "diagnose" | "verify";
@@ -600,9 +1040,21 @@ export interface FleetBlockerSummary {
   integrity_status: "validated";
 }
 
-export interface FleetBlockerCollection {
-  schema_version: "rolo-fleet-blocker-collection/v1";
-  items: FleetBlockerSummary[];
+export interface FleetBlockerSummaryV1 extends FleetBlockerSummaryBase {
+  schema_version: "rolo-fleet-blocker-summary/v1";
+}
+
+export interface FleetBlockerSummaryV2 extends FleetBlockerSummaryBase {
+  schema_version: "rolo-fleet-blocker-summary/v2";
+  category: "MISSING_VERIFIED_EVIDENCE" | "EVIDENCE_UNAVAILABLE_OR_INVALID" | "POLICY_OR_AUTHORIZATION" | "DEPENDENCY_OR_PREREQUISITE" | "PIPELINE_BLOCKER";
+  classification_basis: "normalized_pipeline_message";
+  impact: string;
+  resolution_requirement_count: number;
+}
+
+export type FleetBlockerSummary = FleetBlockerSummaryV1 | FleetBlockerSummaryV2;
+
+interface FleetBlockerCollectionBase {
   total: number;
   limit: number;
   offset: number;
@@ -612,6 +1064,42 @@ export interface FleetBlockerCollection {
   source_kind: "computed_pipeline_blockers";
   confidence: number;
   integrity_status: "validated";
+}
+
+export interface FleetBlockerCollectionV1 extends FleetBlockerCollectionBase {
+  schema_version: "rolo-fleet-blocker-collection/v1";
+  items: FleetBlockerSummaryV1[];
+}
+
+export interface FleetBlockerCollectionV2 extends FleetBlockerCollectionBase {
+  schema_version: "rolo-fleet-blocker-collection/v2";
+  items: FleetBlockerSummaryV2[];
+  limitations: string[];
+}
+
+export type FleetBlockerCollection = FleetBlockerCollectionV1 | FleetBlockerCollectionV2;
+
+export interface BlockerResolutionRequirement {
+  requirement_id: string;
+  kind: "FRESH_ASSESSMENT" | "VALIDATED_EVIDENCE";
+  statement: string;
+  evidence_id: string | null;
+  status: "REQUIRED";
+}
+
+export interface FleetBlockerDetail {
+  schema_version: "rolo-fleet-blocker-detail/v1";
+  blocker: FleetBlockerSummaryV2;
+  stage_status: "NOT_STARTED" | "BLOCKED" | "DEGRADED" | "READY" | "COMPLETE";
+  stage_summary: string;
+  expected_stage_statuses: ["READY", "COMPLETE"];
+  resolution_requirements: BlockerResolutionRequirement[];
+  canonical_cli_argv: string[];
+  resolution_state: "OPEN";
+  contains_secret_payloads: false;
+  source_kind: "pipeline_assessment";
+  integrity_status: "validated";
+  limitations: string[];
 }
 
 export interface BootstrapResult {

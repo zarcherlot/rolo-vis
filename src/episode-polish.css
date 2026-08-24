@@ -1,0 +1,88 @@
+.episode-detail-status {
+  align-self: start;
+  align-items: flex-start;
+}
+
+.episode-detail-heading > dl {
+  grid-column: 1;
+}
+
+.episode-detail-heading > button {
+  position: static;
+  grid-column: 2;
+  align-self: end;
+  justify-self: end;
+}
+
+@media (max-width: 640px) {
+  .episode-detail-heading > dl,
+  .episode-detail-heading > button {
+    grid-column: 1 / -1;
+  }
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.episode-event-marker:focus-visible {
+  z-index: 5;
+  outline: 2px solid #a9c8ff;
+  outline-offset: 3px;
+}
+
+.episode-event-marker.is-outside-diagnostic {
+  opacity: .22;
+}
+
+.episode-event-marker.is-outside-diagnostic:hover,
+.episode-event-marker.is-outside-diagnostic.is-selected {
+  opacity: 1;
+}
+
+.episode-finding.is-selected {
+  border-color: #5c8fdc;
+  border-left-color: #6e9bff;
+  background: rgba(39, 109, 255, .07);
+  box-shadow: 0 0 0 2px rgba(39, 109, 255, .08);
+}
+
+.episode-detail-state.is-error {
+  flex-wrap: wrap;
+  padding: 16px;
+}
+
+.episode-detail-state.is-error > button {
+  margin-left: 10px;
+}
+
+.episode-timeline-notice {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 11px;
+  border: 1px solid rgba(110, 155, 255, .2);
+  border-radius: 7px;
+  color: #91a8c8;
+  background: rgba(39, 109, 255, .045);
+  font-size: 9px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .episode-view *,
+  .episode-view *::before,
+  .episode-view *::after {
+    scroll-behavior: auto !important;
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+  }
+}

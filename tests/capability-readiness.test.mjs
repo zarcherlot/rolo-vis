@@ -50,3 +50,18 @@ test("gated binding still keeps task outcome evidence separate", () => {
   assert.equal(bindingSignal.state, "established");
   assert.match(bindingSignal.statement, /not task outcome evidence/);
 });
+
+test("Agent inference metadata cannot establish any readiness signal", () => {
+  const signals = capabilityReadinessSignals(capability({
+    inferred_binding_count: 3,
+    candidate_origin: "HEURISTIC_AGENT",
+    candidate_verification_status: "DISCOVERED_UNVERIFIED",
+  }), []);
+  const byId = Object.fromEntries(signals.map((signal) => [signal.id, signal]));
+
+  assert.equal(byId.applicability.state, "missing");
+  assert.equal(byId.registration.state, "missing");
+  assert.equal(byId.binding.state, "missing");
+  assert.equal(byId.availability.state, "missing");
+  assert.equal(byId.verification.state, "missing");
+});

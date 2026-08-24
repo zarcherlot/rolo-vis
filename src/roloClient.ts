@@ -1,15 +1,27 @@
 import type {
+  AdaptBaselineSnapshot,
+  AdaptBaselineStatus,
   BootstrapResult,
   CapabilityCollection,
   CapabilityDetail,
   CapabilitySummary,
+  CapabilitySummaryV1,
+  CapabilitySummaryV2,
   DiscoverySnapshotCollection,
   DiscoverySnapshotSummary,
+  DiscoverySnapshotSummaryV1,
+  DiscoverySnapshotSummaryV2,
+  DiscoverySnapshotSummaryV3,
   EvidenceAuthority,
   EvidenceCollection,
   EvidenceRecord,
+  EpisodeState,
+  FleetSliceStability,
   FleetBlockerCollection,
+  FleetBlockerDetail,
   FleetBlockerSummary,
+  FleetBlockerSummaryV1,
+  FleetBlockerSummaryV2,
   FleetCollection,
   FleetRobotSummary,
   HealthResponse,
@@ -23,8 +35,15 @@ import type {
   RobotOverview,
   RobotTopology,
   RobotWikiSnapshot,
+  SliceActivationDecision,
+  SliceRunDetail,
+  SliceRunObservation,
+  SliceReviewPacket,
+  SliceStabilityComparison,
+  SliceStabilityReport,
   StageAssessment,
   TargetOperationSlice,
+  TargetOperationSliceShadowReport,
   TopologyDiff,
   TopologyEdge,
   TopologyNode,
@@ -32,12 +51,34 @@ import type {
   TopologySnapshotCollection,
   TopologySnapshotSummary,
 } from "./types/rolo";
+import { parseCapabilityCollection, parseCapabilityDetail } from "./contracts/capability.ts";
+import { parseDiscoverySnapshotCollection } from "./contracts/discovery.ts";
+import { parseEpisodeCollection, parseEpisodeDetail, parseEpisodeTimelinePage } from "./contracts/episode.ts";
+import {
+  containsUnsafeReference,
+  isConfidence,
+  isRecord,
+  isStringArray,
+  isTimestamp,
+  requireContract,
+  RoloContractError,
+} from "./contracts/guards.ts";
+
+export { RoloContractError } from "./contracts/guards.ts";
 
 const DEFAULT_BASE = "/rolo-api";
 
 export const ROLO_API_FEATURES = {
+  adaptBaselineStatus: "adapt.baseline-status/v1",
+  fleetSliceStability: "adapt.fleet-slice-stability/v1",
   operationGovernance: "adapt.operation-governance/v1",
+  sliceReviewPacket: "adapt.slice-review-packet/v1",
+  sliceRunDetail: "adapt.slice-run-detail/v1",
+  sliceStabilityComparison: "adapt.slice-stability-comparison/v1",
+  sliceStability: "adapt.slice-stability/v1",
   targetOperationSlice: "adapt.target-operation-slice/v1",
+  blockerDetail: "workbench.blocker-detail/v1",
+  episodeReadModel: "workbench.episode-read-model/v1",
 } as const;
 
 export function supportsApiFeature(health: HealthResponse, feature: string): boolean {
@@ -63,28 +104,6 @@ export class RoloApiError extends Error {
   }
 }
 
-export class RoloContractError extends Error {
-  path: string;
-
-  constructor(message: string, path: string) {
-    super(message);
-    this.name = "RoloContractError";
-    this.path = path;
-  }
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function requireContract(condition: boolean, message: string, path: string): asserts condition {
-  if (!condition) throw new RoloContractError(message, path);
-}
-
-function isStringArray(value: unknown): value is string[] {
-  return Array.isArray(value) && value.every((item) => typeof item === "string");
-}
-
 function isStringRecord(value: unknown): value is Record<string, string> {
   return isRecord(value) && Object.values(value).every((item) => typeof item === "string");
 }
@@ -93,14 +112,6 @@ function isNonNegativeIntegerRecord(value: unknown): value is Record<string, num
   return isRecord(value) && Object.values(value).every(
     (item) => Number.isInteger(item) && Number(item) >= 0,
   );
-}
-
-function isTimestamp(value: unknown): value is string {
-  return typeof value === "string" && !Number.isNaN(Date.parse(value));
-}
-
-function isConfidence(value: unknown): value is number {
-  return typeof value === "number" && value >= 0 && value <= 1;
 }
 
 function isSafeAttributes(value: unknown): value is Record<string, string | number | boolean> {
@@ -195,6 +206,197 @@ function parseTargetOperationSlice(value: unknown, path: string, robotId: string
   }
   requireContract(isNonNegativeIntegerRecord(value.deferred_summary), "invalid target operation deferred summary", path);
   return value as unknown as TargetOperationSlice;
+}
+
+function parseSliceRunObservation(value: unknown, path: string): SliceRunObservation {
+  requireContract(isRecord(value), "Slice run observation must be an object", path);
+  requireContract(typeof value.run_id === "string" && value.run_id.length > 0, "missing Slice run identity", path);
+  requireContract(
+    typeof value.decision_ref === "string"
+      && /^artifact:\/\/adapt\/[^/]+\/runs\/[^/]+\/slice-activation-decision\.json$/.test(value.decision_ref),
+    "invalid Slice decision reference",
+    path,
+  );
+  requireContract(["SHADOW", "CANARY"].includes(String(value.mode)), "invalid Slice activation mode", path);
+  requireContract(["SHADOW_ONLY", "NOT_SELECTED", "ACTIVATED", "FALLBACK"].includes(String(value.outcome)), "invalid Slice activation outcome", path);
+  requireContract(typeof value.selected === "boolean" && typeof value.affects_agent_context === "boolean", "invalid Slice selection state", path);
+  requireContract(value.agent_run_status === null || typeof value.agent_run_status === "string", "invalid Slice agent status", path);
+  requireContract(value.gate_status === null || typeof value.gate_status === "string", "invalid Slice gate status", path);
+  for (const key of ["authoritative_operation_count", "requested_operation_count", "effective_operation_count"] as const) {
+    requireContract(Number.isInteger(value[key]) && Number(value[key]) >= 0, `invalid Slice ${key}`, path);
+  }
+  for (const key of ["potential_context_reduction_ratio", "effective_context_reduction_ratio"] as const) {
+    requireContract(typeof value[key] === "number" && value[key] >= 0 && value[key] <= 1, `invalid Slice ${key}`, path);
+  }
+  for (const key of ["prompt_token_estimate", "boot_context_token_estimate"] as const) {
+    requireContract(value[key] === null || (Number.isInteger(value[key]) && Number(value[key]) >= 0), `invalid Slice ${key}`, path);
+  }
+  requireContract(value.boot_context_budget_tokens === null || (Number.isInteger(value.boot_context_budget_tokens) && Number(value.boot_context_budget_tokens) > 0), "invalid Slice context budget", path);
+  requireContract(typeof value.context_budget_exceeded === "boolean" && isStringArray(value.alert_codes), "invalid Slice alerts or budget state", path);
+  requireContract(value.fallback_reason === null || typeof value.fallback_reason === "string", "invalid Slice fallback reason", path);
+  return { ...value, decision_ref: safeReferenceHint(value.decision_ref) } as unknown as SliceRunObservation;
+}
+
+function parseSliceStabilityReport(value: unknown, path: string, robotId: string): SliceStabilityReport {
+  requireContract(isRecord(value), "Slice stability report must be an object", path);
+  requireContract(value.schema_version === "robot-target-operation-slice-stability/v1", "unsupported Slice stability schema", path);
+  requireContract(value.robot_id === robotId, "Slice stability robot identity does not match", path);
+  requireContract(Number.isInteger(value.max_runs) && Number(value.max_runs) > 0 && Number(value.max_runs) <= 100, "invalid Slice observation window", path);
+  requireContract(Number.isInteger(value.min_successful_canary_runs) && Number(value.min_successful_canary_runs) > 0 && Number(value.min_successful_canary_runs) <= 100, "invalid Slice Canary threshold", path);
+  requireContract(Array.isArray(value.observations), "invalid Slice observations", path);
+  const observations = value.observations.map((item, index) => parseSliceRunObservation(item, `${path}/observations/${index}`));
+  for (const key of ["observation_count", "selected_canary_count", "activated_count", "fallback_count", "successful_canary_count", "agent_failed_count", "gate_failed_count", "context_budget_exceeded_count"] as const) {
+    requireContract(Number.isInteger(value[key]) && Number(value[key]) >= 0, `invalid Slice ${key}`, path);
+  }
+  requireContract(value.observation_count === observations.length, "Slice observation summary is inconsistent", path);
+  requireContract(new Set(observations.map((item) => item.run_id)).size === observations.length, "duplicate Slice run observations", path);
+  for (const key of ["average_potential_context_reduction_ratio", "average_effective_context_reduction_ratio"] as const) {
+    requireContract(typeof value[key] === "number" && value[key] >= 0 && value[key] <= 1, `invalid Slice ${key}`, path);
+  }
+  requireContract(isNonNegativeIntegerRecord(value.outcome_counts) && isNonNegativeIntegerRecord(value.alert_counts), "invalid Slice aggregate counts", path);
+  requireContract(["INSUFFICIENT_DATA", "HOLD", "READY_FOR_REVIEW"].includes(String(value.recommendation)), "invalid Slice stability recommendation", path);
+  requireContract(isStringArray(value.recommendation_reasons), "invalid Slice recommendation reasons", path);
+  requireContract(value.influences_release === false, "Slice stability must not influence release", path);
+  return { ...value, observations } as unknown as SliceStabilityReport;
+}
+
+function parseSliceObservationWindow(value: unknown, path: string, label: "RECENT" | "PREVIOUS") {
+  requireContract(isRecord(value) && value.label === label, "invalid Slice comparison window", path);
+  for (const key of ["requested_observations", "observation_count", "successful_canary_count", "fallback_count", "agent_failed_count", "gate_failed_count", "context_budget_exceeded_count"] as const) {
+    requireContract(Number.isInteger(value[key]) && Number(value[key]) >= (key === "requested_observations" ? 1 : 0), `invalid Slice window ${key}`, path);
+  }
+  requireContract(Number(value.observation_count) <= Number(value.requested_observations), "Slice comparison window exceeds its bound", path);
+  requireContract(value.newest_run_id === null || typeof value.newest_run_id === "string", "invalid newest Slice run", path);
+  requireContract(value.oldest_run_id === null || typeof value.oldest_run_id === "string", "invalid oldest Slice run", path);
+  requireContract((value.observation_count === 0) === (value.newest_run_id === null && value.oldest_run_id === null), "inconsistent Slice comparison identity", path);
+  requireContract(typeof value.average_effective_context_reduction_ratio === "number" && value.average_effective_context_reduction_ratio >= 0 && value.average_effective_context_reduction_ratio <= 1, "invalid Slice reduction ratio", path);
+  return value;
+}
+
+function parseSliceStabilityComparison(value: unknown, path: string, robotId: string): SliceStabilityComparison {
+  requireContract(isRecord(value) && value.schema_version === "rolo-adapt-slice-stability-comparison/v1", "unsupported Slice comparison schema", path);
+  requireContract(value.robot_id === robotId && ["NO_PREVIOUS_WINDOW", "PARTIAL", "COMPARABLE"].includes(String(value.status)), "invalid Slice comparison identity or status", path);
+  const recent = parseSliceObservationWindow(value.recent, `${path}/recent`, "RECENT");
+  const previous = parseSliceObservationWindow(value.previous, `${path}/previous`, "PREVIOUS");
+  requireContract(isRecord(value.delta), "invalid Slice comparison delta", path);
+  for (const key of ["successful_canary_count", "fallback_count", "agent_failed_count", "gate_failed_count", "context_budget_exceeded_count", "average_effective_context_reduction_ratio"] as const) {
+    requireContract(typeof value.delta[key] === "number" && Number.isFinite(value.delta[key]), `invalid Slice delta ${key}`, path);
+  }
+  requireContract(isStringArray(value.regression_signals) && isStringArray(value.limitations), "invalid Slice comparison signals or limitations", path);
+  requireContract(value.source_kind === "immutable_adapt_run_artifacts" && value.influences_release === false, "invalid Slice comparison authority", path);
+  return { ...value, recent, previous } as unknown as SliceStabilityComparison;
+}
+
+function parseFleetSliceStability(value: unknown, path: string): FleetSliceStability {
+  requireContract(isRecord(value) && value.schema_version === "rolo-adapt-fleet-slice-stability/v1", "unsupported Fleet Slice schema", path);
+  requireContract(Array.isArray(value.items) && isNonNegativeIntegerRecord(value.recommendation_counts), "invalid Fleet Slice aggregate", path);
+  for (const key of ["max_runs_per_robot", "min_successful_canary_runs", "robot_count", "observed_robot_count"] as const) {
+    requireContract(Number.isInteger(value[key]) && Number(value[key]) >= (key.includes("runs") ? 1 : 0), `invalid Fleet Slice ${key}`, path);
+  }
+  for (const [index, item] of value.items.entries()) {
+    const itemPath = `${path}/items/${index}`;
+    requireContract(isRecord(item) && typeof item.robot_id === "string", "invalid Fleet Slice robot", itemPath);
+    requireContract(["INSUFFICIENT_DATA", "HOLD", "READY_FOR_REVIEW"].includes(String(item.recommendation)), "invalid Fleet Slice recommendation", itemPath);
+    for (const key of ["observation_count", "successful_canary_count", "fallback_count", "diagnostic_count"] as const) requireContract(Number.isInteger(item[key]) && Number(item[key]) >= 0, `invalid Fleet Slice ${key}`, itemPath);
+  }
+  requireContract(value.robot_count === value.items.length && value.observed_robot_count === value.items.filter((item) => isRecord(item) && Number(item.observation_count) > 0).length, "inconsistent Fleet Slice counts", path);
+  requireContract(value.source_kind === "immutable_adapt_run_artifacts" && value.influences_release === false && isStringArray(value.limitations), "invalid Fleet Slice authority", path);
+  return value as unknown as FleetSliceStability;
+}
+
+function parseSliceReviewPacket(value: unknown, path: string, robotId: string): SliceReviewPacket {
+  requireContract(isRecord(value) && value.schema_version === "rolo-adapt-slice-review-packet/v1", "unsupported Slice review schema", path);
+  requireContract(value.robot_id === robotId && ["BLOCKED", "INCOMPLETE", "READY_FOR_HUMAN_REVIEW"].includes(String(value.status)), "invalid Slice review identity or status", path);
+  requireContract(["MATCHED", "DRIFTED"].includes(String(value.baseline_status)) && ["INSUFFICIENT_DATA", "HOLD", "READY_FOR_REVIEW"].includes(String(value.stability_recommendation)), "invalid Slice review recommendation", path);
+  requireContract(Array.isArray(value.checks), "invalid Slice review checks", path);
+  for (const [index, check] of value.checks.entries()) {
+    const checkPath = `${path}/checks/${index}`;
+    requireContract(isRecord(check) && typeof check.check_id === "string" && typeof check.label === "string" && typeof check.summary === "string", "invalid Slice review check", checkPath);
+    requireContract(["PASS", "PENDING", "BLOCKING", "HUMAN_REQUIRED"].includes(String(check.status)), "invalid Slice review check status", checkPath);
+  }
+  requireContract(isStringArray(value.evidence_run_ids) && isStringArray(value.evidence_refs) && value.evidence_run_ids.length === value.evidence_refs.length, "invalid Slice review evidence", path);
+  requireContract(value.evidence_refs.every((reference) => /^artifact:\/\/adapt\/[^/]+\/runs\/[^/]+\/slice-activation-decision\.json$/.test(reference)), "invalid Slice review evidence reference", path);
+  const evidenceRefs = value.evidence_refs.map((reference) => safeReferenceHint(reference));
+  requireContract(value.contains_secret_payloads === false && value.influences_release === false && isStringArray(value.limitations), "unsafe Slice review packet", path);
+  return { ...value, evidence_refs: evidenceRefs } as unknown as SliceReviewPacket;
+}
+
+function parseAdaptBaselineSnapshot(value: unknown, path: string): AdaptBaselineSnapshot {
+  requireContract(isRecord(value), "Adapt baseline snapshot must be an object", path);
+  requireContract(value.schema_version === "robot-adapt-baseline-snapshot/v1", "unsupported Adapt baseline snapshot schema", path);
+  requireContract(Number.isInteger(value.operation_count) && Number(value.operation_count) > 0, "invalid Adapt baseline operation count", path);
+  requireContract(Number.isInteger(value.disposition_count) && Number(value.disposition_count) > 0, "invalid Adapt baseline disposition count", path);
+  for (const key of ["contract_catalog_sha256", "registry_sha256", "operation_identity_sha256"] as const) {
+    requireContract(/^[0-9a-f]{64}$/.test(String(value[key])), `invalid Adapt baseline ${key}`, path);
+  }
+  return value as unknown as AdaptBaselineSnapshot;
+}
+
+function parseAdaptBaselineStatus(value: unknown, path: string): AdaptBaselineStatus {
+  requireContract(isRecord(value), "Adapt baseline status must be an object", path);
+  requireContract(value.schema_version === "rolo-adapt-baseline-status/v1", "unsupported Adapt baseline status schema", path);
+  const pinned = parseAdaptBaselineSnapshot(value.pinned, `${path}/pinned`);
+  const current = parseAdaptBaselineSnapshot(value.current, `${path}/current`);
+  requireContract(["MATCHED", "DRIFTED"].includes(String(value.status)), "invalid Adapt baseline status", path);
+  requireContract(isStringArray(value.changed_fields), "invalid Adapt baseline changed fields", path);
+  const expected = ["operation_count", "disposition_count", "contract_catalog_sha256", "registry_sha256", "operation_identity_sha256"]
+    .filter((key) => pinned[key as keyof AdaptBaselineSnapshot] !== current[key as keyof AdaptBaselineSnapshot])
+    .sort();
+  requireContract(JSON.stringify(value.changed_fields) === JSON.stringify(expected), "inconsistent Adapt baseline drift", path);
+  requireContract(value.status === (expected.length ? "DRIFTED" : "MATCHED"), "inconsistent Adapt baseline status", path);
+  requireContract(value.source_kind === "protected_product_baseline" && value.influences_release === false, "invalid Adapt baseline authority", path);
+  requireContract(isStringArray(value.limitations), "invalid Adapt baseline limitations", path);
+  return { ...value, pinned, current } as unknown as AdaptBaselineStatus;
+}
+
+function parseSliceActivationDecision(value: unknown, path: string, robotId: string, runId: string): SliceActivationDecision {
+  requireContract(isRecord(value), "Slice activation decision must be an object", path);
+  requireContract(value.schema_version === "robot-target-operation-slice-activation/v1", "unsupported Slice activation schema", path);
+  requireContract(value.robot_id === robotId && (value.run_id === null || value.run_id === runId), "Slice activation identity does not match", path);
+  requireContract(/^[0-9a-f]{64}$/.test(String(value.slice_sha256)), "invalid Slice activation digest", path);
+  requireContract(["SHADOW", "CANARY"].includes(String(value.mode)) && ["SHADOW_ONLY", "NOT_SELECTED", "ACTIVATED", "FALLBACK"].includes(String(value.outcome)), "invalid Slice activation state", path);
+  requireContract(typeof value.selected === "boolean" && typeof value.affects_agent_context === "boolean", "invalid Slice activation selection", path);
+  for (const key of ["selected_by", "authoritative_eligible_operations", "requested_context_operations", "effective_context_operations", "release_authority_operations"] as const) {
+    requireContract(isStringArray(value[key]), `invalid Slice activation ${key}`, path);
+  }
+  requireContract(JSON.stringify(value.release_authority_operations) === JSON.stringify(value.authoritative_eligible_operations), "Slice activation changed release authority", path);
+  requireContract(Number.isInteger(value.max_context_operations) && Number(value.max_context_operations) > 0, "invalid Slice context operation limit", path);
+  requireContract(Array.isArray(value.alerts), "invalid Slice activation alerts", path);
+  for (const [index, alert] of value.alerts.entries()) {
+    const alertPath = `${path}/alerts/${index}`;
+    requireContract(isRecord(alert), "Slice activation alert must be an object", alertPath);
+    requireContract(typeof alert.code === "string" && alert.code.length > 0, "missing Slice alert code", alertPath);
+    requireContract(["WARNING", "BLOCKING"].includes(String(alert.severity)) && typeof alert.message === "string", "invalid Slice alert severity or message", alertPath);
+    requireContract(isStringArray(alert.operations), "invalid Slice alert operations", alertPath);
+  }
+  requireContract(value.fallback_reason === null || typeof value.fallback_reason === "string", "invalid Slice fallback reason", path);
+  requireContract(value.influences_release === false, "Slice activation must not influence release", path);
+  return value as unknown as SliceActivationDecision;
+}
+
+function parseSliceShadow(value: unknown, path: string, robotId: string, sliceDigest: string): TargetOperationSliceShadowReport {
+  requireContract(isRecord(value), "Slice shadow report must be an object", path);
+  requireContract(value.schema_version === "robot-target-operation-slice-shadow/v1", "unsupported Slice shadow schema", path);
+  requireContract(value.robot_id === robotId && typeof value.discovery_id === "string", "Slice shadow identity does not match", path);
+  requireContract(value.slice_sha256 === sliceDigest, "Slice shadow digest does not match activation", path);
+  for (const key of ["authoritative_eligible_operations", "shadow_target_adapter_operations", "eligible_not_in_shadow", "shadow_not_in_eligible"] as const) {
+    requireContract(isStringArray(value[key]), `invalid Slice shadow ${key}`, path);
+  }
+  requireContract(value.influences_release === false, "Slice shadow must not influence release", path);
+  return value as unknown as TargetOperationSliceShadowReport;
+}
+
+function parseSliceRunDetail(value: unknown, path: string, robotId: string, runId: string): SliceRunDetail {
+  requireContract(isRecord(value), "Slice run detail must be an object", path);
+  requireContract(value.schema_version === "rolo-adapt-slice-run-detail/v1", "unsupported Slice run detail schema", path);
+  requireContract(value.robot_id === robotId && value.run_id === runId, "Slice run detail identity does not match", path);
+  const observation = parseSliceRunObservation(value.observation, `${path}/observation`);
+  requireContract(observation.run_id === runId, "Slice observation run identity does not match", path);
+  const activation = parseSliceActivationDecision(value.activation, `${path}/activation`, robotId, runId);
+  const shadow = value.shadow === null ? null : parseSliceShadow(value.shadow, `${path}/shadow`, robotId, activation.slice_sha256);
+  requireContract(value.source_kind === "immutable_adapt_run_artifacts" && value.integrity_status === "validated", "invalid Slice run evidence source", path);
+  requireContract(value.influences_release === false && isStringArray(value.limitations), "invalid Slice run authority or limitations", path);
+  return { ...value, observation, activation, shadow } as unknown as SliceRunDetail;
 }
 
 function parseRobotCapabilities(value: unknown, path: string): RobotCapability[] {
@@ -330,13 +532,6 @@ function parseRobotTopology(value: unknown, path: string, expectedRobotId: strin
   requireContract(isConfidence(value.confidence) && ["validated", "verified"].includes(String(value.integrity_status)), "invalid topology trust metadata", path);
   requireContract(isStringArray(value.limitations), "invalid topology limitations", path);
   return value as unknown as RobotTopology;
-}
-
-function containsUnsafeReference(value: unknown): boolean {
-  const serialized = JSON.stringify(value);
-  return serialized.includes("artifact://")
-    || /[A-Za-z]:\\\\/.test(serialized)
-    || /\/(?:home|root|etc|var|tmp|workspace|mnt|Users)\//i.test(serialized);
 }
 
 function parseTopologySnapshotSummary(value: unknown, path: string): TopologySnapshotSummary {
@@ -482,7 +677,7 @@ function parseEvidenceRecord(
   requireContract(typeof value.robot_id === "string" && (!expectedRobotId || value.robot_id === expectedRobotId), "evidence robot identity does not match request", path);
   requireContract(typeof value.title === "string" && typeof value.summary === "string", "invalid evidence title or summary", path);
   requireContract(["DECLARED", "OBSERVED", "GATED"].includes(String(value.authority)), "invalid evidence authority", path);
-  requireContract(["robot_manifest", "gated_artifact", "pipeline_artifact", "lifecycle_run", "lifecycle_gate", "lifecycle_handoff", "wiki_insight", "wiki_diff"].includes(String(value.source_kind)), "invalid evidence source", path);
+  requireContract(["robot_manifest", "gated_artifact", "pipeline_artifact", "lifecycle_run", "lifecycle_gate", "lifecycle_handoff", "wiki_insight", "wiki_diff", "episode_record", "episode_event", "episode_asset", "episode_finding"].includes(String(value.source_kind)), "invalid evidence source", path);
   requireContract(["validated", "verified"].includes(String(value.integrity_status)) && value.classification === "INTERNAL", "invalid evidence integrity or classification", path);
   requireContract(isTimestamp(value.observed_at) && ["fresh", "unknown"].includes(String(value.freshness)) && isConfidence(value.confidence), "invalid evidence observation metadata", path);
   requireContract(typeof value.reference_hint === "string" && /^[0-9a-f]{64}$/.test(String(value.reference_digest)), "invalid evidence reference metadata", path);
@@ -510,64 +705,6 @@ function parseEvidenceCollection(
   requireContract(value.next_offset === null || (Number.isInteger(value.next_offset) && Number(value.next_offset) > Number(value.offset) && Number(value.next_offset) <= Number(value.total)), "invalid evidence collection next offset", path);
   requireContract(isTimestamp(value.observed_at) && ["fresh", "unknown"].includes(String(value.freshness)), "invalid evidence collection observation metadata", path);
   return { ...value, items } as unknown as EvidenceCollection;
-}
-
-function parseCapabilitySummary(value: unknown, path: string): CapabilitySummary {
-  requireContract(isRecord(value), "capability summary must be an object", path);
-  requireContract(value.schema_version === "rolo-capability-summary/v1", "unsupported capability summary schema", path);
-  requireContract(typeof value.operation === "string" && value.operation.length > 0, "missing canonical operation", path);
-  requireContract(["Hardware", "Linux", "Middleware", "Application"].includes(String(value.layer)), "invalid capability layer", path);
-  requireContract(typeof value.description === "string", "invalid capability description", path);
-  requireContract(["DRAFT", "GATEABLE", "RELEASED", "DEPRECATED"].includes(String(value.lifecycle)), "invalid capability lifecycle", path);
-  requireContract(["APPLICABLE", "NOT_OBSERVED", "UNKNOWN"].includes(String(value.applicability)), "invalid capability applicability", path);
-  requireContract(["VERIFIED", "AVAILABLE", "UNAVAILABLE", "UNKNOWN"].includes(String(value.availability)), "invalid capability availability", path);
-  requireContract(["BUILTIN", "REGISTERED", "NOT_REGISTERED", "STALE"].includes(String(value.registration)), "invalid capability registration", path);
-  requireContract(["read", "write"].includes(String(value.access)) && ["R0", "R1", "R2", "R3"].includes(String(value.risk)), "invalid capability access or risk", path);
-  requireContract(["PUBLIC", "INTERNAL", "SENSITIVE", "SECRET"].includes(String(value.data_classification)), "invalid capability classification", path);
-  requireContract(typeof value.contract_version === "string" && /^[0-9a-f]{64}$/.test(String(value.contract_digest)), "invalid capability contract identity", path);
-  requireContract(Number.isInteger(value.binding_count) && Number(value.binding_count) >= 0, "invalid capability binding count", path);
-  requireContract(value.last_verified_at === null || isTimestamp(value.last_verified_at), "invalid capability verification time", path);
-  requireContract(isStringArray(value.evidence_ids) && isConfidence(value.confidence), "invalid capability evidence or confidence", path);
-  requireContract(["validated", "verified"].includes(String(value.integrity_status)) && isStringArray(value.limitations), "invalid capability integrity or limitations", path);
-  return value as unknown as CapabilitySummary;
-}
-
-function parseCapabilityCollection(
-  value: unknown,
-  path: string,
-  robotId: string,
-  expectedPage: { limit: number; offset: number },
-): CapabilityCollection {
-  requireContract(isRecord(value), "capability collection must be an object", path);
-  requireContract(value.schema_version === "rolo-capability-collection/v1", "unsupported capability collection schema", path);
-  requireContract(value.robot_id === robotId && Array.isArray(value.items), "invalid capability collection identity or items", path);
-  const items = value.items.map((item, index) => parseCapabilitySummary(item, `${path}/items/${index}`));
-  requireContract(new Set(items.map((item) => item.operation)).size === items.length, "capability page contains duplicate operations", path);
-  requireContract(Number.isInteger(value.total) && Number(value.total) >= items.length, "invalid capability collection total", path);
-  requireContract(value.limit === expectedPage.limit && value.offset === expectedPage.offset && items.length <= expectedPage.limit, "capability collection does not match the requested page", path);
-  requireContract(value.next_offset === null || (Number.isInteger(value.next_offset) && Number(value.next_offset) > Number(value.offset)), "invalid capability next offset", path);
-  requireContract(isTimestamp(value.observed_at) && ["fresh", "unknown"].includes(String(value.freshness)), "invalid capability observation metadata", path);
-  requireContract(["product_registry", "discovery", "gated_release"].includes(String(value.source_kind)) && isStringArray(value.limitations), "invalid capability source metadata", path);
-  return { ...value, items } as unknown as CapabilityCollection;
-}
-
-function parseCapabilityDetail(value: unknown, path: string, robotId: string, operation: string): CapabilityDetail {
-  requireContract(isRecord(value), "capability detail must be an object", path);
-  requireContract(value.schema_version === "rolo-capability-detail/v1" && value.robot_id === robotId, "invalid capability detail identity", path);
-  const capability = parseCapabilitySummary(value.capability, `${path}/capability`);
-  requireContract(capability.operation === operation, "capability operation does not match request", path);
-  requireContract(isRecord(value.contract) && value.contract.schema_version === "rolo-capability-contract/v1", "invalid capability contract", path);
-  requireContract(isRecord(value.contract.input_schema) && isRecord(value.contract.output_schema), "invalid capability schemas", path);
-  requireContract(Array.isArray(value.bindings), "capability bindings must be an array", path);
-  for (const [index, binding] of value.bindings.entries()) {
-    const bindingPath = `${path}/bindings/${index}`;
-    requireContract(isRecord(binding) && binding.schema_version === "rolo-capability-binding/v1", "invalid capability binding", bindingPath);
-    requireContract(typeof binding.binding_id === "string" && typeof binding.endpoint === "string", "invalid capability binding identity", bindingPath);
-    requireContract(["gated_release", "discovery_candidate"].includes(String(binding.source)) && ["GATED", "OBSERVED", "DECLARED"].includes(String(binding.authority)), "invalid capability binding authority", bindingPath);
-    requireContract(/^[0-9a-f]{64}$/.test(String(binding.reference_digest)) && isStringArray(binding.evidence_ids) && isStringArray(binding.limitations), "invalid capability binding evidence", bindingPath);
-  }
-  requireContract(isTimestamp(value.observed_at) && ["fresh", "unknown"].includes(String(value.freshness)), "invalid capability detail observation metadata", path);
-  return { ...value, capability } as unknown as CapabilityDetail;
 }
 
 function parseLifecycleRunSummary(value: unknown, path: string, robotId: string): LifecycleRunSummary {
@@ -686,53 +823,6 @@ function parseRobotWiki(value: unknown, path: string, robotId: string): RobotWik
   return value as unknown as RobotWikiSnapshot;
 }
 
-function parseDiscoverySnapshotSummary(
-  value: unknown,
-  path: string,
-  robotId: string,
-): DiscoverySnapshotSummary {
-  requireContract(isRecord(value) && value.schema_version === "rolo-discovery-snapshot-summary/v1", "invalid discovery snapshot summary", path);
-  requireContract(value.robot_id === robotId && typeof value.discovery_id === "string" && /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(value.discovery_id), "invalid discovery snapshot identity", path);
-  requireContract(["SUCCEEDED", "PARTIAL", "UNAVAILABLE", "FAILED"].includes(String(value.status)), "invalid discovery snapshot status", path);
-  requireContract(typeof value.discovery_mode === "string" && /^[A-Za-z0-9._-]{1,48}$/.test(value.discovery_mode), "invalid discovery mode", path);
-  requireContract(isTimestamp(value.created_at) && typeof value.is_latest === "boolean", "invalid discovery snapshot metadata", path);
-  const counts = [
-    value.probe_total,
-    value.observed_probes,
-    value.partial_probes,
-    value.unavailable_probes,
-    value.operation_candidates,
-    value.semantic_bindings,
-    value.warning_count,
-  ];
-  requireContract(counts.every((item) => Number.isInteger(item) && Number(item) >= 0), "invalid discovery snapshot counts", path);
-  requireContract(Number(value.observed_probes) + Number(value.partial_probes) + Number(value.unavailable_probes) === Number(value.probe_total), "inconsistent discovery probe coverage", path);
-  requireContract(isConfidence(value.confidence) && value.integrity_status === "verified" && isStringArray(value.limitations), "invalid discovery snapshot trust metadata", path);
-  requireContract(!containsUnsafeReference(value), "discovery snapshot contains an unsafe reference", path);
-  return value as unknown as DiscoverySnapshotSummary;
-}
-
-function parseDiscoverySnapshotCollection(
-  value: unknown,
-  path: string,
-  robotId: string,
-): DiscoverySnapshotCollection {
-  requireContract(isRecord(value) && value.schema_version === "rolo-discovery-snapshot-collection/v1", "unsupported discovery history schema", path);
-  requireContract(value.robot_id === robotId && Array.isArray(value.items), "discovery history identity does not match request", path);
-  const items = value.items.map((item, index) => parseDiscoverySnapshotSummary(item, `${path}/items/${index}`, robotId));
-  requireContract(new Set(items.map((item) => item.discovery_id)).size === items.length, "duplicate discovery snapshot identity", path);
-  requireContract(items.filter((item) => item.is_latest).length <= 1, "multiple latest discovery snapshots", path);
-  requireContract(Number.isInteger(value.total) && Number(value.total) >= items.length, "invalid discovery history total", path);
-  requireContract(Number.isInteger(value.limit) && Number(value.limit) >= 1 && Number(value.limit) <= 100 && items.length <= Number(value.limit), "invalid discovery history page limit", path);
-  requireContract(Number.isInteger(value.offset) && Number(value.offset) >= 0, "invalid discovery history page offset", path);
-  requireContract(value.next_offset === null || (Number.isInteger(value.next_offset) && Number(value.next_offset) > Number(value.offset)), "invalid discovery history next offset", path);
-  requireContract(Number.isInteger(value.excluded_unverified) && Number(value.excluded_unverified) >= 0, "invalid excluded discovery count", path);
-  requireContract(isTimestamp(value.observed_at) && value.freshness === "unknown", "invalid discovery history observation metadata", path);
-  requireContract(value.source_kind === "verified_discovery_history" && value.integrity_status === "verified" && isStringArray(value.limitations), "invalid discovery history trust metadata", path);
-  requireContract(!containsUnsafeReference(value), "discovery history contains an unsafe reference", path);
-  return { ...value, items } as unknown as DiscoverySnapshotCollection;
-}
-
 function parseFleetRobotSummary(value: unknown, path: string): FleetRobotSummary {
   requireContract(isRecord(value) && value.schema_version === "rolo-fleet-robot-summary/v1", "invalid fleet robot summary", path);
   requireContract(typeof value.robot_id === "string" && Boolean(value.robot_id) && typeof value.adapter === "string", "invalid fleet robot identity", path);
@@ -763,27 +853,56 @@ function parseFleetCollection(value: unknown, path: string): FleetCollection {
 }
 
 function parseFleetBlockerSummary(value: unknown, path: string): FleetBlockerSummary {
-  requireContract(isRecord(value) && value.schema_version === "rolo-fleet-blocker-summary/v1", "invalid fleet blocker", path);
+  requireContract(isRecord(value) && ["rolo-fleet-blocker-summary/v1", "rolo-fleet-blocker-summary/v2"].includes(String(value.schema_version)), "invalid fleet blocker", path);
   requireContract(typeof value.blocker_id === "string" && Boolean(value.blocker_id) && typeof value.robot_id === "string" && Boolean(value.robot_id), "invalid fleet blocker identity", path);
   requireContract(["adapt", "diagnose", "verify"].includes(String(value.stage)), "invalid fleet blocker stage", path);
   requireContract(typeof value.message === "string" && typeof value.recommended_action === "string" && typeof value.owner === "string", "invalid fleet blocker guidance", path);
   requireContract(isStringArray(value.evidence_ids) && value.evidence_ids.every((item) => item.startsWith("ev_")), "invalid fleet blocker evidence", path);
   requireContract(isTimestamp(value.observed_at) && value.freshness === "fresh" && value.source_kind === "pipeline_assessment", "invalid fleet blocker observation metadata", path);
   requireContract(isConfidence(value.confidence) && value.integrity_status === "validated", "invalid fleet blocker trust metadata", path);
-  return value as unknown as FleetBlockerSummary;
+  if (value.schema_version === "rolo-fleet-blocker-summary/v1") return value as unknown as FleetBlockerSummaryV1;
+  requireContract(["MISSING_VERIFIED_EVIDENCE", "EVIDENCE_UNAVAILABLE_OR_INVALID", "POLICY_OR_AUTHORIZATION", "DEPENDENCY_OR_PREREQUISITE", "PIPELINE_BLOCKER"].includes(String(value.category)), "invalid fleet blocker category", path);
+  requireContract(value.classification_basis === "normalized_pipeline_message" && typeof value.impact === "string", "invalid fleet blocker classification", path);
+  requireContract(Number.isInteger(value.resolution_requirement_count) && Number(value.resolution_requirement_count) >= 1, "invalid blocker resolution count", path);
+  return value as unknown as FleetBlockerSummaryV2;
 }
 
 function parseFleetBlockerCollection(value: unknown, path: string): FleetBlockerCollection {
-  requireContract(isRecord(value) && value.schema_version === "rolo-fleet-blocker-collection/v1" && Array.isArray(value.items), "invalid fleet blocker collection", path);
+  requireContract(isRecord(value) && ["rolo-fleet-blocker-collection/v1", "rolo-fleet-blocker-collection/v2"].includes(String(value.schema_version)) && Array.isArray(value.items), "invalid fleet blocker collection", path);
   const items = value.items.map((item, index) => parseFleetBlockerSummary(item, `${path}/items/${index}`));
+  const expectedItemSchema = value.schema_version === "rolo-fleet-blocker-collection/v2" ? "rolo-fleet-blocker-summary/v2" : "rolo-fleet-blocker-summary/v1";
+  requireContract(items.every((item) => item.schema_version === expectedItemSchema), "fleet blocker item schema does not match collection", path);
   requireContract(new Set(items.map((item) => item.blocker_id)).size === items.length, "duplicate blocker in fleet collection", path);
   requireContract(Number.isInteger(value.total) && Number(value.total) >= items.length, "invalid fleet blocker total", path);
   requireContract(Number.isInteger(value.limit) && Number(value.limit) >= 1 && Number(value.limit) <= 100 && items.length <= Number(value.limit), "invalid fleet blocker page limit", path);
   requireContract(Number.isInteger(value.offset) && Number(value.offset) >= 0 && (value.next_offset === null || (Number.isInteger(value.next_offset) && Number(value.next_offset) > Number(value.offset))), "invalid fleet blocker page offset", path);
   requireContract(isTimestamp(value.observed_at) && value.freshness === "fresh" && value.source_kind === "computed_pipeline_blockers", "invalid fleet blocker collection metadata", path);
   requireContract(isConfidence(value.confidence) && value.integrity_status === "validated", "invalid fleet blocker collection trust", path);
+  if (value.schema_version === "rolo-fleet-blocker-collection/v2") requireContract(isStringArray(value.limitations), "invalid fleet blocker limitations", path);
   requireContract(!containsUnsafeReference(value), "fleet blocker collection contains an unsafe reference", path);
   return { ...value, items } as unknown as FleetBlockerCollection;
+}
+
+function parseFleetBlockerDetail(value: unknown, path: string, blockerId: string): FleetBlockerDetail {
+  requireContract(isRecord(value) && value.schema_version === "rolo-fleet-blocker-detail/v1", "invalid fleet blocker detail", path);
+  const blocker = parseFleetBlockerSummary(value.blocker, `${path}/blocker`);
+  requireContract(blocker.schema_version === "rolo-fleet-blocker-summary/v2", "blocker detail requires triage v2", path);
+  requireContract(blocker.blocker_id === blockerId, "fleet blocker detail identity does not match", path);
+  requireContract(["NOT_STARTED", "BLOCKED", "DEGRADED", "READY", "COMPLETE"].includes(String(value.stage_status)) && typeof value.stage_summary === "string", "invalid blocker stage context", path);
+  requireContract(JSON.stringify(value.expected_stage_statuses) === JSON.stringify(["READY", "COMPLETE"]), "invalid blocker resolution target", path);
+  requireContract(Array.isArray(value.resolution_requirements) && value.resolution_requirements.length === blocker.resolution_requirement_count, "invalid blocker resolution requirements", path);
+  for (const [index, requirement] of value.resolution_requirements.entries()) {
+    const requirementPath = `${path}/resolution_requirements/${index}`;
+    requireContract(isRecord(requirement) && typeof requirement.requirement_id === "string" && typeof requirement.statement === "string", "invalid blocker resolution requirement", requirementPath);
+    requireContract(["FRESH_ASSESSMENT", "VALIDATED_EVIDENCE"].includes(String(requirement.kind)) && requirement.status === "REQUIRED", "invalid blocker resolution requirement state", requirementPath);
+    requireContract(requirement.evidence_id === null || (typeof requirement.evidence_id === "string" && requirement.evidence_id.startsWith("ev_")), "invalid blocker resolution evidence", requirementPath);
+  }
+  requireContract(new Set(value.resolution_requirements.map((item) => isRecord(item) ? item.requirement_id : "")).size === value.resolution_requirements.length, "duplicate blocker resolution requirement", path);
+  requireContract(JSON.stringify(value.canonical_cli_argv) === JSON.stringify(["robotctl", "pipeline-status", "--robot", blocker.robot_id]), "invalid blocker reproduction CLI", path);
+  requireContract(value.resolution_state === "OPEN" && value.contains_secret_payloads === false, "invalid blocker resolution authority", path);
+  requireContract(value.source_kind === "pipeline_assessment" && value.integrity_status === "validated" && isStringArray(value.limitations), "invalid blocker detail trust metadata", path);
+  requireContract(!containsUnsafeReference(value), "fleet blocker detail contains an unsafe reference", path);
+  return { ...value, blocker } as unknown as FleetBlockerDetail;
 }
 
 export class RoloClient {
@@ -931,6 +1050,53 @@ export class RoloClient {
     return parseEvidenceRecord(await this.request<unknown>(path, options), path, evidenceId);
   }
 
+  async episodeCollection(
+    robotId: string,
+    options?: RequestInit,
+    page: { limit?: number; offset?: number; state?: EpisodeState } = {},
+  ) {
+    const limit = page.limit ?? 50;
+    const offset = page.offset ?? 0;
+    const query = new URLSearchParams({ limit: String(limit), offset: String(offset) });
+    if (page.state) query.set("state", page.state);
+    const path = `/v1/robots/${encodeURIComponent(robotId)}/episodes?${query.toString()}`;
+    return parseEpisodeCollection(
+      await this.request<unknown>(path, options),
+      path,
+      robotId,
+      { limit, offset },
+    );
+  }
+
+  async episode(robotId: string, episodeId: string, options?: RequestInit) {
+    const path = `/v1/robots/${encodeURIComponent(robotId)}/episodes/${encodeURIComponent(episodeId)}`;
+    return parseEpisodeDetail(
+      await this.request<unknown>(path, options),
+      path,
+      robotId,
+      episodeId,
+    );
+  }
+
+  async episodeTimelinePage(
+    robotId: string,
+    episodeId: string,
+    revision: number,
+    options?: RequestInit,
+    page: { limit?: number; cursor?: string } = {},
+  ) {
+    const limit = page.limit ?? 100;
+    const query = new URLSearchParams({ revision: String(revision), limit: String(limit) });
+    if (page.cursor) query.set("cursor", page.cursor);
+    const path = `/v1/robots/${encodeURIComponent(robotId)}/episodes/${encodeURIComponent(episodeId)}/timeline?${query.toString()}`;
+    return parseEpisodeTimelinePage(
+      await this.request<unknown>(path, options),
+      path,
+      { robotId, episodeId, revision },
+      { limit, cursor: page.cursor },
+    );
+  }
+
   async capabilityPage(
     robotId: string,
     options?: RequestInit,
@@ -956,7 +1122,10 @@ export class RoloClient {
     const remaining = await Promise.all(
       offsets.map((offset) => this.capabilityPage(robotId, options, { limit: first.limit, offset })),
     );
-    const items = [first, ...remaining].flatMap((page) => page.items);
+    const items: CapabilitySummary[] = [];
+    for (const page of [first, ...remaining] as CapabilityCollection[]) {
+      items.push(...page.items);
+    }
     requireContract(items.length === first.total, "capability pages do not cover the advertised total", `/v1/robots/${encodeURIComponent(robotId)}/capabilities`);
     requireContract(new Set(items.map((item) => item.operation)).size === items.length, "capability pages contain duplicate operations", `/v1/robots/${encodeURIComponent(robotId)}/capabilities`);
     return { items, limitations: first.limitations };
@@ -975,6 +1144,15 @@ export class RoloClient {
   async run(robotId: string, runId: string, options?: RequestInit) {
     const path = `/v1/robots/${encodeURIComponent(robotId)}/runs/${encodeURIComponent(runId)}`;
     return parseLifecycleRunDetail(await this.request<unknown>(path, options), path, robotId, runId);
+  }
+
+  async blockerDetail(blockerId: string, options?: RequestInit) {
+    const path = `/v1/blockers/${encodeURIComponent(blockerId)}`;
+    return parseFleetBlockerDetail(
+      await this.request<unknown>(path, options),
+      path,
+      blockerId,
+    );
   }
 
   async operationGovernancePage(
@@ -1016,6 +1194,45 @@ export class RoloClient {
       await this.request<unknown>(path, options),
       path,
       robotId,
+    );
+  }
+
+  async sliceStability(robotId: string, options?: RequestInit) {
+    const path = `/v1/robots/${encodeURIComponent(robotId)}/adapt/slice-stability`;
+    return parseSliceStabilityReport(
+      await this.request<unknown>(path, options),
+      path,
+      robotId,
+    );
+  }
+
+  async fleetSliceStability(options?: RequestInit) {
+    const path = "/v1/adapt/slice-fleet";
+    return parseFleetSliceStability(await this.request<unknown>(path, options), path);
+  }
+
+  async sliceStabilityComparison(robotId: string, options?: RequestInit) {
+    const path = `/v1/robots/${encodeURIComponent(robotId)}/adapt/slice-stability/comparison`;
+    return parseSliceStabilityComparison(await this.request<unknown>(path, options), path, robotId);
+  }
+
+  async sliceReviewPacket(robotId: string, options?: RequestInit) {
+    const path = `/v1/robots/${encodeURIComponent(robotId)}/adapt/slice-review`;
+    return parseSliceReviewPacket(await this.request<unknown>(path, options), path, robotId);
+  }
+
+  async adaptBaseline(options?: RequestInit) {
+    const path = "/v1/adapt/baseline";
+    return parseAdaptBaselineStatus(await this.request<unknown>(path, options), path);
+  }
+
+  async sliceRunDetail(robotId: string, runId: string, options?: RequestInit) {
+    const path = `/v1/robots/${encodeURIComponent(robotId)}/adapt/slice-runs/${encodeURIComponent(runId)}`;
+    return parseSliceRunDetail(
+      await this.request<unknown>(path, options),
+      path,
+      robotId,
+      runId,
     );
   }
 

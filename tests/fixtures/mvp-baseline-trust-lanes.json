@@ -1,0 +1,19 @@
+{
+  "schema_version": "rolo-vis-review-fixture/v1",
+  "purpose": "Review-only coverage for trust semantics that may be absent from current rolo-data.",
+  "heuristic_states": [
+    { "mode": "enabled", "status": "AGENT_COMPLETED", "inferred_operation_count": 2, "missing_evidence_count": 1, "influences_release": false },
+    { "mode": "shadow", "status": "FALLBACK", "inferred_operation_count": 0, "missing_evidence_count": 2, "influences_release": false },
+    { "mode": "disabled", "status": "DISABLED", "inferred_operation_count": 0, "missing_evidence_count": 0, "influences_release": false }
+  ],
+  "target_evidence_states": [
+    { "deployment_scope": "LOCAL", "freshness": "FRESH", "collected_at": "2026-08-20T10:00:00Z", "refresh_required": false, "refresh_reason": null },
+    { "deployment_scope": "REMOTE", "freshness": "STALE", "collected_at": "2026-08-18T10:00:00Z", "refresh_required": true, "refresh_reason": "Target evidence is outside the accepted freshness window." }
+  ],
+  "inferred_capability": {
+    "origin": "HEURISTIC_AGENT",
+    "verification_status": "DISCOVERED_UNVERIFIED",
+    "availability_credit": false,
+    "verified_credit": false
+  }
+}
