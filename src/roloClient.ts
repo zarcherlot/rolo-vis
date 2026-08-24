@@ -53,7 +53,7 @@ import type {
 } from "./types/rolo";
 import { parseCapabilityCollection, parseCapabilityDetail } from "./contracts/capability.ts";
 import { parseDiscoverySnapshotCollection } from "./contracts/discovery.ts";
-import { parseEpisodeCollection, parseEpisodeDetail, parseEpisodeTimelinePage } from "./contracts/episode.ts";
+import { parseEpisodeCollection, parseEpisodeDetail, parseEpisodeRevisionCollection, parseEpisodeTimelinePage } from "./contracts/episode.ts";
 import {
   containsUnsafeReference,
   isConfidence,
@@ -79,6 +79,7 @@ export const ROLO_API_FEATURES = {
   targetOperationSlice: "adapt.target-operation-slice/v1",
   blockerDetail: "workbench.blocker-detail/v1",
   episodeReadModel: "workbench.episode-read-model/v1",
+  episodeRevisionHistory: "workbench.episode-revision-history/v1",
 } as const;
 
 export function supportsApiFeature(health: HealthResponse, feature: string): boolean {
@@ -1068,13 +1069,30 @@ export class RoloClient {
     );
   }
 
-  async episode(robotId: string, episodeId: string, options?: RequestInit) {
-    const path = `/v1/robots/${encodeURIComponent(robotId)}/episodes/${encodeURIComponent(episodeId)}`;
+  async episode(robotId: string, episodeId: string, options?: RequestInit, revision?: number) {
+    const query = revision === undefined ? "" : `?revision=${encodeURIComponent(String(revision))}`;
+    const path = `/v1/robots/${encodeURIComponent(robotId)}/episodes/${encodeURIComponent(episodeId)}${query}`;
     return parseEpisodeDetail(
       await this.request<unknown>(path, options),
       path,
       robotId,
       episodeId,
+      revision,
+    );
+  }
+
+  async episodeRevisions(
+    robotId: string,
+    episodeId: string,
+    options?: RequestInit,
+    page: { limit?: number; offset?: number } = {},
+  ) {
+    const limit = page.limit ?? 100;
+    const offset = page.offset ?? 0;
+    const query = new URLSearchParams({ limit: String(limit), offset: String(offset) });
+    const path = `/v1/robots/${encodeURIComponent(robotId)}/episodes/${encodeURIComponent(episodeId)}/revisions?${query.toString()}`;
+    return parseEpisodeRevisionCollection(
+      await this.request<unknown>(path, options), path, robotId, episodeId, { limit, offset },
     );
   }
 

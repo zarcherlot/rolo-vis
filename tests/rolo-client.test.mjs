@@ -2046,6 +2046,7 @@ test("plugin manifest declares every trusted read-model endpoint", async () => {
       "/v1/robots/{robot_id}/discoveries",
       "/v1/robots/{robot_id}/episodes",
       "/v1/robots/{robot_id}/episodes/{episode_id}",
+      "/v1/robots/{robot_id}/episodes/{episode_id}/revisions",
       "/v1/robots/{robot_id}/episodes/{episode_id}/timeline",
       "/v1/robots/{robot_id}/evidence",
       "/v1/evidence/{evidence_id}",

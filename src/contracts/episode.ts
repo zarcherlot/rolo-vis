@@ -6,6 +6,8 @@ import type {
   EpisodeFindingKind,
   EpisodeFindingSummary,
   EpisodeOutcome,
+  EpisodeRevisionCollection,
+  EpisodeRevisionSummary,
   EpisodeState,
   EpisodeSummary,
   EpisodeTimelineEvent,
@@ -233,12 +235,13 @@ export function parseEpisodeCollection(
   return { ...value, items } as unknown as EpisodeCollection;
 }
 
-export function parseEpisodeDetail(value: unknown, path: string, robotId: string, episodeId: string): EpisodeDetail {
+export function parseEpisodeDetail(value: unknown, path: string, robotId: string, episodeId: string, expectedRevision?: number): EpisodeDetail {
   requireSafePublicContent(value, path);
   requireContract(isRecord(value), "Episode detail must be an object", path);
   requireOnlyKeys(value, [...SUMMARY_KEYS, "as_of", "immutable", "clock_domain", "synchronization", "available_lanes", "expected_behavior", "observed_behavior", "assets", "findings"], path);
   parseEpisodeSummaryBase(value, path, "rolo-episode-detail/v1");
   requireContract(value.robot_id === robotId && value.episode_id === episodeId, "Episode detail identity does not match", path);
+  if (expectedRevision !== undefined) requireContract(value.revision === expectedRevision, "Episode detail revision does not match the pinned request", path);
   requireContract(isAwareTimestamp(value.as_of) && Date.parse(value.as_of) >= Date.parse(String(value.started_at)), "invalid Episode as-of time", path);
   requireContract(typeof value.immutable === "boolean" && !(value.state === "RUNNING" && value.immutable), "invalid Episode immutability", path);
   requireContract(isIdentifier(value.clock_domain) && ["SYNCED", "DEGRADED", "UNSYNCED", "UNKNOWN"].includes(String(value.synchronization)), "invalid Episode detail clock metadata", path);
@@ -254,6 +257,53 @@ export function parseEpisodeDetail(value: unknown, path: string, robotId: string
   const assetIds = new Set(assets.map((asset) => asset.asset_id));
   requireContract(findings.every((finding) => finding.supporting_asset_ids.every((assetId) => assetIds.has(assetId))), "Episode finding references an unknown asset", path);
   return { ...value, assets, findings } as unknown as EpisodeDetail;
+}
+
+function parseEpisodeRevisionSummary(value: unknown, path: string, identity: { robotId: string; episodeId: string }): EpisodeRevisionSummary {
+  requireContract(isRecord(value), "Episode revision summary must be an object", path);
+  requireOnlyKeys(value, [
+    "schema_version", "robot_id", "episode_id", "revision", "parent_revision", "committed_at",
+    "state", "outcome", "verification", "coverage", "immutable", "event_count", "asset_count",
+    "finding_count", "is_current", "source_kind", "limitations",
+  ], path);
+  requireContract(supportsEpisodeSchema("revisionSummary", value.schema_version), "unsupported Episode revision summary schema", path);
+  requireContract(value.robot_id === identity.robotId && value.episode_id === identity.episodeId, "Episode revision summary identity does not match", path);
+  requireContract(Number.isInteger(value.revision) && Number(value.revision) >= 1, "invalid Episode revision summary revision", path);
+  requireContract(value.parent_revision === null || (Number.isInteger(value.parent_revision) && Number(value.parent_revision) >= 1 && Number(value.parent_revision) < Number(value.revision)), "invalid Episode revision parent", path);
+  requireContract(isAwareTimestamp(value.committed_at), "invalid Episode revision commit time", path);
+  requireContract(EPISODE_STATES.includes(value.state as EpisodeState) && EPISODE_OUTCOMES.includes(value.outcome as EpisodeOutcome), "invalid Episode revision state or outcome", path);
+  requireContract(EPISODE_VERIFICATIONS.includes(value.verification as EpisodeVerification) && ["METADATA_ONLY", "PARTIAL", "COMPLETE"].includes(String(value.coverage)), "invalid Episode revision verification or coverage", path);
+  requireContract(typeof value.immutable === "boolean" && typeof value.is_current === "boolean", "invalid Episode revision publication flags", path);
+  requireContract(isNonNegativeInteger(value.event_count) && isNonNegativeInteger(value.asset_count) && isNonNegativeInteger(value.finding_count), "invalid Episode revision counts", path);
+  requireContract(["committed_episode_record", "published_episode_projection"].includes(String(value.source_kind)), "invalid Episode revision source", path);
+  requireContract(isStringArray(value.limitations) && value.limitations.length <= 32, "invalid Episode revision limitations", path);
+  if (value.source_kind === "published_episode_projection") requireContract(value.is_current === true, "legacy Episode projection is not current", path);
+  return value as unknown as EpisodeRevisionSummary;
+}
+
+export function parseEpisodeRevisionCollection(
+  value: unknown,
+  path: string,
+  robotId: string,
+  episodeId: string,
+  expected: { limit: number; offset: number },
+): EpisodeRevisionCollection {
+  requireSafePublicContent(value, path);
+  requireContract(isRecord(value), "Episode revision collection must be an object", path);
+  requireOnlyKeys(value, ["schema_version", "robot_id", "episode_id", "current_revision", "items", "total", "limit", "offset", "next_offset", "as_of", "source_kind", "limitations"], path);
+  requireContract(supportsEpisodeSchema("revisionCollection", value.schema_version) && value.robot_id === robotId && value.episode_id === episodeId, "unsupported Episode revision collection or identity", path);
+  requireContract(Number.isInteger(value.current_revision) && Number(value.current_revision) >= 1 && Array.isArray(value.items), "invalid Episode revision collection", path);
+  const items = value.items.map((item, index) => parseEpisodeRevisionSummary(item, `${path}/items/${index}`, { robotId, episodeId }));
+  requireContract(items.every((item, index) => index === 0 || item.revision === items[index - 1].revision - 1), "Episode revisions are not contiguous newest-first", path);
+  requireContract(new Set(items.map((item) => item.revision)).size === items.length, "duplicate Episode revision", path);
+  requireContract(items.filter((item) => item.is_current).length <= 1 && items.every((item) => !item.is_current || item.revision === value.current_revision), "invalid current Episode revision marker", path);
+  if (expected.offset === 0) requireContract(items[0]?.revision === value.current_revision && items[0].is_current, "Episode revision collection does not start at the marked current revision", path);
+  requireContract(items.every((item) => item.source_kind !== "committed_episode_record" || item.parent_revision === (item.revision === 1 ? null : item.revision - 1)), "non-contiguous Episode revision lineage", path);
+  requireContract(isNonNegativeInteger(value.total) && Number(value.total) >= 1 && Number(value.total) >= items.length, "invalid Episode revision total", path);
+  requireContract(value.limit === expected.limit && value.offset === expected.offset && items.length <= expected.limit, "Episode revision collection does not match the requested page", path);
+  requireContract(value.next_offset === null || (Number.isInteger(value.next_offset) && Number(value.next_offset) > expected.offset && Number(value.next_offset) <= Number(value.total)), "invalid Episode revision next offset", path);
+  requireContract(isAwareTimestamp(value.as_of) && value.source_kind === "episode_revision_history" && isStringArray(value.limitations) && value.limitations.length <= 32, "invalid Episode revision collection metadata", path);
+  return { ...value, items } as unknown as EpisodeRevisionCollection;
 }
 
 export function parseEpisodeTimelinePage(

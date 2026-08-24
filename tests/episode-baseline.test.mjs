@@ -26,6 +26,7 @@ test("Episode diagnostic baseline succeeds v0.20 without mutating the v0.19 MVP 
   assert.equal(EPISODE_BASELINE.producerMainMerge, "4cac539");
   assert.equal(EPISODE_BASELINE.requiredFeature, "workbench.episode-read-model/v1");
   assert.deepEqual(EPISODE_SCHEMA_COMPATIBILITY.timelineEvent, ["rolo-episode-timeline-event/v1"]);
+  assert.deepEqual(EPISODE_SCHEMA_COMPATIBILITY.revisionCollection, ["rolo-episode-revision-collection/v1"]);
 });
 
 test("Episode compatibility accepts only the reviewed v1 family", () => {

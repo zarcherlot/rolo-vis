@@ -34,6 +34,8 @@ import type {
   EpisodeCollection,
   EpisodeDetail,
   EpisodeFindingSummary,
+  EpisodeRevisionCollection,
+  EpisodeRevisionSummary,
   EpisodeSummary,
   EpisodeTimelineEvent,
   EpisodeTimelineLane,
@@ -98,10 +100,27 @@ async function readBoundedTimeline(robotId: string, detail: EpisodeDetail, signa
   return accumulated;
 }
 
-async function readComparisonSide(robotId: string, episodeId: string, expectedRevision: number, signal: AbortSignal) {
-  const episodeDetail = await roloClient.episode(robotId, episodeId, { signal });
+async function readComparisonSide(robotId: string, episodeId: string, expectedRevision: number, signal: AbortSignal, revisionHistorySupported: boolean) {
+  const episodeDetail = await roloClient.episode(robotId, episodeId, { signal }, revisionHistorySupported ? expectedRevision : undefined);
   if (episodeDetail.revision !== expectedRevision) throw new Error(`Episode ${episodeId} moved from pinned revision ${expectedRevision} to ${episodeDetail.revision}.`);
   return { detail: episodeDetail, events: await readBoundedTimeline(robotId, episodeDetail, signal) };
+}
+
+async function readRevisionHistory(robotId: string, episodeId: string, signal: AbortSignal): Promise<EpisodeRevisionCollection> {
+  const first = await roloClient.episodeRevisions(robotId, episodeId, { signal });
+  const items: EpisodeRevisionSummary[] = [...first.items];
+  let nextOffset = first.next_offset;
+  let pagesRead = 1;
+  while (nextOffset !== null && pagesRead < 10) {
+    const page = await roloClient.episodeRevisions(robotId, episodeId, { signal }, { limit: 100, offset: nextOffset });
+    items.push(...page.items);
+    nextOffset = page.next_offset;
+    pagesRead += 1;
+  }
+  if (nextOffset !== null || items.length !== first.total) throw new Error("Episode revision history exceeds the bounded 1,000-revision view or does not cover its advertised total.");
+  if (new Set(items.map((item) => item.revision)).size !== items.length) throw new Error("Episode revision history repeats a published revision.");
+  if (items.some((item, index) => index > 0 && item.revision !== items[index - 1].revision - 1)) throw new Error("Episode revision history is not contiguous across page boundaries.");
+  return { ...first, items, next_offset: null };
 }
 
 function EpisodeListItem({ item, active, onClick }: { item: EpisodeSummary; active: boolean; onClick: () => void }) {
@@ -236,12 +255,14 @@ function EpisodeTimeline({ detail, events, selectedEventId, visibleLanes, focuse
   );
 }
 
-export function EpisodeStudio({ robotId, initialTarget, onOpenEvidence }: { robotId: string; initialTarget?: EpisodeDeepLinkTarget | null; onOpenEvidence: (evidenceId: string) => void }) {
+export function EpisodeStudio({ robotId, initialTarget, revisionHistorySupported, onOpenEvidence }: { robotId: string; initialTarget?: EpisodeDeepLinkTarget | null; revisionHistorySupported: boolean; onOpenEvidence: (evidenceId: string) => void }) {
   const [collection, setCollection] = useState<EpisodeCollection | null>(null);
   const [episodes, setEpisodes] = useState<EpisodeSummary[]>([]);
   const [collectionLoading, setCollectionLoading] = useState(true);
   const [collectionMessage, setCollectionMessage] = useState("");
   const [selectedEpisodeId, setSelectedEpisodeId] = useState(() => initialTarget?.robotId === robotId ? initialTarget.episodeId : "");
+  const [selectedRevision, setSelectedRevision] = useState<number | null>(() => initialTarget?.robotId === robotId ? initialTarget.revision : null);
+  const [revisionHistory, setRevisionHistory] = useState<EpisodeRevisionCollection | null>(null);
   const [detail, setDetail] = useState<EpisodeDetail | null>(null);
   const [events, setEvents] = useState<EpisodeTimelineEvent[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
@@ -276,12 +297,16 @@ export function EpisodeStudio({ robotId, initialTarget, onOpenEvidence }: { robo
       if (controller.signal.aborted) return;
       setCollection(value);
       setEpisodes(value.items);
-      setSelectedEpisodeId((current) => current || (initialTarget?.robotId === robotId ? initialTarget.episodeId : "") || value.items[0]?.episode_id || "");
+      const preferredEpisodeId = (initialTarget?.robotId === robotId ? initialTarget.episodeId : "") || value.items[0]?.episode_id || "";
+      setSelectedEpisodeId((current) => current || preferredEpisodeId);
+      setSelectedRevision((current) => current ?? value.items.find((item) => item.episode_id === preferredEpisodeId)?.revision ?? null);
     } catch (error) {
       if (controller.signal.aborted) return;
       setCollection(null);
       setEpisodes([]);
       setSelectedEpisodeId("");
+      setSelectedRevision(null);
+      setRevisionHistory(null);
       setCollectionMessage(error instanceof Error ? error.message : "Episode collection is unavailable.");
     } finally {
       if (!controller.signal.aborted) setCollectionLoading(false);
@@ -297,6 +322,7 @@ export function EpisodeStudio({ robotId, initialTarget, onOpenEvidence }: { robo
   useEffect(() => {
     detailRequest.current?.abort();
     setDetail(null);
+    setRevisionHistory(null);
     setEvents([]);
     setNextCursor(null);
     setSelectedEventId("");
@@ -308,10 +334,15 @@ export function EpisodeStudio({ robotId, initialTarget, onOpenEvidence }: { robo
     const controller = new AbortController();
     detailRequest.current = controller;
     setDetailLoading(true);
-    void roloClient.episode(robotId, selectedEpisodeId, { signal: controller.signal }).then(async (episodeDetail) => {
-      if (summary && episodeDetail.revision !== summary.revision) throw new Error("Episode revision changed while opening Studio. Refresh the Episode list before continuing.");
-      const deepTarget = !initialTargetConsumed.current && initialTarget?.robotId === robotId && initialTarget.episodeId === selectedEpisodeId ? initialTarget : null;
-      if (deepTarget && deepTarget.revision !== null && deepTarget.revision !== episodeDetail.revision) throw new Error(`Deep link pins revision ${deepTarget.revision}, but rolo published revision ${episodeDetail.revision}.`);
+    const deepTarget = !initialTargetConsumed.current && initialTarget?.robotId === robotId && initialTarget.episodeId === selectedEpisodeId ? initialTarget : null;
+    const initiallyRequestedRevision = selectedRevision ?? deepTarget?.revision ?? summary?.revision ?? null;
+    void (async () => {
+      const history = revisionHistorySupported ? await readRevisionHistory(robotId, selectedEpisodeId, controller.signal) : null;
+      const requestedRevision = initiallyRequestedRevision ?? history?.current_revision ?? null;
+      const episodeDetail = await roloClient.episode(robotId, selectedEpisodeId, { signal: controller.signal }, revisionHistorySupported && requestedRevision !== null ? requestedRevision : undefined);
+      if (history && !history.items.some((item) => item.revision === requestedRevision)) throw new Error(`Revision ${requestedRevision} is not present in the validated Episode history.`);
+      if (!revisionHistorySupported && requestedRevision !== null && episodeDetail.revision !== requestedRevision) throw new Error(`Deep link pins revision ${requestedRevision}, but this rolo connection only exposes current revision ${episodeDetail.revision}.`);
+      if (summary && requestedRevision === summary.revision && episodeDetail.revision !== summary.revision) throw new Error("Episode revision changed while opening Studio. Refresh the Episode list before continuing.");
       let timeline = await roloClient.episodeTimelinePage(robotId, selectedEpisodeId, episodeDetail.revision, { signal: controller.signal }, { limit: EPISODE_TIMELINE_PAGE_LIMIT });
       let accumulated = timeline.items;
       let cursor = timeline.next_cursor;
@@ -326,6 +357,8 @@ export function EpisodeStudio({ robotId, initialTarget, onOpenEvidence }: { robo
       }
       if (controller.signal.aborted) return;
       initialTargetConsumed.current = true;
+      setSelectedRevision(episodeDetail.revision);
+      setRevisionHistory(history);
       setDetail(episodeDetail);
       setEvents(accumulated);
       setNextCursor(cursor);
@@ -339,23 +372,23 @@ export function EpisodeStudio({ robotId, initialTarget, onOpenEvidence }: { robo
       if (cursor && accumulated.length >= EPISODE_VISIBLE_EVENT_LIMIT) notices.push(`The visible timeline is capped at ${EPISODE_VISIBLE_EVENT_LIMIT} events.`);
       setTimelineNotice(notices.join(" "));
       setVisibleLanes(new Set(episodeDetail.available_lanes));
-    }).catch((error: unknown) => {
+    })().catch((error: unknown) => {
       if (!controller.signal.aborted) setDetailMessage(error instanceof Error ? error.message : "Episode Studio could not be read.");
     }).finally(() => {
       if (!controller.signal.aborted) setDetailLoading(false);
       if (detailRequest.current === controller) detailRequest.current = null;
     });
     return () => controller.abort();
-  }, [robotId, selectedEpisodeId, episodes, initialTarget, detailReload]);
+  }, [robotId, selectedEpisodeId, selectedRevision, revisionHistorySupported, episodes, initialTarget, detailReload]);
 
   useEffect(() => {
-    if (selectedEpisodeId !== compareEpisodeId) return;
+    if (selectedEpisodeId !== compareEpisodeId || (revisionHistorySupported && selectedRevision !== compareRevision)) return;
     comparisonRequest.current?.abort();
     setCompareEpisodeId("");
     setCompareRevision(null);
     setComparison(null);
     setComparisonMessage("");
-  }, [selectedEpisodeId, compareEpisodeId]);
+  }, [selectedEpisodeId, selectedRevision, compareEpisodeId, compareRevision, revisionHistorySupported]);
 
   useEffect(() => {
     comparisonRequest.current?.abort();
@@ -367,8 +400,8 @@ export function EpisodeStudio({ robotId, initialTarget, onOpenEvidence }: { robo
     comparisonRequest.current = controller;
     setComparisonLoading(true);
     void Promise.all([
-      readComparisonSide(robotId, detail.episode_id, detail.revision, controller.signal),
-      readComparisonSide(robotId, compareEpisodeId, compareRevision, controller.signal),
+      readComparisonSide(robotId, detail.episode_id, detail.revision, controller.signal, revisionHistorySupported),
+      readComparisonSide(robotId, compareEpisodeId, compareRevision, controller.signal, revisionHistorySupported),
     ]).then(([left, right]) => {
       if (!controller.signal.aborted) setComparison(buildEpisodePairComparison(left.detail, left.events, right.detail, right.events));
     }).catch((error: unknown) => {
@@ -378,7 +411,7 @@ export function EpisodeStudio({ robotId, initialTarget, onOpenEvidence }: { robo
       if (comparisonRequest.current === controller) comparisonRequest.current = null;
     });
     return () => controller.abort();
-  }, [robotId, detail, compareEpisodeId, compareRevision]);
+  }, [robotId, detail, compareEpisodeId, compareRevision, revisionHistorySupported]);
 
   useEffect(() => {
     if (!detail) return;
@@ -388,8 +421,8 @@ export function EpisodeStudio({ robotId, initialTarget, onOpenEvidence }: { robo
       revision: detail.revision,
       eventId: selectedEventId || null,
       findingId: selectedFindingId || null,
-      compareEpisodeId: compareEpisodeId && compareEpisodeId !== detail.episode_id ? compareEpisodeId : null,
-      compareRevision: compareEpisodeId && compareEpisodeId !== detail.episode_id ? compareRevision : null,
+      compareEpisodeId: compareEpisodeId && (compareEpisodeId !== detail.episode_id || compareRevision !== detail.revision) ? compareEpisodeId : null,
+      compareRevision: compareEpisodeId && (compareEpisodeId !== detail.episode_id || compareRevision !== detail.revision) ? compareRevision : null,
     });
     window.history.replaceState(null, "", next);
   }, [robotId, detail, selectedEventId, selectedFindingId, compareEpisodeId, compareRevision]);
@@ -451,8 +484,19 @@ export function EpisodeStudio({ robotId, initialTarget, onOpenEvidence }: { robo
       block: "center",
     }));
   }, [diagnosticFocus]);
-  const compareOptions = episodes.filter((item) => item.episode_id !== selectedEpisodeId);
-  const compareSelectionMissing = compareEpisodeId && !compareOptions.some((item) => item.episode_id === compareEpisodeId);
+  const compareOptions = useMemo(() => {
+    const currentEpisodes = episodes
+      .filter((item) => item.episode_id !== selectedEpisodeId)
+      .map((item) => ({ episodeId: item.episode_id, revision: item.revision, label: `${item.task_label} · rev ${item.revision}` }));
+    const historicalRevisions = revisionHistorySupported && detail && revisionHistory
+      ? revisionHistory.items
+        .filter((item) => item.revision !== detail.revision)
+        .map((item) => ({ episodeId: detail.episode_id, revision: item.revision, label: `Same Episode · rev ${item.revision}${item.is_current ? " · current" : ""}` }))
+      : [];
+    return [...historicalRevisions, ...currentEpisodes];
+  }, [episodes, selectedEpisodeId, detail, revisionHistory, revisionHistorySupported]);
+  const comparisonKey = compareEpisodeId && compareRevision !== null ? `${compareEpisodeId}@@${compareRevision}` : "";
+  const compareSelectionMissing = Boolean(comparisonKey) && !compareOptions.some((item) => `${item.episodeId}@@${item.revision}` === comparisonKey);
   const clearComparison = () => {
     comparisonRequest.current?.abort();
     setCompareEpisodeId("");
@@ -461,15 +505,15 @@ export function EpisodeStudio({ robotId, initialTarget, onOpenEvidence }: { robo
     setComparisonMessage("");
     setComparisonLoading(false);
   };
-  const chooseComparison = (episodeId: string) => {
-    if (!episodeId) {
+  const chooseComparison = (key: string) => {
+    if (!key) {
       clearComparison();
       return;
     }
-    const summary = episodes.find((item) => item.episode_id === episodeId);
-    if (!summary) return;
-    setCompareEpisodeId(summary.episode_id);
-    setCompareRevision(summary.revision);
+    const option = compareOptions.find((item) => `${item.episodeId}@@${item.revision}` === key);
+    if (!option) return;
+    setCompareEpisodeId(option.episodeId);
+    setCompareRevision(option.revision);
   };
 
   if (collectionLoading && !collection) return <section className="content-view episode-view"><div className="page-title"><div><div className="eyebrow">Read-only execution record</div><h2>Episode Studio</h2><p>Loading published Episode revisions without inferring live runtime state.</p></div></div><div className="panel episode-state-view"><Pulse size={28} /><div><strong>Reading Episode index</strong><p>Only a feature-negotiated, versioned read model can populate this workspace.</p></div></div></section>;
@@ -478,11 +522,11 @@ export function EpisodeStudio({ robotId, initialTarget, onOpenEvidence }: { robo
 
   return (
     <section className="content-view episode-view">
-      <div className="page-title episode-page-title"><div><div className="eyebrow">Read-only execution record</div><h2>Episode Studio</h2><p>Sequence-ordered execution context, observations, inferences, and Verify-stage results.</p></div>{detail && <div className="episode-revision-lock"><ShieldCheck size={17} /><span><strong>Revision {detail.revision} pinned</strong><small>{detail.immutable ? "Immutable publication" : "Live publication"} · {detail.coverage.replaceAll("_", " ")}</small></span></div>}</div>
+      <div className="page-title episode-page-title"><div><div className="eyebrow">Read-only execution record</div><h2>Episode Studio</h2><p>Sequence-ordered execution context, observations, inferences, and Verify-stage results.</p></div>{detail && <div className="episode-revision-tools">{revisionHistorySupported && revisionHistory && revisionHistory.items.length > 1 && <label className="select-control episode-revision-selector"><Clock size={14} /><select value={detail.revision} onChange={(event) => { clearComparison(); setSelectedRevision(Number(event.target.value)); }} aria-label="Select Episode revision">{revisionHistory.items.map((item) => <option key={item.revision} value={item.revision}>Revision {item.revision}{item.is_current ? " · current" : ""}</option>)}</select></label>}<div className="episode-revision-lock"><ShieldCheck size={17} /><span><strong>Revision {detail.revision} pinned</strong><small>{detail.immutable ? "Immutable publication" : "Live publication"} · {detail.coverage.replaceAll("_", " ")}</small></span></div></div>}</div>
       <section className="episode-compare-control panel" aria-label="Episode pair selection">
         <div><ArrowsLeftRight size={18} /><span><h3>Compare a second published Episode</h3><p>Both revisions are read independently; differences remain descriptive and release-neutral.</p></span></div>
         <div className="episode-compare-picker">
-          <label className="select-control"><ArrowsLeftRight size={14} /><select value={compareEpisodeId} onChange={(event) => chooseComparison(event.target.value)} disabled={!detail || (!compareOptions.length && !compareEpisodeId)} aria-label="Select Episode to compare"><option value="">No comparison</option>{compareSelectionMissing && <option value={compareEpisodeId}>{compareEpisodeId} · pinned deep link</option>}{compareOptions.map((item) => <option key={`${item.episode_id}-${item.revision}`} value={item.episode_id}>{item.task_label} · rev {item.revision}</option>)}</select></label>
+          <label className="select-control"><ArrowsLeftRight size={14} /><select value={comparisonKey} onChange={(event) => chooseComparison(event.target.value)} disabled={!detail || (!compareOptions.length && !compareEpisodeId)} aria-label="Select Episode revision to compare"><option value="">No comparison</option>{compareSelectionMissing && <option value={comparisonKey}>{compareEpisodeId} · rev {compareRevision} · pinned deep link</option>}{compareOptions.map((item) => <option key={`${item.episodeId}-${item.revision}`} value={`${item.episodeId}@@${item.revision}`}>{item.label}</option>)}</select></label>
           {compareEpisodeId && <span className="episode-compare-pin"><small>RIGHT SIDE</small><strong>rev {compareRevision}</strong></span>}
         </div>
       </section>
@@ -493,7 +537,7 @@ export function EpisodeStudio({ robotId, initialTarget, onOpenEvidence }: { robo
         <aside className="episode-index panel">
           <header><span>Published Episodes</span><strong>{collection?.total || episodes.length}</strong></header>
           <div className="episode-index-tools"><label className="search-box"><MagnifyingGlass size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search Episode" aria-label="Search Episodes" /></label><label className="select-control"><Funnel size={14} /><select value={stateFilter} onChange={(event) => setStateFilter(event.target.value)} aria-label="Filter Episode state"><option value="all">All states</option><option value="RUNNING">Running</option><option value="COMPLETED">Completed</option><option value="FAILED">Failed</option><option value="CANCELLED">Cancelled</option><option value="PARTIAL">Partial</option></select></label></div>
-          <div className="episode-index-list">{filteredEpisodes.map((item) => <EpisodeListItem key={`${item.episode_id}-${item.revision}`} item={item} active={item.episode_id === selectedEpisodeId} onClick={() => { if (item.episode_id === compareEpisodeId) clearComparison(); setSelectedEpisodeId(item.episode_id); }} />)}{!filteredEpisodes.length && <div className="episode-index-empty"><MagnifyingGlass size={20} /><span>No Episodes match this view.</span></div>}</div>
+          <div className="episode-index-list">{filteredEpisodes.map((item) => <EpisodeListItem key={`${item.episode_id}-${item.revision}`} item={item} active={item.episode_id === selectedEpisodeId && item.revision === selectedRevision} onClick={() => { if (item.episode_id === compareEpisodeId && item.revision === compareRevision) clearComparison(); setSelectedEpisodeId(item.episode_id); setSelectedRevision(item.revision); }} />)}{!filteredEpisodes.length && <div className="episode-index-empty"><MagnifyingGlass size={20} /><span>No Episodes match this view.</span></div>}</div>
           {collection?.next_offset !== null && <footer><button className="secondary-button" disabled={collectionLoading} onClick={() => void loadMoreEpisodes()}>{collectionLoading ? "Loading…" : "Load more Episodes"}</button></footer>}
         </aside>
 

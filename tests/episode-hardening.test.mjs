@@ -67,7 +67,10 @@ test("Episode deep links fail closed on malformed identity or revision", () => {
   assert.equal(readEpisodeDeepLink("https://workbench.test/?view=episode&robot=r1&episode=ep-1&revision=1&finding=../unsafe"), null);
   assert.equal(readEpisodeDeepLink("https://workbench.test/?view=episode&robot=r1&episode=ep-1&revision=1&compare=ep-2"), null);
   assert.equal(readEpisodeDeepLink("https://workbench.test/?view=episode&robot=r1&episode=ep-1&revision=1&compare=ep-1&compare_revision=1"), null);
-  assert.equal(readEpisodeDeepLink("https://workbench.test/?view=episode&robot=r1&episode=ep-1&revision=1&compare=ep-1&compare_revision=2"), null);
+  assert.deepEqual(readEpisodeDeepLink("https://workbench.test/?view=episode&robot=r1&episode=ep-1&revision=1&compare=ep-1&compare_revision=2"), {
+    robotId: "r1", episodeId: "ep-1", revision: 1, eventId: null, findingId: null,
+    compareEpisodeId: "ep-1", compareRevision: 2,
+  });
   assert.throws(() => buildEpisodeDeepLink("https://workbench.test/", {
     robotId: "r1",
     episodeId: "ep-1",
@@ -77,7 +80,7 @@ test("Episode deep links fail closed on malformed identity or revision", () => {
     compareEpisodeId: "ep-2",
     compareRevision: null,
   }), /both identity and revision/);
-  assert.throws(() => buildEpisodeDeepLink("https://workbench.test/", {
+  assert.equal(buildEpisodeDeepLink("https://workbench.test/", {
     robotId: "r1",
     episodeId: "ep-1",
     revision: 1,
@@ -85,7 +88,7 @@ test("Episode deep links fail closed on malformed identity or revision", () => {
     findingId: null,
     compareEpisodeId: "ep-1",
     compareRevision: 2,
-  }), /different Episode identities/);
+  }), "/?view=episode&robot=r1&episode=ep-1&revision=1&compare=ep-1&compare_revision=2");
 });
 
 test("timeline keyboard navigation follows sequence order across visible lanes", () => {

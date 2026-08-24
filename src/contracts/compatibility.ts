@@ -34,6 +34,8 @@ export const EPISODE_SCHEMA_COMPATIBILITY = {
   timelineEvent: ["rolo-episode-timeline-event/v1"],
   assetSummary: ["rolo-episode-asset-summary/v1"],
   findingSummary: ["rolo-episode-finding-summary/v1"],
+  revisionCollection: ["rolo-episode-revision-collection/v1"],
+  revisionSummary: ["rolo-episode-revision-summary/v1"],
 } as const;
 
 export const EPISODE_READONLY_BASELINE = {
