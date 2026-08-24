@@ -44,15 +44,17 @@ test("Episode deep links pin robot, Episode, revision, and event while preservin
     episodeId: "ep-regression",
     revision: 3,
     eventId: "event-42",
+    findingId: "finding-agent",
     compareEpisodeId: "ep-candidate",
     compareRevision: 7,
   });
-  assert.equal(link, "/?theme=dark&view=episode&robot=mentorpi&episode=ep-regression&revision=3&event=event-42&compare=ep-candidate&compare_revision=7");
+  assert.equal(link, "/?theme=dark&view=episode&robot=mentorpi&episode=ep-regression&revision=3&event=event-42&finding=finding-agent&compare=ep-candidate&compare_revision=7");
   assert.deepEqual(readEpisodeDeepLink(`https://workbench.test${link}`), {
     robotId: "mentorpi",
     episodeId: "ep-regression",
     revision: 3,
     eventId: "event-42",
+    findingId: "finding-agent",
     compareEpisodeId: "ep-candidate",
     compareRevision: 7,
   });
@@ -62,6 +64,7 @@ test("Episode deep links pin robot, Episode, revision, and event while preservin
 test("Episode deep links fail closed on malformed identity or revision", () => {
   assert.equal(readEpisodeDeepLink("https://workbench.test/?view=episode&robot=../secret&episode=ep-1&revision=1"), null);
   assert.equal(readEpisodeDeepLink("https://workbench.test/?view=episode&robot=r1&episode=ep-1&revision=0"), null);
+  assert.equal(readEpisodeDeepLink("https://workbench.test/?view=episode&robot=r1&episode=ep-1&revision=1&finding=../unsafe"), null);
   assert.equal(readEpisodeDeepLink("https://workbench.test/?view=episode&robot=r1&episode=ep-1&revision=1&compare=ep-2"), null);
   assert.equal(readEpisodeDeepLink("https://workbench.test/?view=episode&robot=r1&episode=ep-1&revision=1&compare=ep-1&compare_revision=1"), null);
   assert.equal(readEpisodeDeepLink("https://workbench.test/?view=episode&robot=r1&episode=ep-1&revision=1&compare=ep-1&compare_revision=2"), null);
@@ -70,6 +73,7 @@ test("Episode deep links fail closed on malformed identity or revision", () => {
     episodeId: "ep-1",
     revision: 1,
     eventId: null,
+    findingId: null,
     compareEpisodeId: "ep-2",
     compareRevision: null,
   }), /both identity and revision/);
@@ -78,6 +82,7 @@ test("Episode deep links fail closed on malformed identity or revision", () => {
     episodeId: "ep-1",
     revision: 1,
     eventId: null,
+    findingId: null,
     compareEpisodeId: "ep-1",
     compareRevision: 2,
   }), /different Episode identities/);

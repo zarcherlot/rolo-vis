@@ -39,6 +39,22 @@
   outline-offset: 3px;
 }
 
+.episode-event-marker.is-outside-diagnostic {
+  opacity: .22;
+}
+
+.episode-event-marker.is-outside-diagnostic:hover,
+.episode-event-marker.is-outside-diagnostic.is-selected {
+  opacity: 1;
+}
+
+.episode-finding.is-selected {
+  border-color: #5c8fdc;
+  border-left-color: #6e9bff;
+  background: rgba(39, 109, 255, .07);
+  box-shadow: 0 0 0 2px rgba(39, 109, 255, .08);
+}
+
 .episode-detail-state.is-error {
   flex-wrap: wrap;
   padding: 16px;

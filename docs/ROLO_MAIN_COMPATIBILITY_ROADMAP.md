@@ -193,3 +193,18 @@ Status: E5A and E5B approved.
   contradictions fail closed; incomplete inputs remain explicitly bounded partial.
 - E5B rejects same-ID revision comparison because the public detail endpoint is not
   historical-revision addressable; this remains a future producer-contract dependency.
+
+## Phase 2 E6: Finding Focus / Diagnostic Context
+
+Status: approved.
+
+- Selecting a published Finding creates a stable, revision-pinned `finding` deep link.
+- Timeline events are included only as coincident window context; proximity cannot
+  establish supporting evidence, cause, verification, or remediation authority.
+- Supporting evidence, contradicting evidence, and supporting assets remain separate
+  published lanes, including missing and redacted asset states.
+- Candidate causes must remain inferred and unverified; confidence cannot promote them.
+- Direct links may load only the existing bounded 500-event timeline. Partial context is
+  explicit, and unsafe identity, order, count, or asset references fail closed.
+- Supplementary observation, external handoff, export, replay, and every write action
+  remain deferred pending separate producer and governance contracts.

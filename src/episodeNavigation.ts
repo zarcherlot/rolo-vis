@@ -5,13 +5,14 @@ export const EPISODE_VISIBLE_EVENT_LIMIT = 500;
 export const EPISODE_TIMELINE_PROJECTION_BUDGET_MS = 25;
 
 const IDENTIFIER = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
-const NAV_KEYS = ["view", "robot", "episode", "revision", "event", "compare", "compare_revision"] as const;
+const NAV_KEYS = ["view", "robot", "episode", "revision", "event", "finding", "compare", "compare_revision"] as const;
 
 export interface EpisodeDeepLinkTarget {
   robotId: string;
   episodeId: string;
   revision: number | null;
   eventId: string | null;
+  findingId: string | null;
   compareEpisodeId: string | null;
   compareRevision: number | null;
 }
@@ -23,18 +24,20 @@ export function readEpisodeDeepLink(url: string): EpisodeDeepLinkTarget | null {
   const episodeId = parsed.searchParams.get("episode") || "";
   const revisionValue = parsed.searchParams.get("revision");
   const eventId = parsed.searchParams.get("event");
+  const findingId = parsed.searchParams.get("finding");
   const compareEpisodeId = parsed.searchParams.get("compare");
   const compareRevisionValue = parsed.searchParams.get("compare_revision");
   if (!IDENTIFIER.test(robotId) || !IDENTIFIER.test(episodeId)) return null;
   const revision = revisionValue === null ? null : Number(revisionValue);
   if (revision !== null && (!Number.isInteger(revision) || revision < 1)) return null;
   if (eventId !== null && !IDENTIFIER.test(eventId)) return null;
+  if (findingId !== null && !IDENTIFIER.test(findingId)) return null;
   if ((compareEpisodeId === null) !== (compareRevisionValue === null)) return null;
   const compareRevision = compareRevisionValue === null ? null : Number(compareRevisionValue);
   if (compareEpisodeId !== null && !IDENTIFIER.test(compareEpisodeId)) return null;
   if (compareRevision !== null && (!Number.isInteger(compareRevision) || compareRevision < 1)) return null;
   if (compareEpisodeId === episodeId) return null;
-  return { robotId, episodeId, revision, eventId, compareEpisodeId, compareRevision };
+  return { robotId, episodeId, revision, eventId, findingId, compareEpisodeId, compareRevision };
 }
 
 export function buildEpisodeDeepLink(url: string, target: EpisodeDeepLinkTarget): string {
@@ -46,6 +49,8 @@ export function buildEpisodeDeepLink(url: string, target: EpisodeDeepLinkTarget)
   else parsed.searchParams.set("revision", String(target.revision));
   if (target.eventId === null) parsed.searchParams.delete("event");
   else parsed.searchParams.set("event", target.eventId);
+  if (target.findingId === null) parsed.searchParams.delete("finding");
+  else parsed.searchParams.set("finding", target.findingId);
   if ((target.compareEpisodeId === null) !== (target.compareRevision === null)) throw new Error("Episode comparison deep links require both identity and revision.");
   if (target.compareEpisodeId === target.episodeId) throw new Error("Episode comparison deep links require two different Episode identities.");
   if (target.compareEpisodeId === null) {
