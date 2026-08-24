@@ -36,12 +36,13 @@ export const EPISODE_SCHEMA_COMPATIBILITY = {
   findingSummary: ["rolo-episode-finding-summary/v1"],
 } as const;
 
-export const EPISODE_BASELINE_CANDIDATE = {
+export const EPISODE_BASELINE = {
   id: "rolo-vis-episode-readonly/2026-08",
-  status: "candidate",
+  status: "baseline",
   mode: "read-only",
   extends: MVP_BASELINE.id,
-  frontendMinimum: "d712f32",
+  release: "0.20.0",
+  frontendMinimum: "cb09340",
   producerMinimum: "e2217bb",
   requiredFeature: "workbench.episode-read-model/v1",
 } as const;

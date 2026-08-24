@@ -1,7 +1,7 @@
 # Episode Studio consumer contract
 
-Status: V1C approved; E4 read-only baseline candidate review
-Frontend base: rolo-vis `v0.19.0`  
+Status: E4 approved and promoted as the `v0.20.0` Episode read-only baseline
+Frontend base: rolo-vis `v0.20.0`
 Producer design: `rolo-episode-contract-design/v1`
 
 ## Consumer boundary

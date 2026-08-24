@@ -3,7 +3,7 @@ import test from "node:test";
 import { readFile } from "node:fs/promises";
 
 import {
-  EPISODE_BASELINE_CANDIDATE,
+  EPISODE_BASELINE,
   EPISODE_SCHEMA_COMPATIBILITY,
   MVP_SCHEMA_COMPATIBILITY,
   supportsEpisodeSchema,
@@ -11,13 +11,14 @@ import {
 
 const read = (path) => readFile(new URL(path, import.meta.url), "utf8");
 
-test("Episode v1 is pinned as a successor candidate without mutating the v0.19 MVP matrix", () => {
+test("Episode v1 is promoted as a successor baseline without mutating the v0.19 MVP matrix", () => {
   assert.equal("episode" in MVP_SCHEMA_COMPATIBILITY, false);
-  assert.equal(EPISODE_BASELINE_CANDIDATE.status, "candidate");
-  assert.equal(EPISODE_BASELINE_CANDIDATE.mode, "read-only");
-  assert.equal(EPISODE_BASELINE_CANDIDATE.frontendMinimum, "d712f32");
-  assert.equal(EPISODE_BASELINE_CANDIDATE.producerMinimum, "e2217bb");
-  assert.equal(EPISODE_BASELINE_CANDIDATE.requiredFeature, "workbench.episode-read-model/v1");
+  assert.equal(EPISODE_BASELINE.status, "baseline");
+  assert.equal(EPISODE_BASELINE.mode, "read-only");
+  assert.equal(EPISODE_BASELINE.release, "0.20.0");
+  assert.equal(EPISODE_BASELINE.frontendMinimum, "cb09340");
+  assert.equal(EPISODE_BASELINE.producerMinimum, "e2217bb");
+  assert.equal(EPISODE_BASELINE.requiredFeature, "workbench.episode-read-model/v1");
   assert.deepEqual(EPISODE_SCHEMA_COMPATIBILITY.timelineEvent, ["rolo-episode-timeline-event/v1"]);
 });
 
@@ -29,14 +30,14 @@ test("Episode compatibility accepts only the reviewed v1 family", () => {
   }
 });
 
-test("Episode baseline candidate keeps media and write surfaces outside the plugin", async () => {
-  const [candidate, manifest, studio] = await Promise.all([
-    read("../docs/EPISODE_READONLY_BASELINE_CANDIDATE.md"),
+test("Episode baseline keeps media and write surfaces outside the plugin", async () => {
+  const [baseline, manifest, studio] = await Promise.all([
+    read("../docs/EPISODE_READONLY_BASELINE.md"),
     read("../rolo.plugin.json"),
     read("../src/EpisodeStudio.tsx"),
   ]);
-  assert.match(candidate, /does not itself create `v0\.20\.0`/);
-  assert.match(candidate, /Episode pair comparison should be the next read-only contract design/);
+  assert.match(baseline, /Version: `0\.20\.0`/);
+  assert.match(baseline, /Episode pair comparison is the next read-only contract design/);
   assert.doesNotMatch(manifest, /episode\.(media|replay|export|write)/);
   assert.doesNotMatch(studio, /roloClient\.(invoke|cancel|replay|export|collect|recollect)/);
 });

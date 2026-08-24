@@ -36,7 +36,8 @@ test("Episode Studio is exposed only through the negotiated feature and successo
   assert.match(client, /episodeReadModel: "workbench\.episode-read-model\/v1"/);
   assert.match(client, /episodeCollection|episodeTimelinePage|\/episodes/);
   assert.match(compatibility, /EPISODE_SCHEMA_COMPATIBILITY/);
-  assert.match(compatibility, /status: "candidate"/);
+  assert.match(compatibility, /EPISODE_BASELINE/);
+  assert.match(compatibility, /release: "0\.20\.0"/);
 });
 
 test("Episode v1 explicitly defers media and write-side surfaces", async () => {
