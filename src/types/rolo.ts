@@ -367,7 +367,7 @@ export interface EvidenceRecord {
   title: string;
   summary: string;
   authority: EvidenceAuthority;
-  source_kind: "robot_manifest" | "gated_artifact" | "pipeline_artifact" | "lifecycle_run" | "lifecycle_gate" | "lifecycle_handoff" | "wiki_insight" | "wiki_diff";
+  source_kind: "robot_manifest" | "gated_artifact" | "pipeline_artifact" | "lifecycle_run" | "lifecycle_gate" | "lifecycle_handoff" | "wiki_insight" | "wiki_diff" | "episode_record" | "episode_event" | "episode_asset" | "episode_finding";
   integrity_status: "validated" | "verified";
   classification: "INTERNAL";
   observed_at: string;
@@ -839,6 +839,154 @@ export interface DiscoverySnapshotCollectionV3 extends DiscoverySnapshotCollecti
 }
 
 export type DiscoverySnapshotCollection = DiscoverySnapshotCollectionV1 | DiscoverySnapshotCollectionV2 | DiscoverySnapshotCollectionV3;
+
+export type EpisodeState = "RUNNING" | "COMPLETED" | "FAILED" | "CANCELLED" | "PARTIAL";
+export type EpisodeOutcome = "SUCCEEDED" | "FAILED" | "CANCELLED" | "UNKNOWN";
+export type EpisodeVerification = "VERIFIED" | "UNVERIFIED" | "NOT_AVAILABLE";
+export type EpisodeCoverage = "METADATA_ONLY" | "PARTIAL" | "COMPLETE";
+export type EpisodeTimelineLane = "COMMAND" | "STATE" | "TELEMETRY" | "OBSERVATION" | "ALERT" | "AGENT" | "CONFIGURATION" | "CHECKPOINT" | "GATE" | "OUTCOME";
+export type EpisodeAuthority = "DECLARED" | "OBSERVED" | "INFERRED" | "HUMAN_CONFIRMED" | "VERIFIED";
+export type EpisodeSynchronization = "SYNCED" | "DEGRADED" | "UNSYNCED" | "UNKNOWN";
+export type EpisodeWorldKind = "PHYSICAL" | "SIMULATED" | "REPLAYED";
+export type EpisodeEvidenceKind = "RAW" | "NORMALIZED" | "RENDERED" | "GUI_SCREENSHOT";
+export type EpisodeFindingKind = "OBSERVED_FACT" | "CANDIDATE_CAUSE" | "HUMAN_CONFIRMATION" | "VERIFIED_OUTCOME";
+export type EpisodeSeverity = "INFO" | "WARNING" | "ERROR" | "CRITICAL";
+export type EpisodeAssetAvailability = "AVAILABLE" | "MISSING" | "REDACTED";
+
+interface EpisodeSummaryBase {
+  robot_id: string;
+  episode_id: string;
+  revision: number;
+  task_label: string;
+  state: EpisodeState;
+  outcome: EpisodeOutcome;
+  verification: EpisodeVerification;
+  coverage: EpisodeCoverage;
+  started_at: string;
+  ended_at: string | null;
+  execution_id: string | null;
+  test_case_id: string | null;
+  lifecycle_run_id: string | null;
+  operation: string | null;
+  event_count: number;
+  asset_count: number;
+  finding_count: number;
+  evidence_ids: string[];
+  source_kind: "published_episode_projection";
+  limitations: string[];
+}
+
+export interface EpisodeSummary extends EpisodeSummaryBase {
+  schema_version: "rolo-episode-summary/v1";
+}
+
+export interface EpisodeAssetSummary {
+  schema_version: "rolo-episode-asset-summary/v1";
+  robot_id: string;
+  episode_id: string;
+  revision: number;
+  asset_id: string;
+  modality: string;
+  source_label: string;
+  captured_at: string;
+  offset_ms: number;
+  world_kind: EpisodeWorldKind;
+  evidence_kind: EpisodeEvidenceKind;
+  frame: string | null;
+  clock_domain: string;
+  synchronization: EpisodeSynchronization;
+  media_type: string;
+  byte_count: number | null;
+  digest: string | null;
+  data_classification: "PUBLIC" | "INTERNAL" | "SENSITIVE" | "SECRET";
+  evidence_id: string | null;
+  availability: EpisodeAssetAvailability;
+  limitations: string[];
+}
+
+export interface EpisodeFindingSummary {
+  schema_version: "rolo-episode-finding-summary/v1";
+  robot_id: string;
+  episode_id: string;
+  revision: number;
+  finding_id: string;
+  kind: EpisodeFindingKind;
+  authority: EpisodeAuthority;
+  title: string;
+  summary: string;
+  start_offset_ms: number;
+  end_offset_ms: number;
+  supporting_evidence_ids: string[];
+  supporting_asset_ids: string[];
+  contradicting_evidence_ids: string[];
+  confidence: number | null;
+  verification: EpisodeVerification;
+  limitations: string[];
+}
+
+export interface EpisodeTimelineEvent {
+  schema_version: "rolo-episode-timeline-event/v1";
+  robot_id: string;
+  episode_id: string;
+  revision: number;
+  event_id: string;
+  sequence: number;
+  offset_ms: number;
+  occurred_at: string;
+  duration_ms: number | null;
+  clock_domain: string;
+  synchronization: EpisodeSynchronization;
+  lane: EpisodeTimelineLane;
+  title: string;
+  summary: string;
+  severity: EpisodeSeverity;
+  authority: EpisodeAuthority;
+  evidence_ids: string[];
+  asset_ids: string[];
+  related_event_ids: string[];
+  metrics: Record<string, number>;
+  limitations: string[];
+}
+
+export interface EpisodeDetail extends EpisodeSummaryBase {
+  schema_version: "rolo-episode-detail/v1";
+  as_of: string;
+  immutable: boolean;
+  clock_domain: string;
+  synchronization: EpisodeSynchronization;
+  available_lanes: EpisodeTimelineLane[];
+  expected_behavior: string | null;
+  observed_behavior: string | null;
+  assets: EpisodeAssetSummary[];
+  findings: EpisodeFindingSummary[];
+}
+
+export interface EpisodeCollection {
+  schema_version: "rolo-episode-collection/v1";
+  robot_id: string;
+  items: EpisodeSummary[];
+  total: number;
+  limit: number;
+  offset: number;
+  next_offset: number | null;
+  as_of: string;
+  source_kind: "published_episode_projection";
+  limitations: string[];
+}
+
+export interface EpisodeTimelinePage {
+  schema_version: "rolo-episode-timeline-page/v1";
+  robot_id: string;
+  episode_id: string;
+  revision: number;
+  items: EpisodeTimelineEvent[];
+  limit: number;
+  cursor: string | null;
+  next_cursor: string | null;
+  as_of: string;
+  immutable: boolean;
+  limitations: string[];
+}
 
 export interface FleetRobotSummary {
   schema_version: "rolo-fleet-robot-summary/v1";

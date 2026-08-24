@@ -130,19 +130,21 @@ import { summarizeLifecycleAssessment } from "./lifecycleAssessment";
 import { filterSliceObservations } from "./sliceStability";
 import { getOverviewPresentation, getSurfaceSource } from "./workbenchPolicy";
 import type { WorkbenchMode } from "./workbenchPolicy";
+import { EpisodeStudio } from "./EpisodeStudio";
 
-type NavId = "fleet" | "overview" | "stack" | "capabilities" | "lifecycle" | "wiki" | "evidence";
+type NavId = "fleet" | "overview" | "stack" | "capabilities" | "lifecycle" | "episode" | "wiki" | "evidence";
 type ViewRobot = DemoRobot | (RobotCapability & { status: "online" });
 type RobotOption = DemoRobot | RobotCapability;
 type OpenEvidence = (item: EvidenceItem | string) => void;
 type StackContextFocus = { layer: ContextWikiLayer; requestId: number };
 
-const NAV_ITEMS: Array<{ id: NavId; label: string; icon: typeof House }> = [
+const NAV_ITEMS: Array<{ id: NavId; label: string; icon: typeof House; feature?: string }> = [
   { id: "fleet", label: "Fleet", icon: Robot },
   { id: "overview", label: "Overview", icon: House },
   { id: "stack", label: "Stack Map", icon: GitBranch },
   { id: "capabilities", label: "Capabilities", icon: Stack },
   { id: "lifecycle", label: "Lifecycle", icon: Clock },
+  { id: "episode", label: "Episode Studio", icon: Pulse, feature: ROLO_API_FEATURES.episodeReadModel },
   { id: "wiki", label: "Robot Wiki", icon: BookOpenText },
   { id: "evidence", label: "Evidence", icon: FileText },
 ];
@@ -282,12 +284,13 @@ function RoloNode({ data, selected }: NodeProps<Node<TopologyNodeData>>) {
 
 const nodeTypes = { rolo: RoloNode };
 
-function Sidebar({ active, onChange }: { active: NavId; onChange: (value: NavId) => void }) {
+function Sidebar({ active, apiFeatures, onChange }: { active: NavId; apiFeatures: string[]; onChange: (value: NavId) => void }) {
+  const visibleItems = NAV_ITEMS.filter((item) => !item.feature || apiFeatures.includes(item.feature));
   return (
     <aside className="sidebar" aria-label="Primary navigation">
       <div className="sidebar-brand"><img src="/assets/rolo-mark.png" alt="rolo" /></div>
       <nav>
-        {NAV_ITEMS.map(({ id, label, icon: Icon }) => (
+        {visibleItems.map(({ id, label, icon: Icon }) => (
           <button
             key={id}
             className={`nav-button ${active === id ? "is-active" : ""}`}
@@ -2257,11 +2260,18 @@ function EvidenceView({
 
 function EvidenceDrawer({ evidence, onClose }: { evidence: EvidenceItem | null; onClose: () => void }) {
   if (!evidence) return null;
+  const integrityStatement = evidence.integrity === "verified"
+    ? "The reference is bound to a hash-verified release."
+    : evidence.kind === "OBSERVED"
+      ? "The bounded observation was validated, but it is not an independent Verify-stage result."
+      : evidence.kind === "GATED"
+        ? "The gated record was validated without claiming a hash-verified release."
+        : "The declaration passed schema validation but does not prove runtime presence.";
   return (
     <div className="drawer-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
       <aside className="evidence-drawer" aria-label="Evidence details">
         <div className="drawer-header"><div><span>{evidence.kind}</span><h3>{evidence.title}</h3></div><button onClick={onClose} aria-label="Close evidence"><X size={20} /></button></div>
-        <div className={`evidence-verdict verdict-${evidence.integrity}`}><CheckCircle size={24} weight="fill" /><div><strong>Integrity {evidence.integrity}</strong><span>{evidence.integrity === "verified" ? "The reference is bound to a hash-verified release." : "The declaration passed schema validation but does not prove runtime presence."}</span></div></div>
+        <div className={`evidence-verdict verdict-${evidence.integrity}`}><CheckCircle size={24} weight="fill" /><div><strong>Integrity {evidence.integrity}</strong><span>{integrityStatement}</span></div></div>
         <dl className="drawer-facts"><div><dt>Evidence ID</dt><dd>{evidence.id}</dd></div><div><dt>Source</dt><dd>{evidence.source}</dd></div><div><dt>Observed</dt><dd>{evidence.time}</dd></div><div><dt>Classification</dt><dd>{evidence.classification || "INTERNAL"}</dd></div></dl>
         <div className="drawer-section"><h4>Evidence statement</h4><p>{evidence.summary || `${evidence.title}. This record was produced by a bounded read-only source.`}</p></div>
         <div className="drawer-section"><h4>Sanitized reference</h4><code>{evidence.ref}</code></div>
@@ -2319,6 +2329,7 @@ function AppContent() {
     setFleetRequested(false);
     setFleetLoading(false);
     setFleetMessage("");
+    setApiFeatures([]);
     const controller = new AbortController();
     const timeout = window.setTimeout(() => controller.abort(), 5000);
     try {
@@ -2401,6 +2412,9 @@ function AppContent() {
   }, []);
 
   useEffect(() => { void connect(); }, [connect]);
+  useEffect(() => {
+    if (active === "episode" && !apiFeatures.includes(ROLO_API_FEATURES.episodeReadModel) && ["live", "partial", "demo"].includes(mode)) setActive("stack");
+  }, [active, apiFeatures, mode]);
   useEffect(() => {
     if (active !== "wiki" || !robot || (wiki && discoveryHistory) || wikiLoading || wikiRequestRobotId === robot.robot_id || !["live", "partial"].includes(mode)) return;
     let current = true;
@@ -2521,9 +2535,10 @@ function AppContent() {
   const evidenceSource = getSurfaceSource(mode, "evidence", { evidence: Boolean(evidenceList) });
   const lifecycleSource = getSurfaceSource(mode, "lifecycle", { lifecycle: Boolean(pipeline.length && lifecycleRuns) });
   const capabilitySource = getSurfaceSource(mode, "capabilities", { capabilities: Boolean(capabilityList) });
+  const episodeSupported = apiFeatures.includes(ROLO_API_FEATURES.episodeReadModel);
   return (
     <div className="app-shell">
-      <Sidebar active={active} onChange={navigate} />
+      <Sidebar active={active} apiFeatures={apiFeatures} onChange={navigate} />
       <Topbar robot={robot} robots={robots} activeLabel={activeLabel} mode={mode} snapshot={overview?.observed_at} onRetry={() => connect(robot?.robot_id)} onRobotChange={connect} />
       <main className="app-main">
         {(["connecting", "unavailable"].includes(mode) || !robot) ? <ConnectionStateView mode={mode} message={connectionMessage} onRetry={() => connect()} onUseDemo={useDemo} /> : <>
@@ -2532,6 +2547,7 @@ function AppContent() {
           {active === "overview" && <OverviewView robot={robot} pipeline={pipeline} overview={overview} mode={mode} evidenceItems={evidenceItems} onOpenEvidence={openEvidence} onNavigate={navigate} />}
           {active === "capabilities" && (capabilitySource === "demo" ? <DemoCapabilityView onOpenEvidence={setEvidence} /> : capabilitySource === "live" && capabilityList ? <LiveCapabilityView robotId={robot.robot_id} items={capabilityList} limitations={capabilityLimitations} apiFeatures={apiFeatures} onOpenEvidence={openEvidence} /> : <ReadModelUnavailableView title="Capabilities" description="Live capability coverage needs a versioned rolo capability read model." />)}
           {active === "lifecycle" && (lifecycleSource === "demo" ? <DemoLifecycleView pipeline={pipeline} onOpenEvidence={setEvidence} /> : lifecycleSource === "live" && lifecycleRuns ? <LiveLifecycleView pipeline={pipeline} runs={lifecycleRuns} robotId={robot.robot_id} onOpenEvidence={openEvidence} /> : <ReadModelUnavailableView title="Lifecycle" description="Live lifecycle requires trusted stage and run read models." />)}
+          {active === "episode" && (episodeSupported ? <EpisodeStudio robotId={robot.robot_id} onOpenEvidence={openEvidence} /> : <ReadModelUnavailableView title="Episode Studio" description="rolo has not advertised the versioned Episode read model for this robot connection." />)}
           {active === "wiki" && (mode === "demo" ? <ReadModelUnavailableView title="Robot Wiki" description="The labeled demo fixture does not include discovery Wiki evidence." /> : wiki && discoveryHistory ? <WikiView wiki={wiki} history={discoveryHistory} focusLayer={wikiContextFocus} onOpenStackLayer={openStackLayer} onClearFocus={() => setWikiContextFocus(null)} onOpenEvidence={openEvidence} /> : wikiLoading ? <section className="content-view"><PageTitle title="Robot Wiki" description="Reading manifest-verified discovery snapshots…" /><div className="panel read-model-unavailable" role="status"><Pulse size={26} /><div><strong>Loading Robot Wiki</strong><p>Current knowledge and verified history are being resolved independently.</p></div></div></section> : <ReadModelUnavailableView title="Robot Wiki" description={wikiMessage || "Open this surface to read a verified discovery Wiki."} />)}
           {active === "evidence" && (evidenceSource === "demo" ? <EvidenceView onOpenEvidence={openEvidence} /> : evidenceSource === "live" ? <EvidenceView live collection={evidenceList} robotId={robot.robot_id} onOpenEvidence={openEvidence} /> : <ReadModelUnavailableView title="Evidence" description="Live evidence resolution needs a versioned rolo evidence read model." />)}
         </>}

@@ -15,6 +15,7 @@ import type {
   EvidenceAuthority,
   EvidenceCollection,
   EvidenceRecord,
+  EpisodeState,
   FleetSliceStability,
   FleetBlockerCollection,
   FleetBlockerDetail,
@@ -52,6 +53,7 @@ import type {
 } from "./types/rolo";
 import { parseCapabilityCollection, parseCapabilityDetail } from "./contracts/capability.ts";
 import { parseDiscoverySnapshotCollection } from "./contracts/discovery.ts";
+import { parseEpisodeCollection, parseEpisodeDetail, parseEpisodeTimelinePage } from "./contracts/episode.ts";
 import {
   containsUnsafeReference,
   isConfidence,
@@ -76,6 +78,7 @@ export const ROLO_API_FEATURES = {
   sliceStability: "adapt.slice-stability/v1",
   targetOperationSlice: "adapt.target-operation-slice/v1",
   blockerDetail: "workbench.blocker-detail/v1",
+  episodeReadModel: "workbench.episode-read-model/v1",
 } as const;
 
 export function supportsApiFeature(health: HealthResponse, feature: string): boolean {
@@ -674,7 +677,7 @@ function parseEvidenceRecord(
   requireContract(typeof value.robot_id === "string" && (!expectedRobotId || value.robot_id === expectedRobotId), "evidence robot identity does not match request", path);
   requireContract(typeof value.title === "string" && typeof value.summary === "string", "invalid evidence title or summary", path);
   requireContract(["DECLARED", "OBSERVED", "GATED"].includes(String(value.authority)), "invalid evidence authority", path);
-  requireContract(["robot_manifest", "gated_artifact", "pipeline_artifact", "lifecycle_run", "lifecycle_gate", "lifecycle_handoff", "wiki_insight", "wiki_diff"].includes(String(value.source_kind)), "invalid evidence source", path);
+  requireContract(["robot_manifest", "gated_artifact", "pipeline_artifact", "lifecycle_run", "lifecycle_gate", "lifecycle_handoff", "wiki_insight", "wiki_diff", "episode_record", "episode_event", "episode_asset", "episode_finding"].includes(String(value.source_kind)), "invalid evidence source", path);
   requireContract(["validated", "verified"].includes(String(value.integrity_status)) && value.classification === "INTERNAL", "invalid evidence integrity or classification", path);
   requireContract(isTimestamp(value.observed_at) && ["fresh", "unknown"].includes(String(value.freshness)) && isConfidence(value.confidence), "invalid evidence observation metadata", path);
   requireContract(typeof value.reference_hint === "string" && /^[0-9a-f]{64}$/.test(String(value.reference_digest)), "invalid evidence reference metadata", path);
@@ -1045,6 +1048,53 @@ export class RoloClient {
   async evidence(evidenceId: string, options?: RequestInit) {
     const path = `/v1/evidence/${encodeURIComponent(evidenceId)}`;
     return parseEvidenceRecord(await this.request<unknown>(path, options), path, evidenceId);
+  }
+
+  async episodeCollection(
+    robotId: string,
+    options?: RequestInit,
+    page: { limit?: number; offset?: number; state?: EpisodeState } = {},
+  ) {
+    const limit = page.limit ?? 50;
+    const offset = page.offset ?? 0;
+    const query = new URLSearchParams({ limit: String(limit), offset: String(offset) });
+    if (page.state) query.set("state", page.state);
+    const path = `/v1/robots/${encodeURIComponent(robotId)}/episodes?${query.toString()}`;
+    return parseEpisodeCollection(
+      await this.request<unknown>(path, options),
+      path,
+      robotId,
+      { limit, offset },
+    );
+  }
+
+  async episode(robotId: string, episodeId: string, options?: RequestInit) {
+    const path = `/v1/robots/${encodeURIComponent(robotId)}/episodes/${encodeURIComponent(episodeId)}`;
+    return parseEpisodeDetail(
+      await this.request<unknown>(path, options),
+      path,
+      robotId,
+      episodeId,
+    );
+  }
+
+  async episodeTimelinePage(
+    robotId: string,
+    episodeId: string,
+    revision: number,
+    options?: RequestInit,
+    page: { limit?: number; cursor?: string } = {},
+  ) {
+    const limit = page.limit ?? 100;
+    const query = new URLSearchParams({ revision: String(revision), limit: String(limit) });
+    if (page.cursor) query.set("cursor", page.cursor);
+    const path = `/v1/robots/${encodeURIComponent(robotId)}/episodes/${encodeURIComponent(episodeId)}/timeline?${query.toString()}`;
+    return parseEpisodeTimelinePage(
+      await this.request<unknown>(path, options),
+      path,
+      { robotId, episodeId, revision },
+      { limit, cursor: page.cursor },
+    );
   }
 
   async capabilityPage(

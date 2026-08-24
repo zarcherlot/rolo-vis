@@ -131,3 +131,25 @@ Status: approved and promoted as the `0.19.0` MVP baseline.
   Lifecycle, and Evidence boundaries described in `MVP_READONLY_BASELINE.md`.
 - Promotion passed the full baseline verification command and a live `rolo-data`
   regression. Future contract expansion starts from this tagged boundary.
+
+## Phase 2 design: Episode contracts
+
+Status: E1–E2 producer contracts implemented; E3 frontend is ready for review on an
+independent post-baseline branch.
+
+- rolo owns a new sanitized Episode read-model family; rolo-vis will not consume raw
+  Episode artifacts, Canonical Operation output, or `robot_use` provider payloads.
+- V1 design covers collection, detail, revision-pinned timeline pages, asset metadata,
+  and evidence-linked findings.
+- State, execution outcome, and verification remain separate dimensions.
+- Timeline authority keeps declared intent, observation, Agent inference, human
+  confirmation, and Verify-stage outcome distinct.
+- Media delivery, live streaming, Episode compare, replay, recollection, and write
+  actions are deferred until their contracts receive separate review.
+
+Frontend acceptance and rollout order are recorded in
+`EPISODE_STUDIO_CONSUMER_CONTRACT.md`.
+
+E3 adds only feature-negotiated read surfaces. The `v0.19.0` MVP tag, its runtime
+navigation, and its compatibility ranges remain unchanged until Episode is reviewed
+and promoted separately.

@@ -1,0 +1,22 @@
+.episode-detail-status {
+  align-self: start;
+  align-items: flex-start;
+}
+
+.episode-detail-heading > dl {
+  grid-column: 1;
+}
+
+.episode-detail-heading > button {
+  position: static;
+  grid-column: 2;
+  align-self: end;
+  justify-self: end;
+}
+
+@media (max-width: 640px) {
+  .episode-detail-heading > dl,
+  .episode-detail-heading > button {
+    grid-column: 1 / -1;
+  }
+}
