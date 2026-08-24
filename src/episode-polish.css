@@ -86,3 +86,4 @@
     transition-duration: .01ms !important;
   }
 }
+.episode-revision-tools{display:flex;align-items:center;justify-content:flex-end;gap:10px;flex-wrap:wrap}.episode-revision-selector select{min-width:130px}@media(max-width:640px){.episode-revision-tools{width:100%;align-items:stretch;flex-direction:column}.episode-revision-selector{width:100%}.episode-revision-selector select{width:100%}}

@@ -29,6 +29,8 @@ test("Episode pair loading and URL state are explicitly bounded and revision-pin
   assert.match(studio, /EPISODE_COMPARE_PAGE_BUDGET = 5/);
   assert.match(studio, /EPISODE_VISIBLE_EVENT_LIMIT/);
   assert.match(studio, /moved from pinned revision/);
-  assert.match(studio, /compareRevision: compareEpisodeId/);
+  assert.match(studio, /compareRevision !== detail\.revision/);
+  assert.match(studio, /Same Episode · rev/);
+  assert.match(studio, /episodeRevisions/);
   assert.match(studio, /timeline cursor repeated/);
 });

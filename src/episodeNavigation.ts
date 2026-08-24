@@ -36,7 +36,7 @@ export function readEpisodeDeepLink(url: string): EpisodeDeepLinkTarget | null {
   const compareRevision = compareRevisionValue === null ? null : Number(compareRevisionValue);
   if (compareEpisodeId !== null && !IDENTIFIER.test(compareEpisodeId)) return null;
   if (compareRevision !== null && (!Number.isInteger(compareRevision) || compareRevision < 1)) return null;
-  if (compareEpisodeId === episodeId) return null;
+  if (compareEpisodeId === episodeId && (revision === null || compareRevision === revision)) return null;
   return { robotId, episodeId, revision, eventId, findingId, compareEpisodeId, compareRevision };
 }
 
@@ -52,7 +52,7 @@ export function buildEpisodeDeepLink(url: string, target: EpisodeDeepLinkTarget)
   if (target.findingId === null) parsed.searchParams.delete("finding");
   else parsed.searchParams.set("finding", target.findingId);
   if ((target.compareEpisodeId === null) !== (target.compareRevision === null)) throw new Error("Episode comparison deep links require both identity and revision.");
-  if (target.compareEpisodeId === target.episodeId) throw new Error("Episode comparison deep links require two different Episode identities.");
+  if (target.compareEpisodeId === target.episodeId && (target.revision === null || target.compareRevision === target.revision)) throw new Error("Episode comparison deep links require two distinct published revisions.");
   if (target.compareEpisodeId === null) {
     parsed.searchParams.delete("compare");
     parsed.searchParams.delete("compare_revision");

@@ -213,3 +213,16 @@ Status: approved and promoted with E5 as rolo-vis `v0.21.0`; producer minimum ro
 The release freezes the E5 neutral pair comparison and E6 finding focus as a read-only
 successor to `v0.20.0`. Same-Episode cross-revision comparison remains unavailable until
 the producer exposes revision-addressable historical detail and timeline reads.
+
+## E7 review candidate: revision-addressable Episode history
+
+- Negotiate `workbench.episode-revision-history/v1` separately from the v0.21 Episode
+  baseline.
+- Validate the bounded revision chain before exposing historical detail.
+- Keep old backends on current-revision behavior without probing the new endpoint.
+- Allow the same Episode identity on both comparison sides only for two independently
+  validated, distinct revision pins.
+- Preserve neutral deltas and existing inference, evidence, and read-only authority
+  boundaries.
+- Promotion remains pending combined backend/frontend review and live two-revision
+  verification.

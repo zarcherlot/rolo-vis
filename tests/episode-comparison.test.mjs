@@ -97,3 +97,17 @@ test("cross-robot, identical, mixed-revision, and unordered inputs fail closed",
   assert.throws(() => buildEpisodePairComparison(detail("ep-left"), [event("ep-left", 0)], detail("ep-right"), [{ ...event("ep-right", 0), revision: 2 }]), /another identity or revision/);
   assert.throws(() => buildEpisodePairComparison(detail("ep-left"), [event("ep-left", 1), event("ep-left", 0)], detail("ep-right"), []), /strictly sequence-ordered/);
 });
+
+test("the same Episode can be compared across two independently pinned revisions", () => {
+  const left = detail("ep-left", { revision: 1 });
+  const right = detail("ep-left", { revision: 2, ended_at: "2026-08-24T00:00:04Z" });
+  const result = buildEpisodePairComparison(
+    left,
+    [event("ep-left", 0), event("ep-left", 1)],
+    right,
+    [{ ...event("ep-left", 0), revision: 2 }, { ...event("ep-left", 1), revision: 2 }],
+  );
+  assert.deepEqual([result.left.episodeId, result.left.revision, result.right.episodeId, result.right.revision], ["ep-left", 1, "ep-left", 2]);
+  assert.equal(result.metrics.find((item) => item.key === "duration_ms").delta, 2000);
+  assert.equal(result.metrics.find((item) => item.key === "duration_ms").interpretation, "UNINTERPRETED_DELTA");
+});

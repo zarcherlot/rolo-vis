@@ -974,6 +974,41 @@ export interface EpisodeCollection {
   limitations: string[];
 }
 
+export interface EpisodeRevisionSummary {
+  schema_version: "rolo-episode-revision-summary/v1";
+  robot_id: string;
+  episode_id: string;
+  revision: number;
+  parent_revision: number | null;
+  committed_at: string;
+  state: EpisodeState;
+  outcome: EpisodeOutcome;
+  verification: EpisodeVerification;
+  coverage: EpisodeCoverage;
+  immutable: boolean;
+  event_count: number;
+  asset_count: number;
+  finding_count: number;
+  is_current: boolean;
+  source_kind: "committed_episode_record" | "published_episode_projection";
+  limitations: string[];
+}
+
+export interface EpisodeRevisionCollection {
+  schema_version: "rolo-episode-revision-collection/v1";
+  robot_id: string;
+  episode_id: string;
+  current_revision: number;
+  items: EpisodeRevisionSummary[];
+  total: number;
+  limit: number;
+  offset: number;
+  next_offset: number | null;
+  as_of: string;
+  source_kind: "episode_revision_history";
+  limitations: string[];
+}
+
 export interface EpisodeTimelinePage {
   schema_version: "rolo-episode-timeline-page/v1";
   robot_id: string;
