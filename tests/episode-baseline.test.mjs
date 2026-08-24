@@ -4,6 +4,7 @@ import { readFile } from "node:fs/promises";
 
 import {
   EPISODE_BASELINE,
+  EPISODE_COHORT_BASELINE,
   EPISODE_READONLY_BASELINE,
   EPISODE_REVISION_BASELINE,
   EPISODE_SCHEMA_COMPATIBILITY,
@@ -35,6 +36,15 @@ test("Episode diagnostic baseline succeeds v0.20 without mutating the v0.19 MVP 
   assert.equal(EPISODE_REVISION_BASELINE.producerMinimum, "48da032");
   assert.equal(EPISODE_REVISION_BASELINE.producerMainMerge, "4efd11df");
   assert.equal(EPISODE_REVISION_BASELINE.requiredRevisionFeature, "workbench.episode-revision-history/v1");
+  assert.equal(EPISODE_COHORT_BASELINE.status, "baseline");
+  assert.equal(EPISODE_COHORT_BASELINE.mode, "read-only");
+  assert.equal(EPISODE_COHORT_BASELINE.extends, EPISODE_REVISION_BASELINE.id);
+  assert.equal(EPISODE_COHORT_BASELINE.release, "0.23.0");
+  assert.equal(EPISODE_COHORT_BASELINE.frontendMinimum, "2c2967f");
+  assert.equal(EPISODE_COHORT_BASELINE.frontendMainMerge, "3f18124");
+  assert.equal(EPISODE_COHORT_BASELINE.producerMinimum, "463d501");
+  assert.equal(EPISODE_COHORT_BASELINE.producerMainMerge, "891cbf1");
+  assert.equal(EPISODE_COHORT_BASELINE.requiredCohortFeature, "workbench.episode-cohort-read-model/v1");
 });
 
 test("Episode compatibility accepts only the reviewed v1 family", () => {
@@ -45,14 +55,15 @@ test("Episode compatibility accepts only the reviewed v1 family", () => {
   }
 });
 
-test("Episode diagnostic baseline keeps media and write surfaces outside the plugin", async () => {
+test("Episode Cohort baseline keeps verdict, media, and write surfaces outside the plugin", async () => {
   const [baseline, manifest, studio] = await Promise.all([
-    read("../docs/EPISODE_REVISION_HISTORY_BASELINE.md"),
+    read("../docs/EPISODE_COHORT_REVIEW_BASELINE.md"),
     read("../rolo.plugin.json"),
     read("../src/EpisodeStudio.tsx"),
   ]);
-  assert.match(baseline, /Version: `0\.22\.0`/);
-  assert.match(baseline, /revision-addressable historical detail/);
+  assert.match(baseline, /Version: `0\.23\.0`/);
+  assert.match(baseline, /exact-match current publications/);
+  assert.match(baseline, /DESCRIPTIVE_ONLY/);
   assert.doesNotMatch(manifest, /episode\.(media|replay|export|write)/);
   assert.doesNotMatch(studio, /roloClient\.(invoke|cancel|replay|export|collect|recollect)/);
 });
