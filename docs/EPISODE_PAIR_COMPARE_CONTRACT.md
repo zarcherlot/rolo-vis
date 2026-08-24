@@ -1,6 +1,6 @@
 # Episode Pair Compare consumer contract
 
-Status: E5 design review
+Status: E5A and E5B approved
 
 Base: rolo-vis `v0.20.0`
 
@@ -74,6 +74,11 @@ pair score. Agent inference counts never affect outcome or verification.
 The selected event remains scoped to the left Episode in V1. Pair selection must not
 silently change either pinned revision.
 
+E5B accepts two different `episode_id` values only. The public detail endpoint does not
+currently retrieve a historical revision, so a same-ID/different-revision URL is
+rejected. The pure E5A model remains revision-aware for a future revision-addressable
+detail contract.
+
 ## Delivery slices
 
 ### E5A — implemented for design review
@@ -83,12 +88,17 @@ silently change either pinned revision.
 - comparability and partial-coverage semantics;
 - neutral delta and authority-separation tests.
 
-### E5B — after review
+### E5B — approved
 
 - compare selection and stable pair deep link;
 - two-column facts and neutral delta table;
 - side-by-side bounded lane/authority distributions;
 - explicit descriptive-only and partial-coverage states.
+- independently re-read both pinned revisions instead of trusting list metadata;
+- load no more than five 100-event pages or 500 events per side;
+- reject revision drift, mixed identity, repeated cursors, overlapping pages, and
+  publication-count contradictions;
+- preserve the left selected event while the right side remains an aggregate view.
 
 ### Deferred
 

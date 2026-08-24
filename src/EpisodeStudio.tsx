@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowRight,
+  ArrowsLeftRight,
   Clock,
   FileText,
   Funnel,
@@ -10,6 +11,8 @@ import {
   ShieldCheck,
   WarningCircle,
 } from "@phosphor-icons/react";
+import { buildEpisodePairComparison, type EpisodePairComparison } from "./episodeComparison";
+import { EpisodeComparisonView } from "./EpisodeComparisonView";
 import { roloClient } from "./roloClient";
 import {
   appendTimelineEvents,
@@ -69,6 +72,33 @@ function formatOffset(offsetMs: number): string {
 
 function compactDigest(value: string | null): string {
   return value ? `sha256:${value.slice(0, 12)}…${value.slice(-6)}` : "Withheld";
+}
+
+const EPISODE_COMPARE_PAGE_BUDGET = 5;
+
+async function readBoundedTimeline(robotId: string, detail: EpisodeDetail, signal: AbortSignal): Promise<EpisodeTimelineEvent[]> {
+  let page = await roloClient.episodeTimelinePage(robotId, detail.episode_id, detail.revision, { signal }, { limit: EPISODE_TIMELINE_PAGE_LIMIT });
+  let accumulated = page.items;
+  let cursor = page.next_cursor;
+  let pagesRead = 1;
+  const seenCursors = new Set<string>();
+  while (cursor && accumulated.length < EPISODE_VISIBLE_EVENT_LIMIT && pagesRead < EPISODE_COMPARE_PAGE_BUDGET) {
+    if (seenCursors.has(cursor)) throw new Error("Episode comparison timeline cursor repeated; the pair was rejected.");
+    seenCursors.add(cursor);
+    const limit = Math.min(EPISODE_TIMELINE_PAGE_LIMIT, EPISODE_VISIBLE_EVENT_LIMIT - accumulated.length);
+    page = await roloClient.episodeTimelinePage(robotId, detail.episode_id, detail.revision, { signal }, { limit, cursor });
+    accumulated = appendTimelineEvents(accumulated, page.items);
+    cursor = page.next_cursor;
+    pagesRead += 1;
+  }
+  if (cursor && accumulated.length >= detail.event_count) throw new Error("Episode comparison timeline pagination contradicts the published event count.");
+  return accumulated;
+}
+
+async function readComparisonSide(robotId: string, episodeId: string, expectedRevision: number, signal: AbortSignal) {
+  const episodeDetail = await roloClient.episode(robotId, episodeId, { signal });
+  if (episodeDetail.revision !== expectedRevision) throw new Error(`Episode ${episodeId} moved from pinned revision ${expectedRevision} to ${episodeDetail.revision}.`);
+  return { detail: episodeDetail, events: await readBoundedTimeline(robotId, episodeDetail, signal) };
 }
 
 function EpisodeListItem({ item, active, onClick }: { item: EpisodeSummary; active: boolean; onClick: () => void }) {
@@ -221,8 +251,14 @@ export function EpisodeStudio({ robotId, initialTarget, onOpenEvidence }: { robo
   const [query, setQuery] = useState("");
   const [stateFilter, setStateFilter] = useState("all");
   const [visibleLanes, setVisibleLanes] = useState<Set<EpisodeTimelineLane>>(new Set(TIMELINE_LANES));
+  const [compareEpisodeId, setCompareEpisodeId] = useState(() => initialTarget?.robotId === robotId ? initialTarget.compareEpisodeId || "" : "");
+  const [compareRevision, setCompareRevision] = useState<number | null>(() => initialTarget?.robotId === robotId ? initialTarget.compareRevision : null);
+  const [comparison, setComparison] = useState<EpisodePairComparison | null>(null);
+  const [comparisonLoading, setComparisonLoading] = useState(false);
+  const [comparisonMessage, setComparisonMessage] = useState("");
   const collectionRequest = useRef<AbortController | null>(null);
   const detailRequest = useRef<AbortController | null>(null);
+  const comparisonRequest = useRef<AbortController | null>(null);
   const initialTargetConsumed = useRef(false);
 
   const loadCollection = useCallback(async () => {
@@ -303,15 +339,49 @@ export function EpisodeStudio({ robotId, initialTarget, onOpenEvidence }: { robo
   }, [robotId, selectedEpisodeId, episodes, initialTarget, detailReload]);
 
   useEffect(() => {
+    if (selectedEpisodeId !== compareEpisodeId) return;
+    comparisonRequest.current?.abort();
+    setCompareEpisodeId("");
+    setCompareRevision(null);
+    setComparison(null);
+    setComparisonMessage("");
+  }, [selectedEpisodeId, compareEpisodeId]);
+
+  useEffect(() => {
+    comparisonRequest.current?.abort();
+    setComparison(null);
+    setComparisonMessage("");
+    setComparisonLoading(false);
+    if (!detail || !compareEpisodeId || compareRevision === null) return;
+    const controller = new AbortController();
+    comparisonRequest.current = controller;
+    setComparisonLoading(true);
+    void Promise.all([
+      readComparisonSide(robotId, detail.episode_id, detail.revision, controller.signal),
+      readComparisonSide(robotId, compareEpisodeId, compareRevision, controller.signal),
+    ]).then(([left, right]) => {
+      if (!controller.signal.aborted) setComparison(buildEpisodePairComparison(left.detail, left.events, right.detail, right.events));
+    }).catch((error: unknown) => {
+      if (!controller.signal.aborted) setComparisonMessage(error instanceof Error ? error.message : "Episode comparison could not be derived.");
+    }).finally(() => {
+      if (!controller.signal.aborted) setComparisonLoading(false);
+      if (comparisonRequest.current === controller) comparisonRequest.current = null;
+    });
+    return () => controller.abort();
+  }, [robotId, detail, compareEpisodeId, compareRevision]);
+
+  useEffect(() => {
     if (!detail) return;
     const next = buildEpisodeDeepLink(window.location.href, {
       robotId,
       episodeId: detail.episode_id,
       revision: detail.revision,
       eventId: selectedEventId || null,
+      compareEpisodeId: compareEpisodeId && compareEpisodeId !== detail.episode_id ? compareEpisodeId : null,
+      compareRevision: compareEpisodeId && compareEpisodeId !== detail.episode_id ? compareRevision : null,
     });
     window.history.replaceState(null, "", next);
-  }, [robotId, detail, selectedEventId]);
+  }, [robotId, detail, selectedEventId, compareEpisodeId, compareRevision]);
 
   const loadMoreTimeline = async () => {
     if (!detail || !nextCursor || timelineLoading || events.length >= EPISODE_VISIBLE_EVENT_LIMIT) return;
@@ -351,6 +421,26 @@ export function EpisodeStudio({ robotId, initialTarget, onOpenEvidence }: { robo
     return episodes.filter((item) => (stateFilter === "all" || item.state === stateFilter) && (!normalized || `${item.task_label} ${item.episode_id} ${item.operation || ""}`.toLowerCase().includes(normalized)));
   }, [episodes, query, stateFilter]);
   const selectedEvent = events.find((event) => event.event_id === selectedEventId) || null;
+  const compareOptions = episodes.filter((item) => item.episode_id !== selectedEpisodeId);
+  const compareSelectionMissing = compareEpisodeId && !compareOptions.some((item) => item.episode_id === compareEpisodeId);
+  const clearComparison = () => {
+    comparisonRequest.current?.abort();
+    setCompareEpisodeId("");
+    setCompareRevision(null);
+    setComparison(null);
+    setComparisonMessage("");
+    setComparisonLoading(false);
+  };
+  const chooseComparison = (episodeId: string) => {
+    if (!episodeId) {
+      clearComparison();
+      return;
+    }
+    const summary = episodes.find((item) => item.episode_id === episodeId);
+    if (!summary) return;
+    setCompareEpisodeId(summary.episode_id);
+    setCompareRevision(summary.revision);
+  };
 
   if (collectionLoading && !collection) return <section className="content-view episode-view"><div className="page-title"><div><div className="eyebrow">Read-only execution record</div><h2>Episode Studio</h2><p>Loading published Episode revisions without inferring live runtime state.</p></div></div><div className="panel episode-state-view"><Pulse size={28} /><div><strong>Reading Episode index</strong><p>Only a feature-negotiated, versioned read model can populate this workspace.</p></div></div></section>;
   if (collectionMessage && !collection) return <section className="content-view episode-view"><div className="page-title"><div><div className="eyebrow">Read-only execution record</div><h2>Episode Studio</h2><p>Published execution history with explicit authority and verification boundaries.</p></div></div><div className="panel episode-state-view is-error"><WarningCircle size={28} weight="fill" /><div><strong>Episode read model unavailable</strong><p>{collectionMessage}</p><small>No Lifecycle or fixture data was substituted.</small><button className="secondary-button" onClick={() => void loadCollection()}>Retry Episode index</button></div></div></section>;
@@ -359,11 +449,21 @@ export function EpisodeStudio({ robotId, initialTarget, onOpenEvidence }: { robo
   return (
     <section className="content-view episode-view">
       <div className="page-title episode-page-title"><div><div className="eyebrow">Read-only execution record</div><h2>Episode Studio</h2><p>Sequence-ordered execution context, observations, inferences, and Verify-stage results.</p></div>{detail && <div className="episode-revision-lock"><ShieldCheck size={17} /><span><strong>Revision {detail.revision} pinned</strong><small>{detail.immutable ? "Immutable publication" : "Live publication"} · {detail.coverage.replaceAll("_", " ")}</small></span></div>}</div>
+      <section className="episode-compare-control panel" aria-label="Episode pair selection">
+        <div><ArrowsLeftRight size={18} /><span><h3>Compare a second published Episode</h3><p>Both revisions are read independently; differences remain descriptive and release-neutral.</p></span></div>
+        <div className="episode-compare-picker">
+          <label className="select-control"><ArrowsLeftRight size={14} /><select value={compareEpisodeId} onChange={(event) => chooseComparison(event.target.value)} disabled={!detail || (!compareOptions.length && !compareEpisodeId)} aria-label="Select Episode to compare"><option value="">No comparison</option>{compareSelectionMissing && <option value={compareEpisodeId}>{compareEpisodeId} · pinned deep link</option>}{compareOptions.map((item) => <option key={`${item.episode_id}-${item.revision}`} value={item.episode_id}>{item.task_label} · rev {item.revision}</option>)}</select></label>
+          {compareEpisodeId && <span className="episode-compare-pin"><small>RIGHT SIDE</small><strong>rev {compareRevision}</strong></span>}
+        </div>
+      </section>
+      {comparisonLoading && <div className="episode-compare-state panel"><Pulse size={20} /><span><strong>Reading both pinned revisions</strong><small>Each side is bounded to {EPISODE_COMPARE_PAGE_BUDGET} timeline pages and {EPISODE_VISIBLE_EVENT_LIMIT} visible events.</small></span></div>}
+      {comparisonMessage && <div className="episode-compare-state is-error panel" role="alert"><WarningCircle size={20} weight="fill" /><span><strong>Comparison rejected</strong><small>{comparisonMessage}</small></span></div>}
+      {comparison && <EpisodeComparisonView comparison={comparison} onClear={clearComparison} />}
       <div className="episode-shell">
         <aside className="episode-index panel">
           <header><span>Published Episodes</span><strong>{collection?.total || episodes.length}</strong></header>
           <div className="episode-index-tools"><label className="search-box"><MagnifyingGlass size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search Episode" aria-label="Search Episodes" /></label><label className="select-control"><Funnel size={14} /><select value={stateFilter} onChange={(event) => setStateFilter(event.target.value)} aria-label="Filter Episode state"><option value="all">All states</option><option value="RUNNING">Running</option><option value="COMPLETED">Completed</option><option value="FAILED">Failed</option><option value="CANCELLED">Cancelled</option><option value="PARTIAL">Partial</option></select></label></div>
-          <div className="episode-index-list">{filteredEpisodes.map((item) => <EpisodeListItem key={`${item.episode_id}-${item.revision}`} item={item} active={item.episode_id === selectedEpisodeId} onClick={() => setSelectedEpisodeId(item.episode_id)} />)}{!filteredEpisodes.length && <div className="episode-index-empty"><MagnifyingGlass size={20} /><span>No Episodes match this view.</span></div>}</div>
+          <div className="episode-index-list">{filteredEpisodes.map((item) => <EpisodeListItem key={`${item.episode_id}-${item.revision}`} item={item} active={item.episode_id === selectedEpisodeId} onClick={() => { if (item.episode_id === compareEpisodeId) clearComparison(); setSelectedEpisodeId(item.episode_id); }} />)}{!filteredEpisodes.length && <div className="episode-index-empty"><MagnifyingGlass size={20} /><span>No Episodes match this view.</span></div>}</div>
           {collection?.next_offset !== null && <footer><button className="secondary-button" disabled={collectionLoading} onClick={() => void loadMoreEpisodes()}>{collectionLoading ? "Loading…" : "Load more Episodes"}</button></footer>}
         </aside>
 

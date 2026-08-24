@@ -173,7 +173,7 @@ Status: approved and promoted as rolo-vis `v0.20.0`; producer minimum rolo `e221
 
 ## Phase 2 E5: Episode Pair Compare
 
-Status: E5A derived-model design ready for review.
+Status: E5A and E5B approved.
 
 - Comparison reuses two independently validated Episode v1 details and bounded
   revision-pinned timelines; no backend compare endpoint is introduced.
@@ -184,3 +184,12 @@ Status: E5A derived-model design ready for review.
 - Agent inference, confidence, evidence volume, and finding counts never produce a
   pair verdict or causal attribution.
 - E5B UI work starts only after the derived model and trust language are reviewed.
+- The pair URL pins `compare` and `compare_revision`; leaving Episode Studio clears the
+  complete pair identity together with the left-side selection.
+- E5B independently reads both details and bounded timelines, then renders publication
+  facts, neutral deltas, and count-only lane/authority/severity/finding/asset
+  distributions without a pair score.
+- Revision drift, mixed identity, repeated cursors, page overlap, and event-count
+  contradictions fail closed; incomplete inputs remain explicitly bounded partial.
+- E5B rejects same-ID revision comparison because the public detail endpoint is not
+  historical-revision addressable; this remains a future producer-contract dependency.

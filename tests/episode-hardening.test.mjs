@@ -44,13 +44,17 @@ test("Episode deep links pin robot, Episode, revision, and event while preservin
     episodeId: "ep-regression",
     revision: 3,
     eventId: "event-42",
+    compareEpisodeId: "ep-candidate",
+    compareRevision: 7,
   });
-  assert.equal(link, "/?theme=dark&view=episode&robot=mentorpi&episode=ep-regression&revision=3&event=event-42");
+  assert.equal(link, "/?theme=dark&view=episode&robot=mentorpi&episode=ep-regression&revision=3&event=event-42&compare=ep-candidate&compare_revision=7");
   assert.deepEqual(readEpisodeDeepLink(`https://workbench.test${link}`), {
     robotId: "mentorpi",
     episodeId: "ep-regression",
     revision: 3,
     eventId: "event-42",
+    compareEpisodeId: "ep-candidate",
+    compareRevision: 7,
   });
   assert.equal(buildWorkbenchViewLink(`https://workbench.test${link}`, "wiki"), "/?theme=dark&view=wiki");
 });
@@ -58,6 +62,25 @@ test("Episode deep links pin robot, Episode, revision, and event while preservin
 test("Episode deep links fail closed on malformed identity or revision", () => {
   assert.equal(readEpisodeDeepLink("https://workbench.test/?view=episode&robot=../secret&episode=ep-1&revision=1"), null);
   assert.equal(readEpisodeDeepLink("https://workbench.test/?view=episode&robot=r1&episode=ep-1&revision=0"), null);
+  assert.equal(readEpisodeDeepLink("https://workbench.test/?view=episode&robot=r1&episode=ep-1&revision=1&compare=ep-2"), null);
+  assert.equal(readEpisodeDeepLink("https://workbench.test/?view=episode&robot=r1&episode=ep-1&revision=1&compare=ep-1&compare_revision=1"), null);
+  assert.equal(readEpisodeDeepLink("https://workbench.test/?view=episode&robot=r1&episode=ep-1&revision=1&compare=ep-1&compare_revision=2"), null);
+  assert.throws(() => buildEpisodeDeepLink("https://workbench.test/", {
+    robotId: "r1",
+    episodeId: "ep-1",
+    revision: 1,
+    eventId: null,
+    compareEpisodeId: "ep-2",
+    compareRevision: null,
+  }), /both identity and revision/);
+  assert.throws(() => buildEpisodeDeepLink("https://workbench.test/", {
+    robotId: "r1",
+    episodeId: "ep-1",
+    revision: 1,
+    eventId: null,
+    compareEpisodeId: "ep-1",
+    compareRevision: 2,
+  }), /different Episode identities/);
 });
 
 test("timeline keyboard navigation follows sequence order across visible lanes", () => {
