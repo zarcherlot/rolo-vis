@@ -36,7 +36,7 @@ export const EPISODE_SCHEMA_COMPATIBILITY = {
   findingSummary: ["rolo-episode-finding-summary/v1"],
 } as const;
 
-export const EPISODE_BASELINE = {
+export const EPISODE_READONLY_BASELINE = {
   id: "rolo-vis-episode-readonly/2026-08",
   status: "baseline",
   mode: "read-only",
@@ -44,6 +44,18 @@ export const EPISODE_BASELINE = {
   release: "0.20.0",
   frontendMinimum: "cb09340",
   producerMinimum: "e2217bb",
+  requiredFeature: "workbench.episode-read-model/v1",
+} as const;
+
+export const EPISODE_BASELINE = {
+  id: "rolo-vis-episode-diagnostic/2026-08",
+  status: "baseline",
+  mode: "read-only",
+  extends: EPISODE_READONLY_BASELINE.id,
+  release: "0.21.0",
+  frontendMinimum: "118173f",
+  producerMinimum: "570bad0",
+  producerMainMerge: "4cac539",
   requiredFeature: "workbench.episode-read-model/v1",
 } as const;
 

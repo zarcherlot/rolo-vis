@@ -196,7 +196,8 @@ Status: E5A and E5B approved.
 
 ## Phase 2 E6: Finding Focus / Diagnostic Context
 
-Status: approved.
+Status: approved and promoted with E5 as rolo-vis `v0.21.0`; producer minimum rolo
+`570bad0`, merged to rolo `main` by `4cac539`.
 
 - Selecting a published Finding creates a stable, revision-pinned `finding` deep link.
 - Timeline events are included only as coincident window context; proximity cannot
@@ -208,3 +209,7 @@ Status: approved.
   explicit, and unsafe identity, order, count, or asset references fail closed.
 - Supplementary observation, external handoff, export, replay, and every write action
   remain deferred pending separate producer and governance contracts.
+
+The release freezes the E5 neutral pair comparison and E6 finding focus as a read-only
+successor to `v0.20.0`. Same-Episode cross-revision comparison remains unavailable until
+the producer exposes revision-addressable historical detail and timeline reads.
