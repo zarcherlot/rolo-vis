@@ -37,6 +37,7 @@ import {
 } from "./episodeNavigation";
 import { assessEpisodeReviewReceipt } from "./episodeReviewReceipt";
 import { deriveEpisodeReviewAnchorContinuity } from "./episodeReviewAnchor";
+import { buildEpisodeReviewMarkerSafeNavigation } from "./episodeReviewMarkerLifecycle";
 import "./episode.css";
 import "./episode-polish.css";
 import type {
@@ -498,7 +499,10 @@ export function EpisodeStudio({ robotId, initialTarget, revisionHistorySupported
 
   useEffect(() => {
     if (!detail || detail.episode_id !== selectedEpisodeId || detail.revision !== selectedRevision) return;
-    const next = buildEpisodeDeepLink(window.location.href, {
+    const next = buildEpisodeReviewMarkerSafeNavigation({
+      url: window.location.href,
+      intent: reviewHandoffIntent,
+      current: {
       robotId,
       episodeId: detail.episode_id,
       revision: detail.revision,
@@ -509,9 +513,10 @@ export function EpisodeStudio({ robotId, initialTarget, revisionHistorySupported
       compareRevision: compareEpisodeId && (compareEpisodeId !== detail.episode_id || compareRevision !== detail.revision) ? compareRevision : null,
       compareEvidenceId: compareEpisodeId && (compareEpisodeId !== detail.episode_id || compareRevision !== detail.revision) ? selectedComparisonEvidenceId || null : null,
       cohortDays: cohortSupported ? cohortDays : null,
+      },
     });
     window.history.replaceState(null, "", next);
-  }, [robotId, detail, selectedEpisodeId, selectedRevision, selectedEventId, selectedFindingId, selectedAssetId, compareEpisodeId, compareRevision, selectedComparisonEvidenceId, cohortDays, cohortSupported]);
+  }, [robotId, detail, selectedEpisodeId, selectedRevision, selectedEventId, selectedFindingId, selectedAssetId, compareEpisodeId, compareRevision, selectedComparisonEvidenceId, cohortDays, cohortSupported, reviewHandoffIntent]);
 
   useEffect(() => {
     setReviewLinkState("idle");
@@ -870,7 +875,7 @@ export function EpisodeStudio({ robotId, initialTarget, revisionHistorySupported
       </div>
       {reviewAnchorContinuity.status === "EXPLORING" ? <section className="episode-review-receipt panel is-exploring" role="status" aria-label="Episode review anchor continuity">
         <span className="episode-review-receipt-icon"><Crosshair size={22} weight="fill" /></span>
-        <div><span className="eyebrow">Shared review anchor · local exploration</span><h3>Exploring beyond the restored handoff</h3><p>The shared anchor remains immutable in this tab. Current exploration does not change what the sender handed off or create a new review claim.</p>
+        <div><span className="eyebrow">Shared review anchor · local exploration</span><h3>Exploring beyond the restored handoff</h3><p>The shared anchor remains immutable in this tab. Current exploration does not change what the sender handed off or create a new review claim. Current address is ordinary navigation and no longer carries the shared handoff marker.</p>
           <span className="episode-review-receipt-facts"><code>{reviewAnchorContinuity.target.episodeId}@{reviewAnchorContinuity.target.revision}</code>{reviewAnchorContinuity.differences.map((field) => <small key={field}>{field} changed</small>)}</span>
           <a className="secondary-button episode-review-anchor-return" href={reviewAnchorContinuity.returnLink}><ArrowRight size={14} /> Return to shared anchor</a>
         </div>

@@ -491,3 +491,20 @@ baseline. Feature commit `55d4968` was fast-forwarded to `main` and passed CI ru
 The frozen contract and release evidence are recorded in
 `EPISODE_REVIEW_ANCHOR_CONTINUITY_CONTRACT.md` and
 `EPISODE_REVIEW_ANCHOR_CONTINUITY_BASELINE.md`.
+
+## E20 candidate: Episode review marker lifecycle
+
+Status: E20A-E20C are in review development; E20D baseline promotion is deferred.
+
+- Bind `review_handoff=1` to the exact canonical inbound target instead of every
+  subsequent local Episode location in the same tab.
+- Remove the marker from the visible URL as soon as any E19-reviewed navigation field
+  diverges, while retaining the immutable shared anchor in current-tab memory.
+- Make a reload of the explored URL ordinary Episode navigation, not a newly asserted
+  handoff receipt.
+- Restore the marker only through the existing user-initiated canonical return link and
+  re-run independent receipt validation.
+- Add no endpoint, producer contract, persistence, identity, content, release influence,
+  execution replay, or write authority.
+
+The review contract is `EPISODE_REVIEW_MARKER_LIFECYCLE_CONTRACT.md`.

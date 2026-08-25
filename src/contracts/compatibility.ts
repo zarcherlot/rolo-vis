@@ -310,6 +310,20 @@ export const EPISODE_REVIEW_ANCHOR_CONTINUITY_BASELINE = {
   supportsWrite: false,
 } as const;
 
+export const EPISODE_REVIEW_MARKER_LIFECYCLE_CANDIDATE = {
+  id: "rolo-vis-episode-review-marker-lifecycle/candidate-2026-08",
+  status: "candidate",
+  mode: "read-only",
+  extends: EPISODE_REVIEW_ANCHOR_CONTINUITY_BASELINE.id,
+  targetRelease: "0.35.0",
+  markerRetentionPolicy: "ORIGINAL_CANONICAL_TARGET_ONLY",
+  explorationUrlPolicy: "ORDINARY_EPISODE_NAVIGATION",
+  returnPolicy: "USER_INITIATED_CANONICAL_NAVIGATION",
+  addsEndpoint: false,
+  persistsState: false,
+  supportsWrite: false,
+} as const;
+
 export function supportsSchema(
   family: keyof typeof MVP_SCHEMA_COMPATIBILITY,
   model: "collection" | "summary" | "detail",
