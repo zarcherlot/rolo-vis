@@ -2,7 +2,7 @@
   "schema_version": "rolo-plugin/v1",
   "id": "rolo-vis",
   "name": "rolo Workbench",
-  "version": "0.34.0",
+  "version": "0.35.0",
   "kind": "web-workbench",
   "entry": "dist/client/index.html",
   "capabilities": [

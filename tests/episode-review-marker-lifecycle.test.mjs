@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-import { EPISODE_REVIEW_MARKER_LIFECYCLE_CANDIDATE } from "../src/contracts/compatibility.ts";
+import { EPISODE_REVIEW_MARKER_LIFECYCLE_BASELINE } from "../src/contracts/compatibility.ts";
 import { buildEpisodeReviewHandoffLink, readEpisodeReviewHandoff } from "../src/episodeNavigation.ts";
 import { EPISODE_REVIEW_ANCHOR_FIELDS } from "../src/episodeReviewAnchor.ts";
 import { buildEpisodeReviewMarkerSafeNavigation } from "../src/episodeReviewMarkerLifecycle.ts";
@@ -25,9 +25,9 @@ const intent = readEpisodeReviewHandoff(anchorLink);
 test("E20A retains the handoff marker only at the exact inbound target", () => {
   const exact = buildEpisodeReviewMarkerSafeNavigation({ url: anchorLink, intent, current: anchor });
   assert.deepEqual(readEpisodeReviewHandoff(new URL(exact, "https://workbench.test").href), { kind: "VALID", target: anchor });
-  assert.equal(EPISODE_REVIEW_MARKER_LIFECYCLE_CANDIDATE.extends, "rolo-vis-episode-review-anchor-continuity/2026-08");
-  assert.equal(EPISODE_REVIEW_MARKER_LIFECYCLE_CANDIDATE.persistsState, false);
-  assert.equal(EPISODE_REVIEW_MARKER_LIFECYCLE_CANDIDATE.supportsWrite, false);
+  assert.equal(EPISODE_REVIEW_MARKER_LIFECYCLE_BASELINE.extends, "rolo-vis-episode-review-anchor-continuity/2026-08");
+  assert.equal(EPISODE_REVIEW_MARKER_LIFECYCLE_BASELINE.persistsState, false);
+  assert.equal(EPISODE_REVIEW_MARKER_LIFECYCLE_BASELINE.supportsWrite, false);
 });
 
 test("E20A removes marker ownership for every reviewed navigation difference", () => {

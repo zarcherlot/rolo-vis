@@ -492,9 +492,10 @@ The frozen contract and release evidence are recorded in
 `EPISODE_REVIEW_ANCHOR_CONTINUITY_CONTRACT.md` and
 `EPISODE_REVIEW_ANCHOR_CONTINUITY_BASELINE.md`.
 
-## E20 candidate: Episode review marker lifecycle
+## E20 baseline: Episode review marker lifecycle
 
-Status: E20A-E20C are in review development; E20D baseline promotion is deferred.
+Status: E20A-E20D approved and promoted as the rolo-vis `v0.35.0` read-only
+baseline. Feature commit `dbe5028` was fast-forwarded to `main` and passed CI run #50.
 
 - Bind `review_handoff=1` to the exact canonical inbound target instead of every
   subsequent local Episode location in the same tab.
@@ -507,4 +508,6 @@ Status: E20A-E20C are in review development; E20D baseline promotion is deferred
 - Add no endpoint, producer contract, persistence, identity, content, release influence,
   execution replay, or write authority.
 
-The review contract is `EPISODE_REVIEW_MARKER_LIFECYCLE_CONTRACT.md`.
+The frozen contract and release evidence are recorded in
+`EPISODE_REVIEW_MARKER_LIFECYCLE_CONTRACT.md` and
+`EPISODE_REVIEW_MARKER_LIFECYCLE_BASELINE.md`.

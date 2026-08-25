@@ -1,6 +1,6 @@
 # E20 Episode review marker lifecycle contract
 
-Status: E20A-E20C review candidate; E20D baseline promotion requires explicit approval
+Status: E20A-E20D approved and promoted as the rolo-vis `v0.35.0` read-only baseline
 
 Target baseline: rolo-vis `v0.35.0`
 
@@ -47,10 +47,12 @@ canonical link and independently runs the complete E18 receipt validation again.
 - Keep negative checks for endpoints, storage, authentication, content, execution
   replay, release influence, and writes.
 
-## E20D: deferred baseline promotion
+## E20D: baseline promotion
 
-Promotion to `v0.35.0`, baseline metadata, main merge, tag, and production deployment
-remain deferred until E20A-E20C receive explicit review approval.
+The reviewed feature commit `dbe5028` was fast-forwarded to `main` and passed GitHub
+Actions CI run #50. Baseline metadata and release evidence are frozen in
+`EPISODE_REVIEW_MARKER_LIFECYCLE_BASELINE.md`. Production deployment remains a
+separate, explicitly authorized operation.
 
 ## Authority boundary
 
