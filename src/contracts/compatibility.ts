@@ -161,6 +161,27 @@ export const EPISODE_CONTEXT_NAVIGATION_BASELINE = {
   opensEvidenceRecord: false,
 } as const;
 
+export const EPISODE_OCCURRENCE_FOCUS_BASELINE = {
+  id: "rolo-vis-episode-evidence-occurrence-focus/2026-08",
+  status: "baseline",
+  mode: "read-only",
+  extends: EPISODE_CONTEXT_NAVIGATION_BASELINE.id,
+  release: "0.28.0",
+  frontendMinimum: "508c6d2",
+  frontendMainMerge: "57e3aaf",
+  producerMinimum: "463d501",
+  producerMainMerge: "891cbf1",
+  requiredFeature: "workbench.episode-read-model/v1",
+  requiredRevisionFeature: "workbench.episode-revision-history/v1",
+  requiredCohortFeature: "workbench.episode-cohort-read-model/v1",
+  selectedReferenceParameter: "compare_evidence",
+  sourceParameters: ["event", "finding"],
+  focusAuthority: "SOURCE_FOCUS_ONLY",
+  focusSide: "LEFT_ONLY",
+  opensEvidenceRecord: false,
+  supportsWrite: false,
+} as const;
+
 export function supportsSchema(
   family: keyof typeof MVP_SCHEMA_COMPATIBILITY,
   model: "collection" | "summary" | "detail",

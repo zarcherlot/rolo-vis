@@ -1,6 +1,6 @@
 {
   "name": "rolo-vis",
-  "version": "0.27.0",
+  "version": "0.28.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -16,6 +16,7 @@
     "check:episode-evidence-live": "node scripts/check-episode-comparison-evidence.mjs",
     "check:episode-context-live": "node scripts/check-episode-evidence-reference-context.mjs",
     "check:episode-context-navigation-live": "node scripts/check-episode-context-navigation.mjs",
+    "check:episode-occurrence-focus-live": "node scripts/check-episode-occurrence-focus.mjs",
     "prepare:episode-investigation-live": "node scripts/prepare-episode-investigation-live-data.mjs",
     "test:sites": "node --test tests/sites-worker.test.mjs",
     "verify:baseline": "npm test && npm run typecheck && npm run build && npm run test:sites"

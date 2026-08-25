@@ -1,6 +1,8 @@
 # Episode Evidence occurrence focus contract
 
-Status: E13A–E13C review candidate. This document does not establish the v0.28 baseline.
+Status: E13A–E13D approved and promoted as the `v0.28.0` read-only baseline.
+
+The promotion evidence is frozen in `EPISODE_OCCURRENCE_FOCUS_BASELINE.md`.
 
 ## Purpose
 
@@ -34,3 +36,13 @@ query state or producer endpoint is introduced.
   does not decide whether a Finding is true, sufficient, verified, or causal.
 - The feature does not read Evidence content, open the Evidence drawer, access artifact
   paths, rank outcomes, produce release signals, or add write authority.
+
+## Delivery slices
+
+- **E13A — contract:** freeze left-only targets and negative authority.
+- **E13B — Timeline focus:** validate the selected attachment and focus the exact Event.
+- **E13C — Finding focus:** preserve supporting/contradicting roles while focusing the
+  existing diagnostic surface.
+- **E13D — validation and baseline:** exercise the composite deep link, live Timeline
+  focus, fail-closed reference checks, refresh recovery, and right-side exclusion before
+  freezing the `v0.28.0` metadata.

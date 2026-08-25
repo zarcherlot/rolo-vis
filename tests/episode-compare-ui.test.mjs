@@ -137,3 +137,16 @@ test("E13 left occurrence focus reuses pinned Event/Finding links without changi
   assert.match(contract, /does not read Evidence content/i);
   assert.doesNotMatch(view, /Focus right source/);
 });
+
+test("E13D live check covers composite restoration and fail-closed source authority", async () => {
+  const check = await readFile(new URL("../scripts/check-episode-occurrence-focus.mjs", import.meta.url), "utf8");
+  assert.match(check, /composite_anchor_restored: true/);
+  assert.match(check, /pair_pins_preserved: true/);
+  assert.match(check, /detached_reference_rejected: detachedRejected/);
+  assert.match(check, /role_mismatch_rejected: roleMismatchRejected/);
+  assert.match(check, /focus_authority: "SOURCE_FOCUS_ONLY"/);
+  assert.match(check, /focus_side: "LEFT_ONLY"/);
+  assert.match(check, /opens_evidence_record: false/);
+  assert.match(check, /supports_write: false/);
+  assert.doesNotMatch(check, /client\.evidence\(/);
+});

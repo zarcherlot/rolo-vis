@@ -339,10 +339,10 @@ The detailed contract is `EPISODE_EVIDENCE_CONTEXT_NAVIGATION_CONTRACT.md`.
 The established release evidence is recorded in
 `EPISODE_CONTEXT_NAVIGATION_BASELINE.md`.
 
-## E13 candidate: Evidence occurrence source focus
+## E13 baseline: Evidence occurrence source focus
 
-Status: E13A–E13C are implemented for review on the v0.27.0 consumer baseline; no
-v0.28.0 baseline has been established.
+Status: E13A–E13D are approved and promoted as the `v0.28.0` read-only baseline;
+frontend minimum `508c6d2`, merged to main by `57e3aaf`.
 
 - Reuse the existing `compare_evidence` selection with the existing `event` or
   `finding` deep-link field instead of creating duplicate occurrence state.
@@ -355,4 +355,7 @@ v0.28.0 baseline has been established.
 - Add no producer schema, endpoint, Evidence content read, artifact access, verdict,
   release signal, or write authority.
 
-The review contract is `EPISODE_EVIDENCE_OCCURRENCE_FOCUS_CONTRACT.md`.
+The frozen contract is `EPISODE_EVIDENCE_OCCURRENCE_FOCUS_CONTRACT.md`.
+
+The established release evidence is recorded in
+`EPISODE_OCCURRENCE_FOCUS_BASELINE.md`.
