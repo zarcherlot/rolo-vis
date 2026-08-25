@@ -269,3 +269,25 @@ Status: approved and promoted as rolo-vis `v0.24.0`; frontend commits `547134c` 
   window without introducing verdict or write authority.
 - The E9 contract and validation are frozen as the v0.24.0 read-only successor to the
   Cohort Review baseline.
+
+## E10 candidate: Comparison Evidence traceability
+
+Status: E10A–E10C are the next `v0.25.0` review candidate; no baseline has been
+promoted yet.
+
+- Derive one deterministic, bounded trace from the two already validated Episode
+  details and revision-pinned timeline inputs. No producer or comparison endpoint is
+  added.
+- Preserve Episode, Timeline, Finding supporting, Finding contradicting, and Asset
+  reference sources independently on both sides.
+- Distinguish shared, left-only, and right-only ID presence without treating the label
+  as evidence quality, verification, semantic equivalence, completeness, or cause.
+- Render at most 100 unique references while keeping full counts, hidden counts, and
+  bounded-partial timeline coverage explicit.
+- Reuse the existing single-record Evidence drawer. Presence does not assert that the
+  referenced record exists or supports an outcome.
+- The E8 producer minimum remains unchanged. E10D live validation and `v0.25.0`
+  promotion begin only after this candidate passes review.
+
+The detailed negative-authority and ordering rules are frozen in
+`EPISODE_COMPARISON_EVIDENCE_TRACE_CONTRACT.md`.

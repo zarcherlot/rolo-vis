@@ -5,6 +5,7 @@ import test from "node:test";
 const studioPath = new URL("../src/EpisodeStudio.tsx", import.meta.url);
 const viewPath = new URL("../src/EpisodeComparisonView.tsx", import.meta.url);
 const clientPath = new URL("../src/roloClient.ts", import.meta.url);
+const evidenceContractPath = new URL("../docs/EPISODE_COMPARISON_EVIDENCE_TRACE_CONTRACT.md", import.meta.url);
 
 test("Episode pair UI derives from two existing read surfaces without a compare endpoint", async () => {
   const [studio, client] = await Promise.all([readFile(studioPath, "utf8"), readFile(clientPath, "utf8")]);
@@ -33,4 +34,22 @@ test("Episode pair loading and URL state are explicitly bounded and revision-pin
   assert.match(studio, /Same Episode · rev/);
   assert.match(studio, /episodeRevisions/);
   assert.match(studio, /timeline cursor repeated/);
+});
+
+test("Episode pair evidence trace reuses the validated Evidence drawer and keeps reference presence non-authoritative", async () => {
+  const [studio, view, contract] = await Promise.all([readFile(studioPath, "utf8"), readFile(viewPath, "utf8"), readFile(evidenceContractPath, "utf8")]);
+  assert.match(studio, /<EpisodeComparisonView comparison=\{comparison\} onClear=\{clearComparison\} onOpenEvidence=\{onOpenEvidence\}/);
+  assert.match(view, /Reference presence across both sides/);
+  assert.match(view, /evidenceTrace\.authority/);
+  assert.match(view, /do not establish evidence quality, verification, or causal support/);
+  assert.match(view, /Finding · supporting/);
+  assert.match(view, /Finding · contradicting/);
+  assert.match(view, /LEFT ONLY/);
+  assert.match(view, /RIGHT ONLY/);
+  assert.match(view, /onOpenEvidence\(item\.evidenceId\)/);
+  assert.match(view, /bounded partial, so event-level references may be absent/);
+  assert.match(contract, /At most 100 unique Evidence IDs are rendered/);
+  assert.match(contract, /does not assert that the record exists/);
+  assert.match(contract, /supportsEvidenceQuality/);
+  assert.doesNotMatch(view, /evidence score|evidence verdict|verified by presence/i);
 });
