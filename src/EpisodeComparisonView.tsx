@@ -1,5 +1,5 @@
-import { ArrowsLeftRight, Info, ShieldWarning, WarningCircle, X } from "@phosphor-icons/react";
-import type { EpisodePairComparison, EpisodePairMetric } from "./episodeComparison";
+import { ArrowRight, ArrowsLeftRight, Info, ShieldCheck, ShieldWarning, WarningCircle, X } from "@phosphor-icons/react";
+import type { EpisodeEvidenceSource, EpisodePairComparison, EpisodePairMetric } from "./episodeComparison";
 import "./episode-compare.css";
 
 function formatMetricValue(metric: EpisodePairMetric, value: number | null): string {
@@ -46,7 +46,24 @@ function PairFact({ label: factLabel, left, right, authority }: { label: string;
   return <div className="episode-compare-fact"><strong>{factLabel}</strong><span className={authority ? "is-authority" : ""}>{left}</span><span className={authority ? "is-authority" : ""}>{right}</span></div>;
 }
 
-export function EpisodeComparisonView({ comparison, onClear }: { comparison: EpisodePairComparison; onClear: () => void }) {
+function evidenceSourceLabel(source: EpisodeEvidenceSource): string {
+  const labels: Record<EpisodeEvidenceSource, string> = {
+    EPISODE: "Episode",
+    TIMELINE: "Timeline",
+    FINDING_SUPPORTING: "Finding · supporting",
+    FINDING_CONTRADICTING: "Finding · contradicting",
+    ASSET: "Asset",
+  };
+  return labels[source];
+}
+
+function EvidenceSources({ sources }: { sources: EpisodeEvidenceSource[] }) {
+  return sources.length
+    ? <span className="episode-evidence-sources">{sources.map((source) => <em key={source}>{evidenceSourceLabel(source)}</em>)}</span>
+    : <span className="episode-evidence-absent">Not referenced</span>;
+}
+
+export function EpisodeComparisonView({ comparison, onClear, onOpenEvidence }: { comparison: EpisodePairComparison; onClear: () => void; onOpenEvidence: (evidenceId: string) => void }) {
   const descriptiveOnly = comparison.comparability === "DESCRIPTIVE_ONLY";
   return (
     <section className="episode-compare panel" aria-label="Episode pair comparison">
@@ -95,6 +112,35 @@ export function EpisodeComparisonView({ comparison, onClear }: { comparison: Epi
         <Distribution title="Finding kind" left={comparison.findingKinds.left} right={comparison.findingKinds.right} />
         <Distribution title="Asset availability" left={comparison.assetAvailability.left} right={comparison.assetAvailability.right} />
       </div>
+
+      <section className="episode-compare-evidence" aria-label="Comparison evidence trace">
+        <header>
+          <div><span><ShieldCheck size={14} /> Evidence trace</span><h4>Reference presence across both sides</h4><p>Shared and side-only labels describe where a validated ID is referenced. They do not establish evidence quality, verification, or causal support.</p></div>
+          <strong>{comparison.evidenceTrace.authority.replaceAll("_", " ")}</strong>
+        </header>
+        <div className="episode-compare-evidence-summary" aria-label="Evidence reference counts">
+          <span><small>LEFT UNIQUE</small><strong>{comparison.evidenceTrace.leftUniqueCount}</strong></span>
+          <span><small>LEFT ONLY</small><strong>{comparison.evidenceTrace.leftOnlyCount}</strong></span>
+          <span><small>SHARED</small><strong>{comparison.evidenceTrace.sharedCount}</strong></span>
+          <span><small>RIGHT ONLY</small><strong>{comparison.evidenceTrace.rightOnlyCount}</strong></span>
+          <span><small>RIGHT UNIQUE</small><strong>{comparison.evidenceTrace.rightUniqueCount}</strong></span>
+          <span><small>VISIBLE</small><strong>{comparison.evidenceTrace.visibleCount} / {comparison.evidenceTrace.totalUniqueCount}</strong></span>
+        </div>
+        {comparison.evidenceTrace.items.length ? <div className="episode-compare-evidence-table">
+          <div className="is-heading"><strong>REFERENCE</strong><strong>RELATION</strong><strong>LEFT SOURCES</strong><strong>RIGHT SOURCES</strong><span /></div>
+          {comparison.evidenceTrace.items.map((item) => <div key={item.evidenceId}>
+            <code>{item.evidenceId}</code>
+            <strong className={`is-${item.relation.toLowerCase().replace("_", "-")}`}>{item.relation.replaceAll("_", " ")}</strong>
+            <EvidenceSources sources={item.leftSources} />
+            <EvidenceSources sources={item.rightSources} />
+            <button onClick={() => onOpenEvidence(item.evidenceId)} aria-label={`Open evidence ${item.evidenceId}`}><ShieldCheck size={14} /><span>Inspect</span><ArrowRight size={12} /></button>
+          </div>)}
+        </div> : <div className="episode-compare-evidence-empty"><Info size={16} /><span>No Evidence IDs are referenced by the bounded comparison inputs.</span></div>}
+        {(comparison.evidenceTrace.timelineCoverage.left === "BOUNDED_PARTIAL" || comparison.evidenceTrace.timelineCoverage.right === "BOUNDED_PARTIAL" || comparison.evidenceTrace.truncatedCount > 0) && <footer>
+          <WarningCircle size={15} weight="fill" />
+          <span>{comparison.evidenceTrace.timelineCoverage.left === "BOUNDED_PARTIAL" || comparison.evidenceTrace.timelineCoverage.right === "BOUNDED_PARTIAL" ? "At least one timeline is bounded partial, so event-level references may be absent from this trace." : ""}{comparison.evidenceTrace.truncatedCount > 0 ? ` ${comparison.evidenceTrace.truncatedCount} additional unique references are hidden by the ${comparison.evidenceTrace.visibleLimit}-item visible limit.` : ""}</span>
+        </footer>}
+      </section>
 
       <footer className="episode-compare-limitations"><WarningCircle size={17} weight="fill" /><div><strong>Comparison limitations</strong><ul>{comparison.limitations.map((limitation) => <li key={limitation}>{limitation}</li>)}</ul></div></footer>
     </section>

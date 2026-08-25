@@ -6,6 +6,10 @@ Base: rolo-vis `v0.20.0`
 
 Derived model: `rolo-vis-episode-pair-comparison/v1`
 
+E10 extends this historical E5 projection as
+`rolo-vis-episode-pair-comparison/v2`; only the bounded Evidence reference trace is
+added. The original E5 comparison dimensions and negative authority remain unchanged.
+
 ## Decision
 
 The first compare slice is a client-derived, read-only comparison of two already

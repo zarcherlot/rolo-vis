@@ -11,6 +11,10 @@ import type {
 
 export type EpisodePairComparability = "COMPARABLE" | "DESCRIPTIVE_ONLY";
 export type EpisodePairCoverage = "COMPLETE" | "BOUNDED_PARTIAL";
+export type EpisodeEvidenceRelation = "SHARED" | "LEFT_ONLY" | "RIGHT_ONLY";
+export type EpisodeEvidenceSource = "EPISODE" | "TIMELINE" | "FINDING_SUPPORTING" | "FINDING_CONTRADICTING" | "ASSET";
+
+export const EPISODE_COMPARISON_EVIDENCE_LIMIT = 100;
 
 interface EpisodePairIdentity {
   robotId: string;
@@ -35,8 +39,33 @@ interface EpisodePairDistribution<T extends string> {
   right: Partial<Record<T, number>>;
 }
 
+export interface EpisodeComparisonEvidenceItem {
+  evidenceId: string;
+  relation: EpisodeEvidenceRelation;
+  leftSources: EpisodeEvidenceSource[];
+  rightSources: EpisodeEvidenceSource[];
+}
+
+export interface EpisodeComparisonEvidenceTrace {
+  authority: "REFERENCE_PRESENCE_ONLY";
+  items: EpisodeComparisonEvidenceItem[];
+  leftUniqueCount: number;
+  rightUniqueCount: number;
+  sharedCount: number;
+  leftOnlyCount: number;
+  rightOnlyCount: number;
+  totalUniqueCount: number;
+  visibleCount: number;
+  truncatedCount: number;
+  visibleLimit: number;
+  timelineCoverage: { left: EpisodePairCoverage; right: EpisodePairCoverage };
+  supportsEvidenceQuality: false;
+  supportsVerification: false;
+  supportsCausalAttribution: false;
+}
+
 export interface EpisodePairComparison {
-  schemaVersion: "rolo-vis-episode-pair-comparison/v1";
+  schemaVersion: "rolo-vis-episode-pair-comparison/v2";
   left: EpisodePairIdentity;
   right: EpisodePairIdentity;
   comparability: EpisodePairComparability;
@@ -54,9 +83,80 @@ export interface EpisodePairComparison {
   severities: EpisodePairDistribution<EpisodeSeverity>;
   assetAvailability: EpisodePairDistribution<EpisodeAssetAvailability>;
   findingKinds: EpisodePairDistribution<EpisodeFindingKind>;
+  evidenceTrace: EpisodeComparisonEvidenceTrace;
   limitations: string[];
   supportsOutcomeVerdict: false;
   supportsCausalAttribution: false;
+}
+
+const EVIDENCE_SOURCE_ORDER: EpisodeEvidenceSource[] = ["EPISODE", "TIMELINE", "FINDING_SUPPORTING", "FINDING_CONTRADICTING", "ASSET"];
+
+function collectEvidenceSources(detail: EpisodeDetail, events: EpisodeTimelineEvent[]): Map<string, Set<EpisodeEvidenceSource>> {
+  const references = new Map<string, Set<EpisodeEvidenceSource>>();
+  const add = (evidenceId: string, source: EpisodeEvidenceSource) => {
+    const sources = references.get(evidenceId) || new Set<EpisodeEvidenceSource>();
+    sources.add(source);
+    references.set(evidenceId, sources);
+  };
+
+  detail.evidence_ids.forEach((evidenceId) => add(evidenceId, "EPISODE"));
+  events.forEach((event) => event.evidence_ids.forEach((evidenceId) => add(evidenceId, "TIMELINE")));
+  detail.findings.forEach((finding) => {
+    finding.supporting_evidence_ids.forEach((evidenceId) => add(evidenceId, "FINDING_SUPPORTING"));
+    finding.contradicting_evidence_ids.forEach((evidenceId) => add(evidenceId, "FINDING_CONTRADICTING"));
+  });
+  detail.assets.forEach((asset) => {
+    if (asset.evidence_id) add(asset.evidence_id, "ASSET");
+  });
+  return references;
+}
+
+function orderedSources(sources: Set<EpisodeEvidenceSource> | undefined): EpisodeEvidenceSource[] {
+  if (!sources) return [];
+  return EVIDENCE_SOURCE_ORDER.filter((source) => sources.has(source));
+}
+
+function buildEvidenceTrace(
+  left: EpisodeDetail,
+  leftEvents: EpisodeTimelineEvent[],
+  right: EpisodeDetail,
+  rightEvents: EpisodeTimelineEvent[],
+  leftCoverage: EpisodePairCoverage,
+  rightCoverage: EpisodePairCoverage,
+): EpisodeComparisonEvidenceTrace {
+  const leftReferences = collectEvidenceSources(left, leftEvents);
+  const rightReferences = collectEvidenceSources(right, rightEvents);
+  const orderedIds = [...new Set([...leftReferences.keys(), ...rightReferences.keys()])];
+  const sharedCount = orderedIds.filter((evidenceId) => leftReferences.has(evidenceId) && rightReferences.has(evidenceId)).length;
+  const allItems = orderedIds.map((evidenceId): EpisodeComparisonEvidenceItem => {
+    const onLeft = leftReferences.has(evidenceId);
+    const onRight = rightReferences.has(evidenceId);
+    return {
+      evidenceId,
+      relation: onLeft && onRight ? "SHARED" : onLeft ? "LEFT_ONLY" : "RIGHT_ONLY",
+      leftSources: orderedSources(leftReferences.get(evidenceId)),
+      rightSources: orderedSources(rightReferences.get(evidenceId)),
+    };
+  });
+  const items = allItems.slice(0, EPISODE_COMPARISON_EVIDENCE_LIMIT);
+
+  return {
+    authority: "REFERENCE_PRESENCE_ONLY",
+    items,
+    leftUniqueCount: leftReferences.size,
+    rightUniqueCount: rightReferences.size,
+    sharedCount,
+    leftOnlyCount: leftReferences.size - sharedCount,
+    rightOnlyCount: rightReferences.size - sharedCount,
+    totalUniqueCount: allItems.length,
+    visibleCount: items.length,
+    truncatedCount: allItems.length - items.length,
+    visibleLimit: EPISODE_COMPARISON_EVIDENCE_LIMIT,
+    timelineCoverage: { left: leftCoverage, right: rightCoverage },
+    supportsEvidenceQuality: false,
+    supportsVerification: false,
+    supportsCausalAttribution: false,
+  };
 }
 
 function identity(detail: EpisodeDetail): EpisodePairIdentity {
@@ -124,7 +224,7 @@ export function buildEpisodePairComparison(
   ])];
 
   return {
-    schemaVersion: "rolo-vis-episode-pair-comparison/v1",
+    schemaVersion: "rolo-vis-episode-pair-comparison/v2",
     left: identity(left),
     right: identity(right),
     comparability: reasons.length ? "DESCRIPTIVE_ONLY" : "COMPARABLE",
@@ -148,6 +248,7 @@ export function buildEpisodePairComparison(
     severities: { left: countBy(leftEvents.map((event) => event.severity)), right: countBy(rightEvents.map((event) => event.severity)) },
     assetAvailability: { left: countBy(left.assets.map((asset) => asset.availability)), right: countBy(right.assets.map((asset) => asset.availability)) },
     findingKinds: { left: countBy(left.findings.map((finding) => finding.kind)), right: countBy(right.findings.map((finding) => finding.kind)) },
+    evidenceTrace: buildEvidenceTrace(left, leftEvents, right, rightEvents, leftCoverage, rightCoverage),
     limitations,
     supportsOutcomeVerdict: false,
     supportsCausalAttribution: false,

@@ -595,7 +595,7 @@ export function EpisodeStudio({ robotId, initialTarget, revisionHistorySupported
       </section>
       {comparisonLoading && <div className="episode-compare-state panel"><Pulse size={20} /><span><strong>Reading both pinned revisions</strong><small>Each side is bounded to {EPISODE_COMPARE_PAGE_BUDGET} timeline pages and {EPISODE_VISIBLE_EVENT_LIMIT} visible events.</small></span></div>}
       {comparisonMessage && <div className="episode-compare-state is-error panel" role="alert"><WarningCircle size={20} weight="fill" /><span><strong>Comparison rejected</strong><small>{comparisonMessage}</small></span></div>}
-      {comparison && <EpisodeComparisonView comparison={comparison} onClear={clearComparison} />}
+      {comparison && <EpisodeComparisonView comparison={comparison} onClear={clearComparison} onOpenEvidence={onOpenEvidence} />}
       {cohortSupported && <EpisodeCohortView cohort={cohort} review={cohortReview} loading={cohortLoading} message={cohortMessage} windowDays={cohortDays} disabled={!detail || detailLoading} onWindowDays={setCohortDays} onOpenMember={openCohortMember} onCompareMember={compareCohortMember} />}
       <div className="episode-shell">
         <aside className="episode-index panel">
