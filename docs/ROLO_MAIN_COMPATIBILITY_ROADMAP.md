@@ -473,9 +473,10 @@ The review contract is `EPISODE_REVIEW_HANDOFF_RECEIPT_CONTRACT.md`.
 The established release evidence is recorded in
 `EPISODE_REVIEW_HANDOFF_RECEIPT_BASELINE.md`.
 
-## E19 candidate: Episode review anchor continuity
+## E19 baseline: Episode review anchor continuity
 
-Status: E19A-E19C are in review development; E19D baseline promotion is deferred.
+Status: E19A-E19D approved and promoted as the rolo-vis `v0.34.0` read-only
+baseline. Feature commit `55d4968` was fast-forwarded to `main` and passed CI run #48.
 
 - Preserve an E18-accepted handoff target as a tab-lifetime immutable review anchor.
 - Distinguish deliberate local exploration from a failed or stale handoff by comparing
@@ -487,4 +488,6 @@ Status: E19A-E19C are in review development; E19D baseline promotion is deferred
 - Add no endpoint, producer contract, identity, content, review progress, release
   influence, execution replay, or write authority.
 
-The review contract is `EPISODE_REVIEW_ANCHOR_CONTINUITY_CONTRACT.md`.
+The frozen contract and release evidence are recorded in
+`EPISODE_REVIEW_ANCHOR_CONTINUITY_CONTRACT.md` and
+`EPISODE_REVIEW_ANCHOR_CONTINUITY_BASELINE.md`.

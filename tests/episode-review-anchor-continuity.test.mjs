@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-import { EPISODE_REVIEW_ANCHOR_CONTINUITY_CANDIDATE } from "../src/contracts/compatibility.ts";
+import { EPISODE_REVIEW_ANCHOR_CONTINUITY_BASELINE } from "../src/contracts/compatibility.ts";
 import { buildEpisodeReviewHandoffLink, readEpisodeReviewHandoff } from "../src/episodeNavigation.ts";
 import { deriveEpisodeReviewAnchorContinuity, EPISODE_REVIEW_ANCHOR_FIELDS } from "../src/episodeReviewAnchor.ts";
 
@@ -26,9 +26,9 @@ test("E19A establishes continuity only after an E18 receipt was accepted", () =>
   assert.deepEqual(deriveEpisodeReviewAnchorContinuity({ intent: { kind: "NONE" }, anchorAccepted: true, current: anchor, workbenchUrl: anchorLink }), { status: "NONE" });
   assert.deepEqual(deriveEpisodeReviewAnchorContinuity({ intent, anchorAccepted: true, current: null, workbenchUrl: anchorLink }), { status: "NONE" });
   assert.deepEqual(deriveEpisodeReviewAnchorContinuity({ intent, anchorAccepted: true, current: anchor, workbenchUrl: anchorLink }), { status: "ANCHORED", target: anchor });
-  assert.equal(EPISODE_REVIEW_ANCHOR_CONTINUITY_CANDIDATE.extends, "rolo-vis-episode-review-handoff-receipt/2026-08");
-  assert.equal(EPISODE_REVIEW_ANCHOR_CONTINUITY_CANDIDATE.persistsAnchor, false);
-  assert.equal(EPISODE_REVIEW_ANCHOR_CONTINUITY_CANDIDATE.supportsWrite, false);
+  assert.equal(EPISODE_REVIEW_ANCHOR_CONTINUITY_BASELINE.extends, "rolo-vis-episode-review-handoff-receipt/2026-08");
+  assert.equal(EPISODE_REVIEW_ANCHOR_CONTINUITY_BASELINE.persistsAnchor, false);
+  assert.equal(EPISODE_REVIEW_ANCHOR_CONTINUITY_BASELINE.supportsWrite, false);
 });
 
 test("E19A reports exact changed fields in stable contract order", () => {

@@ -1,6 +1,6 @@
 # E19 Episode review anchor continuity contract
 
-Status: E19A-E19C review candidate; E19D baseline promotion requires explicit approval
+Status: E19A-E19D approved and promoted as the rolo-vis `v0.34.0` read-only baseline
 
 Target baseline: rolo-vis `v0.34.0`
 
@@ -49,10 +49,12 @@ an explicit user-initiated canonical navigation.
 - Keep negative-authority checks for endpoints, storage, content, authentication,
   execution replay, automatic navigation, release influence, and writes.
 
-## E19D: deferred baseline promotion
+## E19D: baseline promotion
 
-Promotion to `v0.34.0`, baseline metadata, main merge, tag, and production deployment
-remain deferred until E19A-E19C receive explicit review approval.
+The reviewed feature commit `55d4968` was fast-forwarded to `main` and passed GitHub
+Actions CI run #48. Baseline metadata and release evidence are frozen in
+`EPISODE_REVIEW_ANCHOR_CONTINUITY_BASELINE.md`. Production deployment remains a
+separate, explicitly authorized operation.
 
 ## Authority boundary
 

@@ -291,12 +291,16 @@ export const EPISODE_REVIEW_HANDOFF_RECEIPT_BASELINE = {
   supportsWrite: false,
 } as const;
 
-export const EPISODE_REVIEW_ANCHOR_CONTINUITY_CANDIDATE = {
-  id: "rolo-vis-episode-review-anchor-continuity/candidate-2026-08",
-  status: "candidate",
+export const EPISODE_REVIEW_ANCHOR_CONTINUITY_BASELINE = {
+  id: "rolo-vis-episode-review-anchor-continuity/2026-08",
+  status: "baseline",
   mode: "read-only",
   extends: EPISODE_REVIEW_HANDOFF_RECEIPT_BASELINE.id,
-  targetRelease: "0.34.0",
+  release: "0.34.0",
+  frontendMinimum: "55d4968",
+  frontendMainMerge: "55d4968",
+  producerMinimum: "463d501",
+  producerMainMerge: "891cbf1",
   anchorLifetime: "CURRENT_TAB_COMPONENT_MEMORY_ONLY",
   continuityStates: ["ANCHORED", "EXPLORING"],
   comparisonPolicy: "EXACT_FIELD_DIFFERENCE",
