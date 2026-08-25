@@ -360,11 +360,10 @@ The frozen contract is `EPISODE_EVIDENCE_OCCURRENCE_FOCUS_CONTRACT.md`.
 The established release evidence is recorded in
 `EPISODE_OCCURRENCE_FOCUS_BASELINE.md`.
 
-## E14 candidate: Asset occurrence focus continuity
+## E14 baseline: Asset occurrence focus continuity
 
-Status: E14A–E14C are approved at frontend minimum `7123f01`; E14D is the
-`v0.29.0` release candidate. Final baseline promotion waits for review, the feature
-merge to `main`, remote CI, and the immutable tag.
+Status: E14A–E14D are approved and promoted as the `v0.29.0` read-only baseline.
+Frontend minimum `7123f01` was merged to `main` by `4578788` after remote CI passed.
 
 - Add one bounded `asset` deep-link field scoped to an existing selected
   `compare_evidence` context and both revision-pinned comparison identities.
@@ -377,5 +376,5 @@ merge to `main`, remote CI, and the immutable tag.
 
 The review contract is `EPISODE_ASSET_OCCURRENCE_FOCUS_CONTRACT.md`.
 
-The E14D release-candidate evidence is recorded in
+The established release evidence is recorded in
 `EPISODE_ASSET_OCCURRENCE_FOCUS_BASELINE.md`.
