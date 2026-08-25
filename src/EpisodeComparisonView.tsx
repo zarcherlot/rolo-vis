@@ -78,7 +78,7 @@ function OccurrenceLane({ title, lane, onFocus }: { title: string; lane: Episode
         occurrence.verification?.replaceAll("_", " "),
         occurrence.availability?.replaceAll("_", " "),
       ].filter(Boolean).join(" · ") || "Episode-level reference"}</small>
-      {onFocus && ["TIMELINE", "FINDING_SUPPORTING", "FINDING_CONTRADICTING"].includes(occurrence.source) && <button className="episode-occurrence-focus" onClick={() => onFocus(occurrence)} aria-label={`Focus left source ${occurrence.contextId}`}><Crosshair size={12} /><span>Focus left source</span><ArrowRight size={11} /></button>}
+      {onFocus && ["TIMELINE", "FINDING_SUPPORTING", "FINDING_CONTRADICTING", "ASSET"].includes(occurrence.source) && <button className="episode-occurrence-focus" onClick={() => onFocus(occurrence)} aria-label={`Focus left source ${occurrence.contextId}`}><Crosshair size={12} /><span>Focus left source</span><ArrowRight size={11} /></button>}
     </section>)}</div> : <p>No occurrence on this side.</p>}
     {lane.truncatedCount > 0 && <footer>{lane.truncatedCount} additional occurrences are hidden by the per-side limit.</footer>}
   </article>;

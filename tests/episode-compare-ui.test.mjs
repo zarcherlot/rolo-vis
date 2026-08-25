@@ -8,6 +8,7 @@ const clientPath = new URL("../src/roloClient.ts", import.meta.url);
 const evidenceContractPath = new URL("../docs/EPISODE_COMPARISON_EVIDENCE_TRACE_CONTRACT.md", import.meta.url);
 const contextContractPath = new URL("../docs/EPISODE_EVIDENCE_REFERENCE_CONTEXT_CONTRACT.md", import.meta.url);
 const occurrenceFocusContractPath = new URL("../docs/EPISODE_EVIDENCE_OCCURRENCE_FOCUS_CONTRACT.md", import.meta.url);
+const assetFocusContractPath = new URL("../docs/EPISODE_ASSET_OCCURRENCE_FOCUS_CONTRACT.md", import.meta.url);
 
 test("Episode pair UI derives from two existing read surfaces without a compare endpoint", async () => {
   const [studio, client] = await Promise.all([readFile(studioPath, "utf8"), readFile(clientPath, "utf8")]);
@@ -149,4 +150,22 @@ test("E13D live check covers composite restoration and fail-closed source author
   assert.match(check, /opens_evidence_record: false/);
   assert.match(check, /supports_write: false/);
   assert.doesNotMatch(check, /client\.evidence\(/);
+});
+
+test("E14 Asset occurrence focus stays left-only, metadata-only, and Context-scoped", async () => {
+  const [studio, view, navigation, contract] = await Promise.all([
+    readFile(studioPath, "utf8"),
+    readFile(viewPath, "utf8"),
+    readFile(new URL("../src/episodeNavigation.ts", import.meta.url), "utf8"),
+    readFile(assetFocusContractPath, "utf8"),
+  ]);
+  assert.match(navigation, /assetId !== null.*compareEvidenceId === null/s);
+  assert.match(studio, /setSelectedAssetId\(target\.assetId\)/);
+  assert.match(studio, /asset\.evidence_id === selectedComparisonEvidenceId/);
+  assert.match(studio, /episode-asset-\$\{selectedAssetId\}/);
+  assert.match(view, /"ASSET"/);
+  assert.match(view, /RIGHT OCCURRENCES · CONTEXT ONLY/);
+  assert.match(contract, /ASSET_METADATA_FOCUS_ONLY/);
+  assert.match(contract, /does not open the Evidence drawer/i);
+  assert.doesNotMatch(view, /Focus right source/);
 });
