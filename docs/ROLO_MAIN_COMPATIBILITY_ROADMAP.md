@@ -294,3 +294,23 @@ The detailed negative-authority and ordering rules are frozen in
 
 The established release evidence is recorded in
 `EPISODE_COMPARISON_EVIDENCE_BASELINE.md`.
+
+## E11 candidate: Evidence reference occurrence context
+
+Status: E11A–E11C are the next `v0.26.0` review candidate; no baseline has been
+promoted.
+
+- Extend each visible v0.25 Evidence trace row with bounded left/right attachment
+  points from the same validated Episode details and timelines.
+- Preserve exact Episode, Timeline Event, Finding supporting/contradicting, and Asset
+  identities without reading Evidence content.
+- Show at most 20 occurrences per side and retain at least one visible occurrence from
+  every represented source lane when truncation is required.
+- Cross-check reconstructed occurrence sources against the v0.25 trace and fail closed
+  on identity or source drift.
+- Keep occurrence presence separate from Evidence availability, content, quality,
+  sufficiency, semantic equivalence, verification, outcome, and cause.
+- Add no producer schema, endpoint, feature flag, artifact access, release signal, or
+  write authority.
+
+The detailed contract is `EPISODE_EVIDENCE_REFERENCE_CONTEXT_CONTRACT.md`.

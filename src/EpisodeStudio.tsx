@@ -13,6 +13,7 @@ import {
   WarningCircle,
 } from "@phosphor-icons/react";
 import { buildEpisodePairComparison, type EpisodePairComparison } from "./episodeComparison";
+import { buildEpisodeEvidenceReferenceContext, type EpisodeEvidenceReferenceContext } from "./episodeEvidenceContext";
 import { buildEpisodeCohortReview } from "./episodeCohort";
 import { EpisodeCohortView } from "./EpisodeCohortView";
 import { EpisodeComparisonView } from "./EpisodeComparisonView";
@@ -283,6 +284,7 @@ export function EpisodeStudio({ robotId, initialTarget, revisionHistorySupported
   const [compareEpisodeId, setCompareEpisodeId] = useState(() => initialTarget?.robotId === robotId ? initialTarget.compareEpisodeId || "" : "");
   const [compareRevision, setCompareRevision] = useState<number | null>(() => initialTarget?.robotId === robotId ? initialTarget.compareRevision : null);
   const [comparison, setComparison] = useState<EpisodePairComparison | null>(null);
+  const [evidenceContext, setEvidenceContext] = useState<EpisodeEvidenceReferenceContext | null>(null);
   const [comparisonLoading, setComparisonLoading] = useState(false);
   const [comparisonMessage, setComparisonMessage] = useState("");
   const [cohortDays, setCohortDays] = useState<7 | 30 | 90>(() => initialTarget?.robotId === robotId ? initialTarget.cohortDays ?? 30 : 30);
@@ -396,12 +398,14 @@ export function EpisodeStudio({ robotId, initialTarget, revisionHistorySupported
     setCompareEpisodeId("");
     setCompareRevision(null);
     setComparison(null);
+    setEvidenceContext(null);
     setComparisonMessage("");
   }, [selectedEpisodeId, selectedRevision, compareEpisodeId, compareRevision, revisionHistorySupported]);
 
   useEffect(() => {
     comparisonRequest.current?.abort();
     setComparison(null);
+    setEvidenceContext(null);
     setComparisonMessage("");
     setComparisonLoading(false);
     if (!detail || !compareEpisodeId || compareRevision === null) return;
@@ -412,7 +416,11 @@ export function EpisodeStudio({ robotId, initialTarget, revisionHistorySupported
       readComparisonSide(robotId, detail.episode_id, detail.revision, controller.signal, revisionHistorySupported),
       readComparisonSide(robotId, compareEpisodeId, compareRevision, controller.signal, revisionHistorySupported),
     ]).then(([left, right]) => {
-      if (!controller.signal.aborted) setComparison(buildEpisodePairComparison(left.detail, left.events, right.detail, right.events));
+      if (controller.signal.aborted) return;
+      const pair = buildEpisodePairComparison(left.detail, left.events, right.detail, right.events);
+      const context = buildEpisodeEvidenceReferenceContext(pair, left.detail, left.events, right.detail, right.events);
+      setComparison(pair);
+      setEvidenceContext(context);
     }).catch((error: unknown) => {
       if (!controller.signal.aborted) setComparisonMessage(error instanceof Error ? error.message : "Episode comparison could not be derived.");
     }).finally(() => {
@@ -543,6 +551,7 @@ export function EpisodeStudio({ robotId, initialTarget, revisionHistorySupported
     setCompareEpisodeId("");
     setCompareRevision(null);
     setComparison(null);
+    setEvidenceContext(null);
     setComparisonMessage("");
     setComparisonLoading(false);
   };
@@ -569,6 +578,7 @@ export function EpisodeStudio({ robotId, initialTarget, revisionHistorySupported
     if (!detail || (member.episode_id === detail.episode_id && member.revision === detail.revision)) return;
     comparisonRequest.current?.abort();
     setComparison(null);
+    setEvidenceContext(null);
     setComparisonMessage("");
     setComparisonLoading(false);
     setCompareEpisodeId(member.episode_id);
@@ -595,7 +605,7 @@ export function EpisodeStudio({ robotId, initialTarget, revisionHistorySupported
       </section>
       {comparisonLoading && <div className="episode-compare-state panel"><Pulse size={20} /><span><strong>Reading both pinned revisions</strong><small>Each side is bounded to {EPISODE_COMPARE_PAGE_BUDGET} timeline pages and {EPISODE_VISIBLE_EVENT_LIMIT} visible events.</small></span></div>}
       {comparisonMessage && <div className="episode-compare-state is-error panel" role="alert"><WarningCircle size={20} weight="fill" /><span><strong>Comparison rejected</strong><small>{comparisonMessage}</small></span></div>}
-      {comparison && <EpisodeComparisonView comparison={comparison} onClear={clearComparison} onOpenEvidence={onOpenEvidence} />}
+      {comparison && evidenceContext && <EpisodeComparisonView comparison={comparison} evidenceContext={evidenceContext} onClear={clearComparison} onOpenEvidence={onOpenEvidence} />}
       {cohortSupported && <EpisodeCohortView cohort={cohort} review={cohortReview} loading={cohortLoading} message={cohortMessage} windowDays={cohortDays} disabled={!detail || detailLoading} onWindowDays={setCohortDays} onOpenMember={openCohortMember} onCompareMember={compareCohortMember} />}
       <div className="episode-shell">
         <aside className="episode-index panel">

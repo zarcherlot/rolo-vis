@@ -1,5 +1,7 @@
-import { ArrowRight, ArrowsLeftRight, Info, ShieldCheck, ShieldWarning, WarningCircle, X } from "@phosphor-icons/react";
+import { useEffect, useState } from "react";
+import { ArrowRight, ArrowsLeftRight, Crosshair, Info, ShieldCheck, ShieldWarning, WarningCircle, X } from "@phosphor-icons/react";
 import type { EpisodeEvidenceSource, EpisodePairComparison, EpisodePairMetric } from "./episodeComparison";
+import type { EpisodeEvidenceOccurrenceLane, EpisodeEvidenceReferenceContext } from "./episodeEvidenceContext";
 import "./episode-compare.css";
 
 function formatMetricValue(metric: EpisodePairMetric, value: number | null): string {
@@ -63,7 +65,29 @@ function EvidenceSources({ sources }: { sources: EpisodeEvidenceSource[] }) {
     : <span className="episode-evidence-absent">Not referenced</span>;
 }
 
-export function EpisodeComparisonView({ comparison, onClear, onOpenEvidence }: { comparison: EpisodePairComparison; onClear: () => void; onOpenEvidence: (evidenceId: string) => void }) {
+function OccurrenceLane({ title, lane }: { title: string; lane: EpisodeEvidenceOccurrenceLane }) {
+  return <article className="episode-evidence-context-lane">
+    <header><span>{title}</span><strong>{lane.visibleCount} / {lane.totalCount}</strong></header>
+    {lane.items.length ? <div>{lane.items.map((occurrence) => <section key={`${occurrence.source}-${occurrence.role}-${occurrence.contextId}`}>
+      <span><em>{evidenceSourceLabel(occurrence.source)}</em><strong>{occurrence.role}</strong></span>
+      <h5>{occurrence.label}</h5>
+      <code>{occurrence.contextId}</code>
+      <small>{[
+        occurrence.offsetMs === null ? null : `${occurrence.offsetMs} ms`,
+        occurrence.lane,
+        occurrence.authority ? label(occurrence.authority) : null,
+        occurrence.verification?.replaceAll("_", " "),
+        occurrence.availability?.replaceAll("_", " "),
+      ].filter(Boolean).join(" · ") || "Episode-level reference"}</small>
+    </section>)}</div> : <p>No occurrence on this side.</p>}
+    {lane.truncatedCount > 0 && <footer>{lane.truncatedCount} additional occurrences are hidden by the per-side limit.</footer>}
+  </article>;
+}
+
+export function EpisodeComparisonView({ comparison, evidenceContext, onClear, onOpenEvidence }: { comparison: EpisodePairComparison; evidenceContext: EpisodeEvidenceReferenceContext; onClear: () => void; onOpenEvidence: (evidenceId: string) => void }) {
+  const [selectedEvidenceId, setSelectedEvidenceId] = useState<string | null>(null);
+  useEffect(() => setSelectedEvidenceId(null), [comparison.left.episodeId, comparison.left.revision, comparison.right.episodeId, comparison.right.revision]);
+  const selectedContext = selectedEvidenceId ? evidenceContext.items.find((item) => item.evidenceId === selectedEvidenceId) || null : null;
   const descriptiveOnly = comparison.comparability === "DESCRIPTIVE_ONLY";
   return (
     <section className="episode-compare panel" aria-label="Episode pair comparison">
@@ -128,14 +152,21 @@ export function EpisodeComparisonView({ comparison, onClear, onOpenEvidence }: {
         </div>
         {comparison.evidenceTrace.items.length ? <div className="episode-compare-evidence-table">
           <div className="is-heading"><strong>REFERENCE</strong><strong>RELATION</strong><strong>LEFT SOURCES</strong><strong>RIGHT SOURCES</strong><span /></div>
-          {comparison.evidenceTrace.items.map((item) => <div key={item.evidenceId}>
+          {comparison.evidenceTrace.items.map((item) => <div key={item.evidenceId} className={selectedEvidenceId === item.evidenceId ? "is-context-selected" : ""}>
             <code>{item.evidenceId}</code>
             <strong className={`is-${item.relation.toLowerCase().replace("_", "-")}`}>{item.relation.replaceAll("_", " ")}</strong>
             <EvidenceSources sources={item.leftSources} />
             <EvidenceSources sources={item.rightSources} />
-            <button onClick={() => onOpenEvidence(item.evidenceId)} aria-label={`Open evidence ${item.evidenceId}`}><ShieldCheck size={14} /><span>Inspect</span><ArrowRight size={12} /></button>
+            <span className="episode-evidence-actions">
+              <button className="is-context" aria-pressed={selectedEvidenceId === item.evidenceId} onClick={() => setSelectedEvidenceId((current) => current === item.evidenceId ? null : item.evidenceId)} aria-label={`Show reference context for ${item.evidenceId}`}><Crosshair size={14} /><span>Context</span></button>
+              <button onClick={() => onOpenEvidence(item.evidenceId)} aria-label={`Open evidence ${item.evidenceId}`}><ShieldCheck size={14} /><span>Inspect</span><ArrowRight size={12} /></button>
+            </span>
           </div>)}
         </div> : <div className="episode-compare-evidence-empty"><Info size={16} /><span>No Evidence IDs are referenced by the bounded comparison inputs.</span></div>}
+        {selectedContext && <section className="episode-evidence-context" aria-label={`Reference occurrence context for ${selectedContext.evidenceId}`}>
+          <header><div><span><Crosshair size={14} /> Reference occurrence context</span><h4>{selectedContext.evidenceId}</h4><p>These are bounded attachment points, not Evidence content or proof of semantic equivalence.</p></div><strong>{evidenceContext.authority.replaceAll("_", " ")}</strong><button onClick={() => setSelectedEvidenceId(null)} aria-label="Close reference context"><X size={13} /></button></header>
+          <div><OccurrenceLane title="LEFT OCCURRENCES" lane={selectedContext.left} /><OccurrenceLane title="RIGHT OCCURRENCES" lane={selectedContext.right} /></div>
+        </section>}
         {(comparison.evidenceTrace.timelineCoverage.left === "BOUNDED_PARTIAL" || comparison.evidenceTrace.timelineCoverage.right === "BOUNDED_PARTIAL" || comparison.evidenceTrace.truncatedCount > 0) && <footer>
           <WarningCircle size={15} weight="fill" />
           <span>{comparison.evidenceTrace.timelineCoverage.left === "BOUNDED_PARTIAL" || comparison.evidenceTrace.timelineCoverage.right === "BOUNDED_PARTIAL" ? "At least one timeline is bounded partial, so event-level references may be absent from this trace." : ""}{comparison.evidenceTrace.truncatedCount > 0 ? ` ${comparison.evidenceTrace.truncatedCount} additional unique references are hidden by the ${comparison.evidenceTrace.visibleLimit}-item visible limit.` : ""}</span>
