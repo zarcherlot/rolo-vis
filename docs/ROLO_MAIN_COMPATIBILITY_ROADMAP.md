@@ -251,8 +251,8 @@ merged to main by `891cbf1`; frontend minimum `2c2967f`, merged by `3f18124`.
 
 ## E9 candidate: Cohort investigation continuity
 
-Status: E9A-E9C approved and pushed as `547134c`; E9D isolated live validation passed.
-The v0.24 baseline candidate is pending review and promotion.
+Status: approved and promoted as rolo-vis `v0.24.0`; frontend commits `547134c` and
+`858c824`, merged to main by `a42adeb`; the E8 producer minimum remains unchanged.
 
 - Keep the revision-pinned cohort reference unchanged while selecting one exact-match
   member as the right side of the existing pair comparison.
@@ -267,3 +267,5 @@ The v0.24 baseline candidate is pending review and promotion.
 - E9D kept the reference pinned while independently reading an off-index cohort member,
   rejected an unavailable member revision, and round-tripped both pins plus the cohort
   window without introducing verdict or write authority.
+- The E9 contract and validation are frozen as the v0.24.0 read-only successor to the
+  Cohort Review baseline.

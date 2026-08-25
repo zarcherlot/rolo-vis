@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.24.0 - 2026-08-25
+
+- Keep the revision-pinned cohort reference on the left while selecting an exact-match
+  member for the independently validated right side of Episode pair comparison.
+- Preserve comparison and cohort-window deep links even when the member is outside the
+  currently loaded Episode index page.
+- Add reproducible, non-destructive live validation over an isolated copy of rolo-data.
+- Retain descriptive-only comparison authority with no verdict, causal attribution,
+  release signal, external handoff, or write support.
+
 ## 0.23.0 - 2026-08-24
 
 - Baseline the feature-negotiated Episode Cohort Review over exact semantic identity.

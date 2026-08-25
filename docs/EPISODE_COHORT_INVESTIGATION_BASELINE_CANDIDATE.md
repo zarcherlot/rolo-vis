@@ -1,6 +1,6 @@
 # Episode Cohort Investigation baseline candidate
 
-Status: review candidate
+Status: approved and promoted by the `v0.24.0` baseline
 
 Proposed version: `0.24.0`
 
@@ -47,13 +47,9 @@ added only to the isolated validation copy; the source directory was not modifie
   and `cohort_days=30`.
 - The result advertised no outcome verdict, causal attribution, or write support.
 
-## Promotion gates
+## Promotion result
 
-1. E9D tooling, evidence, and this candidate require review.
-2. The complete local baseline gate must pass after candidate documentation is frozen.
-3. The reviewed E9D commit must be pushed and its remote checks must pass.
-4. Promotion then bumps the package and baseline metadata to `0.24.0`, merges the
-   candidate to `main`, and creates tag `v0.24.0`.
-
-Until all four gates pass, `v0.23.0` remains the established baseline.
+E9D tooling and evidence were approved, commit `858c824` passed the PR #7 remote gate,
+and the candidate merged to main as `a42adeb`. The release metadata, final verification,
+main merge, and `v0.24.0` tag are recorded by the established baseline document.
 

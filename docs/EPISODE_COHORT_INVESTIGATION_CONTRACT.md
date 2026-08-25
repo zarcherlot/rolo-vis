@@ -1,6 +1,6 @@
 # Episode Cohort Investigation consumer contract
 
-Status: E9A-E9C approved; E9D validated as a baseline candidate
+Status: approved and promoted as the v0.24.0 read-only baseline
 
 Candidate: E9 / rolo-vis v0.24 development line
 
