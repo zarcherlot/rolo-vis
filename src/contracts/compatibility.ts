@@ -184,12 +184,12 @@ export const EPISODE_OCCURRENCE_FOCUS_BASELINE = {
 
 export const EPISODE_ASSET_FOCUS_BASELINE = {
   id: "rolo-vis-episode-asset-occurrence-focus/2026-08",
-  status: "candidate",
+  status: "baseline",
   mode: "read-only",
   extends: EPISODE_OCCURRENCE_FOCUS_BASELINE.id,
   release: "0.29.0",
   frontendMinimum: "7123f01",
-  frontendMainMerge: null,
+  frontendMainMerge: "4578788",
   producerMinimum: "463d501",
   producerMainMerge: "891cbf1",
   requiredFeature: "workbench.episode-read-model/v1",

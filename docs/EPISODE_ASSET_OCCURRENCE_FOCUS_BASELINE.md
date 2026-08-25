@@ -1,8 +1,8 @@
-# Episode Asset occurrence focus baseline candidate
+# Episode Asset occurrence focus baseline
 
-Status: release candidate; not yet promoted
+Status: established baseline
 
-Target version: `0.29.0`
+Version: `0.29.0`
 
 Baseline ID: `rolo-vis-episode-asset-occurrence-focus/2026-08`
 
@@ -10,7 +10,7 @@ Extends: rolo-vis `v0.28.0` / `rolo-vis-episode-evidence-occurrence-focus/2026-0
 
 Frontend minimum: `7123f01`
 
-Frontend main merge: pending final promotion
+Frontend main merge: `4578788`
 
 Producer minimum: rolo `463d501` (merged to main by `891cbf1`)
 
@@ -18,14 +18,14 @@ Validated upstream head: rolo `666f35c`
 
 ## Product boundary
 
-This candidate extends the reviewed left-only source focus to one exact public Asset
+This baseline extends the reviewed left-only source focus to one exact public Asset
 metadata card. It carries only `ASSET_METADATA_FOCUS_ONLY` authority.
 
 The durable anchor adds the bounded `asset` parameter to the existing pinned
 `compare_evidence` Context. Asset focus cannot exist without both revision-pinned
 comparison identities and the selected Evidence reference.
 
-## Frozen candidate contract
+## Frozen contract
 
 - only a visible left `ASSET / REFERENCE` occurrence exposes focus;
 - the exact public Asset ID and its `evidence_id` attachment are revalidated;
@@ -39,9 +39,10 @@ comparison identities and the selected Evidence reference.
 - no Asset bytes, raw path, media delivery, endpoint, producer schema, write, verdict, or
   release authority is introduced.
 
-## E14D candidate evidence
+## Promotion evidence
 
 - E14A–E14C were reviewed and sealed as frontend minimum `7123f01`.
+- rolo-vis PR #17 passed the complete remote CI gate and merged to main as `4578788`.
 - The E14D live check reads the real rolo Episode collection, cohort, pinned details,
   and bounded timelines before deriving the left Asset occurrence locally.
 - The isolated projection passes rolo's public read-model parser and exposes one
@@ -52,14 +53,8 @@ comparison identities and the selected Evidence reference.
 - Deterministic UI tests preserve the absence of right-side focus and keep the Evidence
   drawer separate.
 
-## Promotion gate
-
-Promotion to the established `v0.29.0` baseline requires E14D review approval, remote
-CI success, merge to `main`, replacement of the pending merge metadata, and creation of
-the immutable `v0.29.0` tag.
-
 ## Deferred successor work
 
 Right-side navigation, Asset content or media, Evidence content comparison, batch
 reads, export, external handoff, recollection, replay, release influence, and every
-write action remain outside this candidate.
+write action remain outside this baseline.

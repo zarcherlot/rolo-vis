@@ -1,9 +1,8 @@
 # E14 Episode Asset occurrence focus contract
 
-Status: E14A–E14C approved; E14D is the `v0.29.0` release candidate. Final
-promotion still requires the reviewed commit to merge to `main`.
+Status: E14A–E14D approved and promoted as the `v0.29.0` read-only baseline.
 
-The candidate validation evidence is recorded in
+The promotion evidence is recorded in
 `EPISODE_ASSET_OCCURRENCE_FOCUS_BASELINE.md`.
 
 ## Purpose

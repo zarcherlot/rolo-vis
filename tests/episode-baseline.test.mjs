@@ -99,12 +99,12 @@ test("Episode diagnostic baseline succeeds v0.20 without mutating the v0.19 MVP 
   assert.equal(EPISODE_OCCURRENCE_FOCUS_BASELINE.focusSide, "LEFT_ONLY");
   assert.equal(EPISODE_OCCURRENCE_FOCUS_BASELINE.opensEvidenceRecord, false);
   assert.equal(EPISODE_OCCURRENCE_FOCUS_BASELINE.supportsWrite, false);
-  assert.equal(EPISODE_ASSET_FOCUS_BASELINE.status, "candidate");
+  assert.equal(EPISODE_ASSET_FOCUS_BASELINE.status, "baseline");
   assert.equal(EPISODE_ASSET_FOCUS_BASELINE.mode, "read-only");
   assert.equal(EPISODE_ASSET_FOCUS_BASELINE.extends, EPISODE_OCCURRENCE_FOCUS_BASELINE.id);
   assert.equal(EPISODE_ASSET_FOCUS_BASELINE.release, "0.29.0");
   assert.equal(EPISODE_ASSET_FOCUS_BASELINE.frontendMinimum, "7123f01");
-  assert.equal(EPISODE_ASSET_FOCUS_BASELINE.frontendMainMerge, null);
+  assert.equal(EPISODE_ASSET_FOCUS_BASELINE.frontendMainMerge, "4578788");
   assert.equal(EPISODE_ASSET_FOCUS_BASELINE.producerMinimum, "463d501");
   assert.equal(EPISODE_ASSET_FOCUS_BASELINE.selectedReferenceParameter, "compare_evidence");
   assert.equal(EPISODE_ASSET_FOCUS_BASELINE.assetParameter, "asset");
@@ -186,7 +186,7 @@ test("Episode occurrence focus baseline freezes v0.28 without right-side or writ
   assert.doesNotMatch(manifest, /episode\.(media|replay|export|write)/);
 });
 
-test("Episode Asset occurrence focus forms the v0.29 release candidate without content or write authority", async () => {
+test("Episode Asset occurrence focus baseline freezes v0.29 without content or write authority", async () => {
   const [baseline, contract, check, manifest, packageJson] = await Promise.all([
     read("../docs/EPISODE_ASSET_OCCURRENCE_FOCUS_BASELINE.md"),
     read("../docs/EPISODE_ASSET_OCCURRENCE_FOCUS_CONTRACT.md"),
@@ -194,12 +194,12 @@ test("Episode Asset occurrence focus forms the v0.29 release candidate without c
     read("../rolo.plugin.json"),
     read("../package.json"),
   ]);
-  assert.match(baseline, /Target version: `0\.29\.0`/);
+  assert.match(baseline, /Version: `0\.29\.0`/);
   assert.match(baseline, /Frontend minimum: `7123f01`/);
-  assert.match(baseline, /Frontend main merge: pending final promotion/);
+  assert.match(baseline, /Frontend main merge: `4578788`/);
   assert.match(baseline, /ASSET_METADATA_FOCUS_ONLY/);
   assert.match(baseline, /metadata-only `MISSING` Asset/i);
-  assert.match(contract, /E14D is the `v0\.29\.0` release candidate/i);
+  assert.match(contract, /approved and promoted as the `v0\.29\.0` read-only baseline/i);
   assert.match(check, /occurrence\.source === "ASSET"/);
   assert.match(check, /reads_asset_bytes: false/);
   assert.match(check, /supports_write: false/);
