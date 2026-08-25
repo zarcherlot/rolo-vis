@@ -251,8 +251,8 @@ merged to main by `891cbf1`; frontend minimum `2c2967f`, merged by `3f18124`.
 
 ## E9 candidate: Cohort investigation continuity
 
-Status: E9A-E9C implemented as a frontend review candidate; E9D baseline promotion is
-pending review and live validation.
+Status: E9A-E9C approved and pushed as `547134c`; E9D isolated live validation passed.
+The v0.24 baseline candidate is pending review and promotion.
 
 - Keep the revision-pinned cohort reference unchanged while selecting one exact-match
   member as the right side of the existing pair comparison.
@@ -264,3 +264,6 @@ pending review and live validation.
   external handoff, or write authority.
 - rolo main through `e96c9b0` changes ADAPT discovery and Wiki narrative but leaves the
   public Episode contracts used here unchanged; the E8 producer minimum remains valid.
+- E9D kept the reference pinned while independently reading an off-index cohort member,
+  rejected an unavailable member revision, and round-tripped both pins plus the cohort
+  window without introducing verdict or write authority.

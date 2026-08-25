@@ -1,6 +1,6 @@
 # Episode Cohort Investigation consumer contract
 
-Status: review candidate
+Status: E9A-E9C approved; E9D validated as a baseline candidate
 
 Candidate: E9 / rolo-vis v0.24 development line
 
@@ -58,3 +58,12 @@ must remain compatible with the E8 producer minimum.
 - E9B: add explicit Open and Compare actions while preserving the pinned reference.
 - E9C: cover off-index members, deep-link continuity, accessibility, and neutral copy.
 - E9D: run the full baseline gate and live validation before a v0.24 baseline proposal.
+
+## E9D result
+
+On 2026-08-25 the current rolo service loaded an isolated copy of desktop `rolo-data`
+plus controlled Episode publications. The selected member was absent from a limit-one
+index page but was independently read by exact identity and revision. Both timelines were
+complete, the left reference remained unchanged, an unavailable right revision was
+rejected, and the deep link reproduced both pins plus the 30-day window. The candidate
+exposed no outcome verdict, causal attribution, or write support.

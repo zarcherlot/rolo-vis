@@ -44,3 +44,30 @@ test("Cohort compare keeps the reference pinned and reuses the independently val
   assert.match(contract, /identity only/i);
   assert.match(contract, /not treated as Episode detail or timeline evidence/i);
 });
+
+test("E9D live check covers an off-index member, exact revision rejection, and deep-link continuity", async () => {
+  const [check, prepare] = await Promise.all([
+    read("../scripts/check-episode-cohort-investigation.mjs"),
+    read("../scripts/prepare-episode-investigation-live-data.mjs"),
+  ]);
+  assert.match(check, /episodeCollection\(robotId, undefined, \{ limit: 1, offset: 0 \}\)/);
+  assert.match(check, /Promise\.all\(\[/);
+  assert.match(check, /buildEpisodePairComparison/);
+  assert.match(check, /readEpisodeDeepLink\(deepLink\)/);
+  assert.match(check, /member\.revision \+ 1/);
+  assert.match(check, /reference_preserved: true/);
+  assert.match(check, /supports_write: false/);
+  assert.match(prepare, /refusing to overwrite/);
+  assert.match(prepare, /source_preserved: true/);
+  assert.match(prepare, /ep-e9-reference/);
+});
+
+test("v0.24 candidate records isolated evidence without prematurely replacing v0.23", async () => {
+  const candidate = await read("../docs/EPISODE_COHORT_INVESTIGATION_BASELINE_CANDIDATE.md");
+  assert.match(candidate, /Proposed version: `0\.24\.0`/);
+  assert.match(candidate, /Reviewed frontend slice: `547134c`/);
+  assert.match(candidate, /source directory was not modified/i);
+  assert.match(candidate, /member was outside the bounded index page/i);
+  assert.match(candidate, /`v0\.23\.0` remains the established baseline/);
+  assert.doesNotMatch(candidate, /Status: established baseline/i);
+});
