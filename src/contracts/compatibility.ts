@@ -248,6 +248,27 @@ export const EPISODE_NAVIGATION_REHYDRATION_BASELINE = {
   supportsWrite: false,
 } as const;
 
+export const EPISODE_REVIEW_LINK_HANDOFF_BASELINE = {
+  id: "rolo-vis-episode-review-link-handoff/2026-08",
+  status: "baseline",
+  mode: "read-only",
+  extends: EPISODE_NAVIGATION_REHYDRATION_BASELINE.id,
+  release: "0.32.0",
+  frontendMinimum: "92689a9",
+  frontendMainMerge: "92689a9",
+  producerMinimum: "463d501",
+  producerMainMerge: "891cbf1",
+  requiredFeature: "workbench.episode-read-model/v1",
+  requiredRevisionFeature: "workbench.episode-revision-history/v1",
+  requiredCohortFeature: "workbench.episode-cohort-read-model/v1",
+  handoffAuthority: "READ_ONLY_REVIEW_HANDOFF_ONLY",
+  linkPolicy: "STRICT_ALLOWLIST_ROUND_TRIP",
+  clipboardInitiation: "USER_ONLY",
+  addsEndpoint: false,
+  exportsContent: false,
+  supportsWrite: false,
+} as const;
+
 export function supportsSchema(
   family: keyof typeof MVP_SCHEMA_COMPATIBILITY,
   model: "collection" | "summary" | "detail",

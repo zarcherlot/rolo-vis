@@ -427,9 +427,9 @@ The established release evidence is recorded in
 
 ## E17 candidate: Episode review link handoff
 
-Status: E17A-E17B approved; E17C is implemented and locally validated on
-`codex/episode-review-link-handoff`, pending review; target baseline rolo-vis
-`v0.32.0`.
+Status: E17A-E17D approved and promoted as the rolo-vis `v0.32.0` read-only
+baseline. Frontend minimum `92689a9` was fast-forwarded to `main` as `92689a9`;
+main CI #44 passed before baseline promotion.
 
 - Build one absolute canonical review link only from an immutable, revision-pinned
   Episode state that survives the strict E16 parser unchanged.
@@ -440,10 +440,12 @@ Status: E17A-E17B approved; E17C is implemented and locally validated on
 - Add no endpoint, producer contract, browser storage, content export, verdict, release
   signal, execution replay, or robot write authority.
 - E17C covers canonical and comparison round trips, unrelated-state stripping,
-  same/cross-robot restore planning, stale state, and clipboard denial; E17D will
-  freeze the reviewed contract as `v0.32.0`.
+  same/cross-robot restore planning, stale state, and clipboard denial.
 - E17C passed 177 application tests, TypeScript, production/Sites packaging, the live
   two-Episode gate, and rebuilt-preview copy/restore/stale-context validation without
   adding console errors or authority.
 
 The review contract is `EPISODE_REVIEW_LINK_HANDOFF_CONTRACT.md`.
+
+The established release evidence is recorded in
+`EPISODE_REVIEW_LINK_HANDOFF_BASELINE.md`.

@@ -1,6 +1,6 @@
 # E17 Episode review link handoff contract
 
-Status: E17A-E17B approved; E17C implemented and locally validated, pending review
+Status: E17A-E17D approved and promoted as the `v0.32.0` read-only baseline
 
 Target baseline: rolo-vis `v0.32.0`
 
@@ -53,10 +53,11 @@ Episode read-model validation.
 - Keep the reusable gate explicit about navigation-only authority and the absence of
   endpoints, content export, and writes.
 
-## Remaining slice
+## E17D: baseline promotion
 
-- **E17D — baseline:** complete remote CI, freeze compatibility metadata, and establish
-  `v0.32.0` only after review approval.
+The reviewed E17 contract is frozen as rolo-vis `v0.32.0`, with frontend minimum and
+main merge `92689a9`. Release evidence is recorded in
+`EPISODE_REVIEW_LINK_HANDOFF_BASELINE.md`.
 
 ## E17C validation evidence
 
