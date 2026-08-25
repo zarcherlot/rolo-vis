@@ -1,7 +1,10 @@
 # E16 Episode navigation rehydration contract
 
-Status: E16A-E16C reviewed and approved on the `v0.30.0` read-only baseline.
-E16D promotion is pending; no `v0.31.0` baseline is established yet.
+Status: E16A-E16D approved and promoted as the `v0.31.0` read-only baseline;
+frontend minimum `5776492`, fast-forwarded to `main` as `5776492`.
+
+The established release evidence is recorded in
+`EPISODE_NAVIGATION_REHYDRATION_BASELINE.md`.
 
 ## Decision
 

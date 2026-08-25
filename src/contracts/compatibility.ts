@@ -227,6 +227,27 @@ export const EPISODE_RIGHT_CONTEXT_HANDOFF_BASELINE = {
   supportsWrite: false,
 } as const;
 
+export const EPISODE_NAVIGATION_REHYDRATION_BASELINE = {
+  id: "rolo-vis-episode-navigation-rehydration/2026-08",
+  status: "baseline",
+  mode: "read-only",
+  extends: EPISODE_RIGHT_CONTEXT_HANDOFF_BASELINE.id,
+  release: "0.31.0",
+  frontendMinimum: "5776492",
+  frontendMainMerge: "5776492",
+  producerMinimum: "463d501",
+  producerMainMerge: "891cbf1",
+  requiredFeature: "workbench.episode-read-model/v1",
+  requiredRevisionFeature: "workbench.episode-revision-history/v1",
+  requiredCohortFeature: "workbench.episode-cohort-read-model/v1",
+  navigationAuthority: "NAVIGATION_REHYDRATION_ONLY",
+  historyEvents: ["popstate"],
+  invalidTarget: "STACK_NORMALIZED",
+  reconnectPolicy: "ROBOT_IDENTITY_CHANGE_ONLY",
+  addsEndpoint: false,
+  supportsWrite: false,
+} as const;
+
 export function supportsSchema(
   family: keyof typeof MVP_SCHEMA_COMPATIBILITY,
   model: "collection" | "summary" | "detail",

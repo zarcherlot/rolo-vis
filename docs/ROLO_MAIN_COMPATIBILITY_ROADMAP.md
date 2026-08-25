@@ -401,9 +401,9 @@ The established release evidence is recorded in
 
 ## E16 candidate: Episode navigation rehydration
 
-Status: E16A-E16C reviewed and approved on the `v0.30.0` read-only baseline. E16C
-local interaction, live contract, and complete local gates passed; E16D promotion is
-pending.
+Status: E16A-E16D approved and promoted as the `v0.31.0` read-only baseline.
+Frontend minimum `5776492` was fast-forwarded to `main` as `5776492`; main CI #42
+passed before baseline promotion.
 
 - Treat browser Back/Forward as a controlled input and restore only strictly validated
   Episode deep links or known workbench views.
@@ -421,3 +421,6 @@ pending.
   negotiation without adding endpoint or write authority.
 
 The review contract is `EPISODE_NAVIGATION_REHYDRATION_CONTRACT.md`.
+
+The established release evidence is recorded in
+`EPISODE_NAVIGATION_REHYDRATION_BASELINE.md`.
