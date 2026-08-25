@@ -204,6 +204,29 @@ export const EPISODE_ASSET_FOCUS_BASELINE = {
   supportsWrite: false,
 } as const;
 
+export const EPISODE_RIGHT_CONTEXT_HANDOFF_BASELINE = {
+  id: "rolo-vis-episode-right-context-handoff/2026-08",
+  status: "candidate",
+  mode: "read-only",
+  extends: EPISODE_ASSET_FOCUS_BASELINE.id,
+  release: "0.30.0",
+  frontendMinimum: "801231f",
+  frontendMainMerge: null,
+  producerMinimum: "463d501",
+  producerMainMerge: "891cbf1",
+  requiredFeature: "workbench.episode-read-model/v1",
+  requiredRevisionFeature: "workbench.episode-revision-history/v1",
+  requiredCohortFeature: "workbench.episode-cohort-read-model/v1",
+  selectedReferenceParameter: "compare_evidence",
+  sourceParameters: ["event", "finding", "asset"],
+  orientationAuthority: "PAIR_ORIENTATION_HANDOFF_ONLY",
+  sourceTransition: "RIGHT_SELECTED_THEN_LEFT_REVALIDATED",
+  addsSideParameter: false,
+  opensEvidenceRecord: false,
+  readsAssetBytes: false,
+  supportsWrite: false,
+} as const;
+
 export function supportsSchema(
   family: keyof typeof MVP_SCHEMA_COMPATIBILITY,
   model: "collection" | "summary" | "detail",

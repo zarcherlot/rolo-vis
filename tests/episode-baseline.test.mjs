@@ -11,6 +11,7 @@ import {
   EPISODE_CONTEXT_NAVIGATION_BASELINE,
   EPISODE_EVIDENCE_CONTEXT_BASELINE,
   EPISODE_OCCURRENCE_FOCUS_BASELINE,
+  EPISODE_RIGHT_CONTEXT_HANDOFF_BASELINE,
   EPISODE_READONLY_BASELINE,
   EPISODE_REVISION_BASELINE,
   EPISODE_SCHEMA_COMPATIBILITY,
@@ -113,6 +114,20 @@ test("Episode diagnostic baseline succeeds v0.20 without mutating the v0.19 MVP 
   assert.equal(EPISODE_ASSET_FOCUS_BASELINE.opensEvidenceRecord, false);
   assert.equal(EPISODE_ASSET_FOCUS_BASELINE.readsAssetBytes, false);
   assert.equal(EPISODE_ASSET_FOCUS_BASELINE.supportsWrite, false);
+  assert.equal(EPISODE_RIGHT_CONTEXT_HANDOFF_BASELINE.status, "candidate");
+  assert.equal(EPISODE_RIGHT_CONTEXT_HANDOFF_BASELINE.mode, "read-only");
+  assert.equal(EPISODE_RIGHT_CONTEXT_HANDOFF_BASELINE.extends, EPISODE_ASSET_FOCUS_BASELINE.id);
+  assert.equal(EPISODE_RIGHT_CONTEXT_HANDOFF_BASELINE.release, "0.30.0");
+  assert.equal(EPISODE_RIGHT_CONTEXT_HANDOFF_BASELINE.frontendMinimum, "801231f");
+  assert.equal(EPISODE_RIGHT_CONTEXT_HANDOFF_BASELINE.frontendMainMerge, null);
+  assert.equal(EPISODE_RIGHT_CONTEXT_HANDOFF_BASELINE.producerMinimum, "463d501");
+  assert.deepEqual(EPISODE_RIGHT_CONTEXT_HANDOFF_BASELINE.sourceParameters, ["event", "finding", "asset"]);
+  assert.equal(EPISODE_RIGHT_CONTEXT_HANDOFF_BASELINE.orientationAuthority, "PAIR_ORIENTATION_HANDOFF_ONLY");
+  assert.equal(EPISODE_RIGHT_CONTEXT_HANDOFF_BASELINE.sourceTransition, "RIGHT_SELECTED_THEN_LEFT_REVALIDATED");
+  assert.equal(EPISODE_RIGHT_CONTEXT_HANDOFF_BASELINE.addsSideParameter, false);
+  assert.equal(EPISODE_RIGHT_CONTEXT_HANDOFF_BASELINE.opensEvidenceRecord, false);
+  assert.equal(EPISODE_RIGHT_CONTEXT_HANDOFF_BASELINE.readsAssetBytes, false);
+  assert.equal(EPISODE_RIGHT_CONTEXT_HANDOFF_BASELINE.supportsWrite, false);
 });
 
 test("Episode Comparison Evidence baseline freezes v0.25 without adding producer or write authority", async () => {
@@ -127,8 +142,8 @@ test("Episode Comparison Evidence baseline freezes v0.25 without adding producer
   assert.match(baseline, /REFERENCE_PRESENCE_ONLY/);
   assert.match(baseline, /rejected the unresolved referenced record with HTTP\s+404/i);
   assert.match(contract, /approved and promoted as the `v0\.25\.0` read-only baseline/i);
-  assert.equal(JSON.parse(manifest).version, "0.29.0");
-  assert.equal(JSON.parse(packageJson).version, "0.29.0");
+  assert.equal(JSON.parse(manifest).version, "0.30.0");
+  assert.equal(JSON.parse(packageJson).version, "0.30.0");
   assert.doesNotMatch(manifest, /episode\.(media|replay|export|write)/);
 });
 
@@ -145,8 +160,8 @@ test("Episode Evidence reference context baseline freezes v0.26 without content 
   assert.match(baseline, /20 visible occurrences per side/i);
   assert.match(baseline, /unresolved Evidence record remained rejected with HTTP 404/i);
   assert.match(contract, /approved and promoted as the `v0\.26\.0` read-only baseline/i);
-  assert.equal(JSON.parse(manifest).version, "0.29.0");
-  assert.equal(JSON.parse(packageJson).version, "0.29.0");
+  assert.equal(JSON.parse(manifest).version, "0.30.0");
+  assert.equal(JSON.parse(packageJson).version, "0.30.0");
   assert.doesNotMatch(manifest, /episode\.(media|replay|export|write)/);
 });
 
@@ -163,8 +178,8 @@ test("Episode Evidence context navigation baseline freezes v0.27 without record 
   assert.match(baseline, /does not request, open, or infer an Evidence record/i);
   assert.match(baseline, /stale ID\s+was removed, malformed input was rejected/i);
   assert.match(contract, /approved and promoted as the `v0\.27\.0` read-only baseline/i);
-  assert.equal(JSON.parse(manifest).version, "0.29.0");
-  assert.equal(JSON.parse(packageJson).version, "0.29.0");
+  assert.equal(JSON.parse(manifest).version, "0.30.0");
+  assert.equal(JSON.parse(packageJson).version, "0.30.0");
   assert.doesNotMatch(manifest, /episode\.(media|replay|export|write)/);
 });
 
@@ -181,8 +196,8 @@ test("Episode occurrence focus baseline freezes v0.28 without right-side or writ
   assert.match(baseline, /right-side.*remain context only/i);
   assert.match(baseline, /live fixture exposes no Finding occurrence/i);
   assert.match(contract, /approved and promoted as the `v0\.28\.0` read-only baseline/i);
-  assert.equal(JSON.parse(manifest).version, "0.29.0");
-  assert.equal(JSON.parse(packageJson).version, "0.29.0");
+  assert.equal(JSON.parse(manifest).version, "0.30.0");
+  assert.equal(JSON.parse(packageJson).version, "0.30.0");
   assert.doesNotMatch(manifest, /episode\.(media|replay|export|write)/);
 });
 
@@ -204,8 +219,32 @@ test("Episode Asset occurrence focus baseline freezes v0.29 without content or w
   assert.match(check, /reads_asset_bytes: false/);
   assert.match(check, /supports_write: false/);
   assert.doesNotMatch(check, /client\.evidence\(/);
-  assert.equal(JSON.parse(manifest).version, "0.29.0");
-  assert.equal(JSON.parse(packageJson).version, "0.29.0");
+  assert.equal(JSON.parse(manifest).version, "0.30.0");
+  assert.equal(JSON.parse(packageJson).version, "0.30.0");
+  assert.doesNotMatch(manifest, /episode\.(media|replay|export|write)/);
+});
+
+test("Episode right Context handoff forms the v0.30 release candidate without ranking or write authority", async () => {
+  const [baseline, contract, check, manifest, packageJson] = await Promise.all([
+    read("../docs/EPISODE_RIGHT_CONTEXT_HANDOFF_BASELINE.md"),
+    read("../docs/EPISODE_RIGHT_CONTEXT_HANDOFF_CONTRACT.md"),
+    read("../scripts/check-episode-right-context-handoff.mjs"),
+    read("../rolo.plugin.json"),
+    read("../package.json"),
+  ]);
+  assert.match(baseline, /Target version: `0\.30\.0`/);
+  assert.match(baseline, /Frontend minimum: `801231f`/);
+  assert.match(baseline, /Frontend main merge: pending final promotion/);
+  assert.match(baseline, /PAIR_ORIENTATION_HANDOFF_ONLY/);
+  assert.match(baseline, /deterministic inverse/i);
+  assert.match(contract, /E15D is the `v0\.30\.0` release candidate/i);
+  assert.match(check, /inverse_orientation_restored: true/);
+  assert.match(check, /side_parameter_added: false/);
+  assert.match(check, /opens_evidence_record: false/);
+  assert.match(check, /supports_write: false/);
+  assert.doesNotMatch(check, /client\.evidence\(|client\.(invoke|cancel|replay|export|collect|recollect)/);
+  assert.equal(JSON.parse(manifest).version, "0.30.0");
+  assert.equal(JSON.parse(packageJson).version, "0.30.0");
   assert.doesNotMatch(manifest, /episode\.(media|replay|export|write)/);
 });
 

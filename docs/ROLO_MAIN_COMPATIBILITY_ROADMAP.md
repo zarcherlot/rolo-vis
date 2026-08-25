@@ -379,10 +379,11 @@ The review contract is `EPISODE_ASSET_OCCURRENCE_FOCUS_CONTRACT.md`.
 The established release evidence is recorded in
 `EPISODE_ASSET_OCCURRENCE_FOCUS_BASELINE.md`.
 
-## E15 design candidate: right Context handoff
+## E15 candidate: right Context handoff
 
-Status: E15A-E15C approved on the `v0.29.0` baseline. `v0.30.0` metadata
-remains deferred to E15D validation and promotion.
+Status: E15A-E15C are approved at frontend minimum `801231f`; E15D is the
+`v0.30.0` release candidate. Final promotion waits for review, the feature merge to
+`main`, remote CI, and the immutable tag.
 
 - Make an exact visible right Event, Finding, or Asset actionable only by swapping the
   two already pinned Episode/revision orientations.
@@ -393,4 +394,7 @@ remains deferred to E15D validation and promotion.
 - Treat reference/candidate as viewport orientation labels; handoff never promotes a
   run or changes outcome authority.
 
-The design contract is `EPISODE_RIGHT_CONTEXT_HANDOFF_CONTRACT.md`.
+The review contract is `EPISODE_RIGHT_CONTEXT_HANDOFF_CONTRACT.md`.
+
+The E15D release-candidate evidence is recorded in
+`EPISODE_RIGHT_CONTEXT_HANDOFF_BASELINE.md`.

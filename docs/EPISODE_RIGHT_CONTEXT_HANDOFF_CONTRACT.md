@@ -1,7 +1,10 @@
 # E15 Episode right Context handoff contract
 
-Status: E15A-E15C approved on the `v0.29.0` baseline. E15D validation and
-`v0.30.0` baseline promotion remain pending.
+Status: E15A-E15C approved; E15D is the `v0.30.0` release candidate. Final
+promotion still requires the reviewed commit to merge to `main`.
+
+The candidate validation evidence is recorded in
+`EPISODE_RIGHT_CONTEXT_HANDOFF_BASELINE.md`.
 
 ## Decision
 
