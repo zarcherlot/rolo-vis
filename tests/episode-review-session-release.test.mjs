@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-import { EPISODE_REVIEW_SESSION_RELEASE_CANDIDATE } from "../src/contracts/compatibility.ts";
+import { EPISODE_REVIEW_SESSION_RELEASE_BASELINE } from "../src/contracts/compatibility.ts";
 import { buildEpisodeReviewHandoffLink, readEpisodeDeepLink, readEpisodeReviewHandoff } from "../src/episodeNavigation.ts";
 import {
   advanceEpisodeReviewSession,
@@ -34,9 +34,9 @@ test("E21A activates only after acceptance and keeps release terminal", () => {
   assert.equal(releaseEpisodeReviewSession("ACTIVE"), "RELEASED");
   assert.equal(advanceEpisodeReviewSession("RELEASED", "ACCEPTED"), "RELEASED");
   assert.equal(releaseEpisodeReviewSession("RELEASED"), "RELEASED");
-  assert.equal(EPISODE_REVIEW_SESSION_RELEASE_CANDIDATE.extends, "rolo-vis-episode-review-marker-lifecycle/2026-08");
-  assert.equal(EPISODE_REVIEW_SESSION_RELEASE_CANDIDATE.persistsState, false);
-  assert.equal(EPISODE_REVIEW_SESSION_RELEASE_CANDIDATE.supportsWrite, false);
+  assert.equal(EPISODE_REVIEW_SESSION_RELEASE_BASELINE.extends, "rolo-vis-episode-review-marker-lifecycle/2026-08");
+  assert.equal(EPISODE_REVIEW_SESSION_RELEASE_BASELINE.persistsState, false);
+  assert.equal(EPISODE_REVIEW_SESSION_RELEASE_BASELINE.supportsWrite, false);
 });
 
 test("E21B removes only the marker and preserves the current navigation context", () => {

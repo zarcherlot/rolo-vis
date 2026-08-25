@@ -1,6 +1,6 @@
 # E21 Episode review session release contract
 
-Status: E21A-E21C review candidate; E21D baseline promotion requires explicit approval
+Status: E21A-E21D approved and promoted as the rolo-vis `v0.36.0` read-only baseline
 
 Target baseline: rolo-vis `v0.36.0`
 
@@ -48,10 +48,13 @@ handoff, notify a sender, record review progress, or write any state to rolo.
 - Keep negative checks for endpoints, persistence, sender identity, content, execution
   replay, release influence, automatic navigation, and writes.
 
-## E21D: deferred baseline promotion
+## E21D: baseline promotion
 
-Promotion to `v0.36.0`, baseline metadata, main merge, tag, and production deployment
-remain deferred until E21A-E21C receive explicit review approval.
+E21A-E21C were approved and sealed in feature commit `98d3a38`, which was
+fast-forwarded to `main` and passed GitHub Actions CI run #52. E21D records the
+review-session lifecycle as the `v0.36.0` read-only baseline in
+`EPISODE_REVIEW_SESSION_RELEASE_BASELINE.md`. Production deployment remains a
+separate, explicitly authorized operation and is not part of this promotion.
 
 ## Authority boundary
 

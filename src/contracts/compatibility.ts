@@ -328,12 +328,16 @@ export const EPISODE_REVIEW_MARKER_LIFECYCLE_BASELINE = {
   supportsWrite: false,
 } as const;
 
-export const EPISODE_REVIEW_SESSION_RELEASE_CANDIDATE = {
-  id: "rolo-vis-episode-review-session-release/candidate-2026-08",
-  status: "candidate",
+export const EPISODE_REVIEW_SESSION_RELEASE_BASELINE = {
+  id: "rolo-vis-episode-review-session-release/2026-08",
+  status: "baseline",
   mode: "read-only",
   extends: EPISODE_REVIEW_MARKER_LIFECYCLE_BASELINE.id,
-  targetRelease: "0.36.0",
+  release: "0.36.0",
+  frontendMinimum: "98d3a38",
+  frontendMainMerge: "98d3a38",
+  producerMinimum: "463d501",
+  producerMainMerge: "891cbf1",
   sessionStates: ["PENDING", "ACTIVE", "RELEASED"],
   activationPolicy: "ACCEPTED_RECEIPT_ONLY",
   releasePolicy: "EXPLICIT_USER_ACTION_ONLY",

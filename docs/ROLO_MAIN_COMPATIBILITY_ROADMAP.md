@@ -512,9 +512,10 @@ The frozen contract and release evidence are recorded in
 `EPISODE_REVIEW_MARKER_LIFECYCLE_CONTRACT.md` and
 `EPISODE_REVIEW_MARKER_LIFECYCLE_BASELINE.md`.
 
-## E21 candidate: Episode review session release
+## E21 baseline: Episode review session release
 
-Status: E21A-E21C are in review development; E21D baseline promotion is deferred.
+Status: E21A-E21D approved and promoted as the rolo-vis `v0.36.0` read-only
+baseline. Feature commit `98d3a38` was fast-forwarded to `main` and passed CI run #52.
 
 - Replace the one-way accepted-anchor boolean with explicit `PENDING`, `ACTIVE`, and
   terminal current-component `RELEASED` states.
@@ -527,4 +528,6 @@ Status: E21A-E21C are in review development; E21D baseline promotion is deferred
 - Add no endpoint, producer contract, persistence, identity, review progress, content,
   release influence, execution replay, or write authority.
 
-The review contract is `EPISODE_REVIEW_SESSION_RELEASE_CONTRACT.md`.
+The frozen contract and release evidence are recorded in
+`EPISODE_REVIEW_SESSION_RELEASE_CONTRACT.md` and
+`EPISODE_REVIEW_SESSION_RELEASE_BASELINE.md`.
