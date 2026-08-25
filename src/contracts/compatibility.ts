@@ -107,6 +107,23 @@ export const EPISODE_COHORT_INVESTIGATION_BASELINE = {
   requiredCohortFeature: "workbench.episode-cohort-read-model/v1",
 } as const;
 
+export const EPISODE_COMPARISON_EVIDENCE_BASELINE = {
+  id: "rolo-vis-episode-comparison-evidence/2026-08",
+  status: "baseline",
+  mode: "read-only",
+  extends: EPISODE_COHORT_INVESTIGATION_BASELINE.id,
+  release: "0.25.0",
+  frontendMinimum: "e756702",
+  frontendMainMerge: "0dd4fec",
+  producerMinimum: "463d501",
+  producerMainMerge: "891cbf1",
+  requiredFeature: "workbench.episode-read-model/v1",
+  requiredRevisionFeature: "workbench.episode-revision-history/v1",
+  requiredCohortFeature: "workbench.episode-cohort-read-model/v1",
+  derivedComparisonSchema: "rolo-vis-episode-pair-comparison/v2",
+  evidenceTraceAuthority: "REFERENCE_PRESENCE_ONLY",
+} as const;
+
 export function supportsSchema(
   family: keyof typeof MVP_SCHEMA_COMPATIBILITY,
   model: "collection" | "summary" | "detail",

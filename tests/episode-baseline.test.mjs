@@ -6,6 +6,7 @@ import {
   EPISODE_BASELINE,
   EPISODE_COHORT_BASELINE,
   EPISODE_COHORT_INVESTIGATION_BASELINE,
+  EPISODE_COMPARISON_EVIDENCE_BASELINE,
   EPISODE_READONLY_BASELINE,
   EPISODE_REVISION_BASELINE,
   EPISODE_SCHEMA_COMPATIBILITY,
@@ -54,6 +55,32 @@ test("Episode diagnostic baseline succeeds v0.20 without mutating the v0.19 MVP 
   assert.equal(EPISODE_COHORT_INVESTIGATION_BASELINE.frontendMainMerge, "a42adeb");
   assert.equal(EPISODE_COHORT_INVESTIGATION_BASELINE.producerMinimum, "463d501");
   assert.equal(EPISODE_COHORT_INVESTIGATION_BASELINE.requiredCohortFeature, "workbench.episode-cohort-read-model/v1");
+  assert.equal(EPISODE_COMPARISON_EVIDENCE_BASELINE.status, "baseline");
+  assert.equal(EPISODE_COMPARISON_EVIDENCE_BASELINE.mode, "read-only");
+  assert.equal(EPISODE_COMPARISON_EVIDENCE_BASELINE.extends, EPISODE_COHORT_INVESTIGATION_BASELINE.id);
+  assert.equal(EPISODE_COMPARISON_EVIDENCE_BASELINE.release, "0.25.0");
+  assert.equal(EPISODE_COMPARISON_EVIDENCE_BASELINE.frontendMinimum, "e756702");
+  assert.equal(EPISODE_COMPARISON_EVIDENCE_BASELINE.frontendMainMerge, "0dd4fec");
+  assert.equal(EPISODE_COMPARISON_EVIDENCE_BASELINE.producerMinimum, "463d501");
+  assert.equal(EPISODE_COMPARISON_EVIDENCE_BASELINE.derivedComparisonSchema, "rolo-vis-episode-pair-comparison/v2");
+  assert.equal(EPISODE_COMPARISON_EVIDENCE_BASELINE.evidenceTraceAuthority, "REFERENCE_PRESENCE_ONLY");
+});
+
+test("Episode Comparison Evidence baseline freezes v0.25 without adding producer or write authority", async () => {
+  const [baseline, contract, manifest, packageJson] = await Promise.all([
+    read("../docs/EPISODE_COMPARISON_EVIDENCE_BASELINE.md"),
+    read("../docs/EPISODE_COMPARISON_EVIDENCE_TRACE_CONTRACT.md"),
+    read("../rolo.plugin.json"),
+    read("../package.json"),
+  ]);
+  assert.match(baseline, /Version: `0\.25\.0`/);
+  assert.match(baseline, /Frontend minimum: `e756702` \(merged to main by `0dd4fec`\)/);
+  assert.match(baseline, /REFERENCE_PRESENCE_ONLY/);
+  assert.match(baseline, /rejected the unresolved referenced record with HTTP\s+404/i);
+  assert.match(contract, /approved and promoted as the `v0\.25\.0` read-only baseline/i);
+  assert.equal(JSON.parse(manifest).version, "0.25.0");
+  assert.equal(JSON.parse(packageJson).version, "0.25.0");
+  assert.doesNotMatch(manifest, /episode\.(media|replay|export|write)/);
 });
 
 test("Episode Cohort Investigation baseline freezes reference continuity without new authority", async () => {
