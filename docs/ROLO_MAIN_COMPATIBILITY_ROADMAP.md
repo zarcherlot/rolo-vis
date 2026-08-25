@@ -338,3 +338,21 @@ The detailed contract is `EPISODE_EVIDENCE_CONTEXT_NAVIGATION_CONTRACT.md`.
 
 The established release evidence is recorded in
 `EPISODE_CONTEXT_NAVIGATION_BASELINE.md`.
+
+## E13 candidate: Evidence occurrence source focus
+
+Status: E13A–E13C are implemented for review on the v0.27.0 consumer baseline; no
+v0.28.0 baseline has been established.
+
+- Reuse the existing `compare_evidence` selection with the existing `event` or
+  `finding` deep-link field instead of creating duplicate occurrence state.
+- Resolve left Timeline and Finding occurrence targets again against the pinned public
+  inputs and fail closed when an ID, role, or Evidence attachment has drifted.
+- Preserve both comparison identities, keep Context expanded, and leave every right
+  occurrence context-only.
+- Keep Episode and Asset occurrences context-only until an equivalent sanitized focus
+  surface is explicitly contracted.
+- Add no producer schema, endpoint, Evidence content read, artifact access, verdict,
+  release signal, or write authority.
+
+The review contract is `EPISODE_EVIDENCE_OCCURRENCE_FOCUS_CONTRACT.md`.

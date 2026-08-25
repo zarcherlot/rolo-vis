@@ -13,7 +13,8 @@ import {
   WarningCircle,
 } from "@phosphor-icons/react";
 import { buildEpisodePairComparison, type EpisodePairComparison } from "./episodeComparison";
-import { buildEpisodeEvidenceReferenceContext, type EpisodeEvidenceReferenceContext } from "./episodeEvidenceContext";
+import { buildEpisodeEvidenceReferenceContext, type EpisodeEvidenceOccurrence, type EpisodeEvidenceReferenceContext } from "./episodeEvidenceContext";
+import { resolveEpisodeOccurrenceFocus } from "./episodeOccurrenceFocus";
 import { buildEpisodeCohortReview } from "./episodeCohort";
 import { EpisodeCohortView } from "./EpisodeCohortView";
 import { EpisodeComparisonView } from "./EpisodeComparisonView";
@@ -228,7 +229,7 @@ function EpisodeTimeline({ detail, events, selectedEventId, visibleLanes, focuse
     return true;
   };
   return (
-    <div className="episode-timeline panel" aria-label="Episode metadata timeline" aria-describedby="episode-timeline-keyboard-help">
+    <div id="episode-timeline" className="episode-timeline panel" aria-label="Episode metadata timeline" aria-describedby="episode-timeline-keyboard-help">
       <span className="visually-hidden" id="episode-timeline-keyboard-help">Use arrow keys to move between visible events. Home and End move to the first and last visible event.</span>
       <header className="episode-time-ruler"><span>Lane</span><div>{[0, .25, .5, .75, 1].map((fraction) => <time key={fraction} style={{ left: `${fraction * 100}%` }}>{formatOffset(Math.round(layout.maxOffset * fraction))}</time>)}</div></header>
       <div className="episode-lanes">
@@ -598,6 +599,25 @@ export function EpisodeStudio({ robotId, initialTarget, revisionHistorySupported
       block: "start",
     }));
   };
+  const focusLeftOccurrence = (evidenceId: string, occurrence: EpisodeEvidenceOccurrence) => {
+    if (!detail || !comparison
+      || detail.robot_id !== comparison.left.robotId
+      || detail.episode_id !== comparison.left.episodeId
+      || detail.revision !== comparison.left.revision) return;
+    const target = resolveEpisodeOccurrenceFocus(evidenceId, occurrence, detail, events);
+    if (!target) return;
+    if (target.kind === "EVENT") {
+      setSelectedFindingId("");
+      setSelectedEventId(target.eventId);
+      setVisibleLanes((current) => new Set(current).add(target.lane));
+      window.requestAnimationFrame(() => document.getElementById("episode-timeline")?.scrollIntoView({
+        behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
+        block: "center",
+      }));
+      return;
+    }
+    setSelectedFindingId(target.findingId);
+  };
 
   if (collectionLoading && !collection) return <section className="content-view episode-view"><div className="page-title"><div><div className="eyebrow">Read-only execution record</div><h2>Episode Studio</h2><p>Loading published Episode revisions without inferring live runtime state.</p></div></div><div className="panel episode-state-view"><Pulse size={28} /><div><strong>Reading Episode index</strong><p>Only a feature-negotiated, versioned read model can populate this workspace.</p></div></div></section>;
   if (collectionMessage && !collection) return <section className="content-view episode-view"><div className="page-title"><div><div className="eyebrow">Read-only execution record</div><h2>Episode Studio</h2><p>Published execution history with explicit authority and verification boundaries.</p></div></div><div className="panel episode-state-view is-error"><WarningCircle size={28} weight="fill" /><div><strong>Episode read model unavailable</strong><p>{collectionMessage}</p><small>No Lifecycle or fixture data was substituted.</small><button className="secondary-button" onClick={() => void loadCollection()}>Retry Episode index</button></div></div></section>;
@@ -615,7 +635,7 @@ export function EpisodeStudio({ robotId, initialTarget, revisionHistorySupported
       </section>
       {comparisonLoading && <div className="episode-compare-state panel"><Pulse size={20} /><span><strong>Reading both pinned revisions</strong><small>Each side is bounded to {EPISODE_COMPARE_PAGE_BUDGET} timeline pages and {EPISODE_VISIBLE_EVENT_LIMIT} visible events.</small></span></div>}
       {comparisonMessage && <div className="episode-compare-state is-error panel" role="alert"><WarningCircle size={20} weight="fill" /><span><strong>Comparison rejected</strong><small>{comparisonMessage}</small></span></div>}
-      {comparison && evidenceContext && <EpisodeComparisonView comparison={comparison} evidenceContext={evidenceContext} selectedEvidenceId={selectedComparisonEvidenceId || null} onSelectEvidenceContext={(evidenceId) => setSelectedComparisonEvidenceId(evidenceId || "")} onClear={clearComparison} onOpenEvidence={onOpenEvidence} />}
+      {comparison && evidenceContext && <EpisodeComparisonView comparison={comparison} evidenceContext={evidenceContext} selectedEvidenceId={selectedComparisonEvidenceId || null} onSelectEvidenceContext={(evidenceId) => setSelectedComparisonEvidenceId(evidenceId || "")} onFocusLeftOccurrence={focusLeftOccurrence} onClear={clearComparison} onOpenEvidence={onOpenEvidence} />}
       {cohortSupported && <EpisodeCohortView cohort={cohort} review={cohortReview} loading={cohortLoading} message={cohortMessage} windowDays={cohortDays} disabled={!detail || detailLoading} onWindowDays={setCohortDays} onOpenMember={openCohortMember} onCompareMember={compareCohortMember} />}
       <div className="episode-shell">
         <aside className="episode-index panel">
