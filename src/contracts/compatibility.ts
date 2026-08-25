@@ -124,6 +124,23 @@ export const EPISODE_COMPARISON_EVIDENCE_BASELINE = {
   evidenceTraceAuthority: "REFERENCE_PRESENCE_ONLY",
 } as const;
 
+export const EPISODE_EVIDENCE_CONTEXT_BASELINE = {
+  id: "rolo-vis-episode-evidence-reference-context/2026-08",
+  status: "baseline",
+  mode: "read-only",
+  extends: EPISODE_COMPARISON_EVIDENCE_BASELINE.id,
+  release: "0.26.0",
+  frontendMinimum: "e863266",
+  frontendMainMerge: "838e2c2",
+  producerMinimum: "463d501",
+  producerMainMerge: "891cbf1",
+  requiredFeature: "workbench.episode-read-model/v1",
+  requiredRevisionFeature: "workbench.episode-revision-history/v1",
+  requiredCohortFeature: "workbench.episode-cohort-read-model/v1",
+  derivedContextSchema: "rolo-vis-episode-evidence-reference-context/v1",
+  referenceContextAuthority: "REFERENCE_OCCURRENCE_ONLY",
+} as const;
+
 export function supportsSchema(
   family: keyof typeof MVP_SCHEMA_COMPATIBILITY,
   model: "collection" | "summary" | "detail",

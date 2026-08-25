@@ -295,10 +295,10 @@ The detailed negative-authority and ordering rules are frozen in
 The established release evidence is recorded in
 `EPISODE_COMPARISON_EVIDENCE_BASELINE.md`.
 
-## E11 candidate: Evidence reference occurrence context
+## E11 baseline: Evidence reference occurrence context
 
-Status: E11A–E11C are the next `v0.26.0` review candidate; no baseline has been
-promoted.
+Status: E11A–E11D are approved and promoted as the `v0.26.0` read-only baseline;
+frontend minimum `e863266`, merged to main by `838e2c2`.
 
 - Extend each visible v0.25 Evidence trace row with bounded left/right attachment
   points from the same validated Episode details and timelines.
@@ -314,3 +314,6 @@ promoted.
   write authority.
 
 The detailed contract is `EPISODE_EVIDENCE_REFERENCE_CONTEXT_CONTRACT.md`.
+
+The established release evidence is recorded in
+`EPISODE_EVIDENCE_REFERENCE_CONTEXT_BASELINE.md`.
