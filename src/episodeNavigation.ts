@@ -7,6 +7,20 @@ export const EPISODE_TIMELINE_PROJECTION_BUDGET_MS = 25;
 const IDENTIFIER = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
 const NAV_KEYS = ["view", "robot", "episode", "revision", "event", "finding", "asset", "compare", "compare_revision", "compare_evidence", "cohort_days"] as const;
 
+export const WORKBENCH_VIEW_IDS = ["fleet", "overview", "stack", "capabilities", "lifecycle", "episode", "wiki", "evidence"] as const;
+export type WorkbenchViewId = (typeof WORKBENCH_VIEW_IDS)[number];
+export type WorkbenchNavigationIntent =
+  | { kind: "EPISODE"; view: "episode"; target: EpisodeDeepLinkTarget }
+  | { kind: "VIEW"; view: Exclude<WorkbenchViewId, "episode"> }
+  | { kind: "INVALID"; view: "stack"; reason: "INVALID_EPISODE" | "UNSUPPORTED_VIEW" };
+
+export interface WorkbenchNavigationReplay {
+  view: WorkbenchViewId;
+  episodeTarget: EpisodeDeepLinkTarget | null;
+  reconnectRobotId: string | null;
+  normalizeToStack: boolean;
+}
+
 export interface EpisodeDeepLinkTarget {
   robotId: string;
   episodeId: string;
@@ -54,6 +68,48 @@ export function readEpisodeDeepLink(url: string): EpisodeDeepLinkTarget | null {
   return { robotId, episodeId, revision, eventId, findingId, assetId, compareEpisodeId, compareRevision, compareEvidenceId, cohortDays };
 }
 
+export function readWorkbenchNavigationIntent(url: string): WorkbenchNavigationIntent {
+  const parsed = new URL(url, "http://rolo-vis.local");
+  const view = parsed.searchParams.get("view");
+  if (view === "episode") {
+    const target = readEpisodeDeepLink(url);
+    return target
+      ? { kind: "EPISODE", view: "episode", target }
+      : { kind: "INVALID", view: "stack", reason: "INVALID_EPISODE" };
+  }
+  if (view === null || view === "stack") return { kind: "VIEW", view: "stack" };
+  if (WORKBENCH_VIEW_IDS.some((candidate) => candidate === view)) {
+    return { kind: "VIEW", view: view as Exclude<WorkbenchViewId, "episode"> };
+  }
+  return { kind: "INVALID", view: "stack", reason: "UNSUPPORTED_VIEW" };
+}
+
+export function planWorkbenchNavigationReplay(
+  intent: WorkbenchNavigationIntent,
+  connectedRobotId: string | null,
+): WorkbenchNavigationReplay {
+  if (intent.kind === "EPISODE") {
+    return {
+      view: "episode",
+      episodeTarget: intent.target,
+      reconnectRobotId: connectedRobotId === intent.target.robotId ? null : intent.target.robotId,
+      normalizeToStack: false,
+    };
+  }
+  if (intent.kind === "VIEW") {
+    return { view: intent.view, episodeTarget: null, reconnectRobotId: null, normalizeToStack: false };
+  }
+  return { view: "stack", episodeTarget: null, reconnectRobotId: null, normalizeToStack: true };
+}
+
+export function shouldRejectEpisodeNavigation(
+  view: WorkbenchViewId,
+  episodeFeatureAvailable: boolean,
+  connectionSettled: boolean,
+): boolean {
+  return view === "episode" && !episodeFeatureAvailable && connectionSettled;
+}
+
 export function buildEpisodeDeepLink(url: string, target: EpisodeDeepLinkTarget): string {
   const parsed = new URL(url, "http://rolo-vis.local");
   const assetId = target.assetId ?? null;
@@ -88,7 +144,7 @@ export function buildEpisodeDeepLink(url: string, target: EpisodeDeepLinkTarget)
   return `${parsed.pathname}${parsed.search}${parsed.hash}`;
 }
 
-export function buildWorkbenchViewLink(url: string, view: string): string {
+export function buildWorkbenchViewLink(url: string, view: WorkbenchViewId): string {
   const parsed = new URL(url, "http://rolo-vis.local");
   for (const key of NAV_KEYS) parsed.searchParams.delete(key);
   if (view !== "stack") parsed.searchParams.set("view", view);

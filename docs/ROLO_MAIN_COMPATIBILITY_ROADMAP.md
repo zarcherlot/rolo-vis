@@ -398,3 +398,26 @@ The review contract is `EPISODE_RIGHT_CONTEXT_HANDOFF_CONTRACT.md`.
 
 The established release evidence is recorded in
 `EPISODE_RIGHT_CONTEXT_HANDOFF_BASELINE.md`.
+
+## E16 candidate: Episode navigation rehydration
+
+Status: E16A-E16C reviewed and approved on the `v0.30.0` read-only baseline. E16C
+local interaction, live contract, and complete local gates passed; E16D promotion is
+pending.
+
+- Treat browser Back/Forward as a controlled input and restore only strictly validated
+  Episode deep links or known workbench views.
+- Remount the Episode request boundary on history replay so prior bounded requests are
+  aborted and restored pins are independently loaded and revalidated.
+- Reconnect only when the restored target names a different robot; same-robot history
+  replay must not repeat the workbench bootstrap.
+- Fail malformed Episode and unsupported view history entries closed to Stack Map and
+  remove their navigation fields.
+- Clear stale Episode replay state on explicit Sidebar navigation.
+- Add no producer/API contract, write authority, execution replay, content access,
+  release signal, or production deployment.
+- E16C exercised a real E15 orientation history through Back/Forward and added a
+  reusable live gate for same/cross-robot replay, malformed state, and settled feature
+  negotiation without adding endpoint or write authority.
+
+The review contract is `EPISODE_NAVIGATION_REHYDRATION_CONTRACT.md`.
