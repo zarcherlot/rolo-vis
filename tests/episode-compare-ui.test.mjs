@@ -7,6 +7,7 @@ const viewPath = new URL("../src/EpisodeComparisonView.tsx", import.meta.url);
 const clientPath = new URL("../src/roloClient.ts", import.meta.url);
 const evidenceContractPath = new URL("../docs/EPISODE_COMPARISON_EVIDENCE_TRACE_CONTRACT.md", import.meta.url);
 const contextContractPath = new URL("../docs/EPISODE_EVIDENCE_REFERENCE_CONTEXT_CONTRACT.md", import.meta.url);
+const occurrenceFocusContractPath = new URL("../docs/EPISODE_EVIDENCE_OCCURRENCE_FOCUS_CONTRACT.md", import.meta.url);
 
 test("Episode pair UI derives from two existing read surfaces without a compare endpoint", async () => {
   const [studio, client] = await Promise.all([readFile(studioPath, "utf8"), readFile(clientPath, "utf8")]);
@@ -119,4 +120,20 @@ test("E12D live check covers valid, stale, malformed, orphaned, and pair-switche
   assert.match(check, /selection_authority: "CONTEXT_SELECTION_ONLY"/);
   assert.match(check, /opens_evidence_record: false/);
   assert.doesNotMatch(check, /client\.evidence\(/);
+});
+
+test("E13 left occurrence focus reuses pinned Event/Finding links without changing right-side context", async () => {
+  const [studio, view, contract] = await Promise.all([
+    readFile(studioPath, "utf8"),
+    readFile(viewPath, "utf8"),
+    readFile(occurrenceFocusContractPath, "utf8"),
+  ]);
+  assert.match(studio, /resolveEpisodeOccurrenceFocus\(evidenceId, occurrence, detail, events\)/);
+  assert.match(studio, /setSelectedEventId\(target\.eventId\)/);
+  assert.match(studio, /setSelectedFindingId\(target\.findingId\)/);
+  assert.match(view, /Focus left source/);
+  assert.match(view, /RIGHT OCCURRENCES · CONTEXT ONLY/);
+  assert.match(contract, /compare_evidence.*event.*finding/is);
+  assert.match(contract, /does not read Evidence content/i);
+  assert.doesNotMatch(view, /Focus right source/);
 });
