@@ -1,6 +1,6 @@
 # E10 / v0.25 Episode comparison evidence trace contract
 
-Status: E10A–E10C review candidate. It is not a promoted `v0.25.0` baseline.
+Status: approved and promoted as the `v0.25.0` read-only baseline.
 
 ## Goal
 
@@ -83,8 +83,20 @@ The derived model freezes these negative authorities as literal `false`:
 - **E10B — derived model:** build the deterministic per-side trace and coverage facts.
 - **E10C — workbench surface:** show counts and source lanes, and open the existing
   Evidence drawer for one selected ID.
-- **E10D — validation and promotion:** after review, run live compatible-backend
-  regression, freeze the successor metadata, and promote `v0.25.0` separately.
+- **E10D — validation and promotion:** approved. Live compatible-backend regression,
+  successor metadata, main merge, and `v0.25.0` tag are frozen by
+  `EPISODE_COMPARISON_EVIDENCE_BASELINE.md`.
+
+## E10D result
+
+Date: 2026-08-25
+
+Frontend commit `e756702` passed PR #9 remote CI and merged to main as `0dd4fec`.
+The full local baseline gate passed 139 application tests, TypeScript checking,
+production packaging, and four Sites worker tests. Live validation against rolo
+`e96c9b0` and an isolated copy of desktop `rolo-data` derived comparison v2, preserved
+one shared ID's Episode and Timeline source lanes, kept all three negative-authority
+flags false, and confirmed that the unresolved Evidence record failed with HTTP 404.
 
 ## Deferred
 

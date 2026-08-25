@@ -53,3 +53,13 @@ test("Episode pair evidence trace reuses the validated Evidence drawer and keeps
   assert.match(contract, /supportsEvidenceQuality/);
   assert.doesNotMatch(view, /evidence score|evidence verdict|verified by presence/i);
 });
+
+test("E10D live check validates bounded reference authority and unresolved records", async () => {
+  const check = await readFile(new URL("../scripts/check-episode-comparison-evidence.mjs", import.meta.url), "utf8");
+  assert.match(check, /rolo-vis-episode-pair-comparison\/v2/);
+  assert.match(check, /REFERENCE_PRESENCE_ONLY/);
+  assert.match(check, /supportsEvidenceQuality/);
+  assert.match(check, /trace\.visibleCount \+ trace\.truncatedCount/);
+  assert.match(check, /error\.status === 404/);
+  assert.match(check, /supports_write: false/);
+});

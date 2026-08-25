@@ -272,8 +272,8 @@ Status: approved and promoted as rolo-vis `v0.24.0`; frontend commits `547134c` 
 
 ## E10 candidate: Comparison Evidence traceability
 
-Status: E10A–E10C are the next `v0.25.0` review candidate; no baseline has been
-promoted yet.
+Status: approved and promoted as rolo-vis `v0.25.0`; frontend minimum `e756702`,
+merged to main by `0dd4fec`; the E8 producer minimum remains unchanged.
 
 - Derive one deterministic, bounded trace from the two already validated Episode
   details and revision-pinned timeline inputs. No producer or comparison endpoint is
@@ -286,8 +286,11 @@ promoted yet.
   bounded-partial timeline coverage explicit.
 - Reuse the existing single-record Evidence drawer. Presence does not assert that the
   referenced record exists or supports an outcome.
-- The E8 producer minimum remains unchanged. E10D live validation and `v0.25.0`
-  promotion begin only after this candidate passes review.
+- The E8 producer minimum remains unchanged. E10D passed live comparison-v2 and
+  unresolved-Evidence validation before the `v0.25.0` promotion.
 
 The detailed negative-authority and ordering rules are frozen in
 `EPISODE_COMPARISON_EVIDENCE_TRACE_CONTRACT.md`.
+
+The established release evidence is recorded in
+`EPISODE_COMPARISON_EVIDENCE_BASELINE.md`.
