@@ -472,3 +472,19 @@ The review contract is `EPISODE_REVIEW_HANDOFF_RECEIPT_CONTRACT.md`.
 
 The established release evidence is recorded in
 `EPISODE_REVIEW_HANDOFF_RECEIPT_BASELINE.md`.
+
+## E19 candidate: Episode review anchor continuity
+
+Status: E19A-E19C are in review development; E19D baseline promotion is deferred.
+
+- Preserve an E18-accepted handoff target as a tab-lifetime immutable review anchor.
+- Distinguish deliberate local exploration from a failed or stale handoff by comparing
+  each reviewed navigation field exactly and in deterministic order.
+- Offer one explicit canonical return link without automatic navigation, persistence,
+  clipboard access, or weakened revalidation.
+- Re-run the complete E18 receipt path after return instead of reusing prior acceptance
+  as data authority.
+- Add no endpoint, producer contract, identity, content, review progress, release
+  influence, execution replay, or write authority.
+
+The review contract is `EPISODE_REVIEW_ANCHOR_CONTINUITY_CONTRACT.md`.

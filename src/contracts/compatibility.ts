@@ -291,6 +291,21 @@ export const EPISODE_REVIEW_HANDOFF_RECEIPT_BASELINE = {
   supportsWrite: false,
 } as const;
 
+export const EPISODE_REVIEW_ANCHOR_CONTINUITY_CANDIDATE = {
+  id: "rolo-vis-episode-review-anchor-continuity/candidate-2026-08",
+  status: "candidate",
+  mode: "read-only",
+  extends: EPISODE_REVIEW_HANDOFF_RECEIPT_BASELINE.id,
+  targetRelease: "0.34.0",
+  anchorLifetime: "CURRENT_TAB_COMPONENT_MEMORY_ONLY",
+  continuityStates: ["ANCHORED", "EXPLORING"],
+  comparisonPolicy: "EXACT_FIELD_DIFFERENCE",
+  returnPolicy: "USER_INITIATED_CANONICAL_NAVIGATION",
+  addsEndpoint: false,
+  persistsAnchor: false,
+  supportsWrite: false,
+} as const;
+
 export function supportsSchema(
   family: keyof typeof MVP_SCHEMA_COMPATIBILITY,
   model: "collection" | "summary" | "detail",

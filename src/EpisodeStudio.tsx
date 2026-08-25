@@ -36,6 +36,7 @@ import {
   type EpisodeDeepLinkTarget,
 } from "./episodeNavigation";
 import { assessEpisodeReviewReceipt } from "./episodeReviewReceipt";
+import { deriveEpisodeReviewAnchorContinuity } from "./episodeReviewAnchor";
 import "./episode.css";
 import "./episode-polish.css";
 import type {
@@ -311,6 +312,7 @@ export function EpisodeStudio({ robotId, initialTarget, revisionHistorySupported
   const [reviewLinkState, setReviewLinkState] = useState<"idle" | "copied" | "error">("idle");
   const [reviewLinkMessage, setReviewLinkMessage] = useState("");
   const [reviewHandoffIntent] = useState(() => readEpisodeReviewHandoff(window.location.href));
+  const [reviewAnchorAccepted, setReviewAnchorAccepted] = useState(false);
 
   const loadCollection = useCallback(async () => {
     collectionRequest.current?.abort();
@@ -616,6 +618,22 @@ export function EpisodeStudio({ robotId, initialTarget, revisionHistorySupported
     return episodes.filter((item) => (stateFilter === "all" || item.state === stateFilter) && (!normalized || `${item.task_label} ${item.episode_id} ${item.operation || ""}`.toLowerCase().includes(normalized)));
   }, [episodes, query, stateFilter]);
   const selectedEvent = events.find((event) => event.event_id === selectedEventId) || null;
+  const currentReviewTarget = useMemo<EpisodeDeepLinkTarget | null>(() => {
+    if (!detail) return null;
+    const hasComparison = Boolean(compareEpisodeId && (compareEpisodeId !== detail.episode_id || compareRevision !== detail.revision));
+    return {
+      robotId,
+      episodeId: detail.episode_id,
+      revision: detail.revision,
+      eventId: selectedEventId || null,
+      findingId: selectedFindingId || null,
+      assetId: selectedComparisonEvidenceId ? selectedAssetId || null : null,
+      compareEpisodeId: hasComparison ? compareEpisodeId : null,
+      compareRevision: hasComparison ? compareRevision : null,
+      compareEvidenceId: hasComparison ? selectedComparisonEvidenceId || null : null,
+      cohortDays: cohortSupported ? cohortDays : null,
+    };
+  }, [robotId, detail, selectedEventId, selectedFindingId, selectedAssetId, compareEpisodeId, compareRevision, selectedComparisonEvidenceId, cohortDays, cohortSupported]);
   const reviewReceipt = useMemo(() => assessEpisodeReviewReceipt({
     intent: reviewHandoffIntent,
     robotId,
@@ -628,6 +646,15 @@ export function EpisodeStudio({ robotId, initialTarget, revisionHistorySupported
     comparisonLoading,
     comparisonError: comparisonMessage,
   }), [reviewHandoffIntent, robotId, detail, events, detailLoading, detailMessage, comparison, evidenceContext, comparisonLoading, comparisonMessage]);
+  useEffect(() => {
+    if (reviewReceipt.status === "ACCEPTED") setReviewAnchorAccepted(true);
+  }, [reviewReceipt.status]);
+  const reviewAnchorContinuity = useMemo(() => deriveEpisodeReviewAnchorContinuity({
+    intent: reviewHandoffIntent,
+    anchorAccepted: reviewAnchorAccepted,
+    current: currentReviewTarget,
+    workbenchUrl: window.location.href,
+  }), [reviewHandoffIntent, reviewAnchorAccepted, currentReviewTarget]);
   const diagnosticFocus = useMemo(() => {
     if (!detail || !selectedFindingId) return null;
     return buildEpisodeDiagnosticFocus(detail, events, selectedFindingId);
@@ -841,10 +868,16 @@ export function EpisodeStudio({ robotId, initialTarget, revisionHistorySupported
           <div className="episode-revision-lock"><ShieldCheck size={17} /><span><strong>Revision {detail.revision} pinned</strong><small>{detail.immutable ? "Immutable publication" : "Live publication"} · {detail.coverage.replaceAll("_", " ")}</small></span></div>
         </div>}
       </div>
-      {reviewReceipt.status !== "NONE" && <section className={`episode-review-receipt panel is-${reviewReceipt.status.toLowerCase()}`} role={reviewReceipt.status === "REJECTED" ? "alert" : "status"} aria-label="Episode review handoff receipt">
+      {reviewAnchorContinuity.status === "EXPLORING" ? <section className="episode-review-receipt panel is-exploring" role="status" aria-label="Episode review anchor continuity">
+        <span className="episode-review-receipt-icon"><Crosshair size={22} weight="fill" /></span>
+        <div><span className="eyebrow">Shared review anchor · local exploration</span><h3>Exploring beyond the restored handoff</h3><p>The shared anchor remains immutable in this tab. Current exploration does not change what the sender handed off or create a new review claim.</p>
+          <span className="episode-review-receipt-facts"><code>{reviewAnchorContinuity.target.episodeId}@{reviewAnchorContinuity.target.revision}</code>{reviewAnchorContinuity.differences.map((field) => <small key={field}>{field} changed</small>)}</span>
+          <a className="secondary-button episode-review-anchor-return" href={reviewAnchorContinuity.returnLink}><ArrowRight size={14} /> Return to shared anchor</a>
+        </div>
+      </section> : reviewReceipt.status !== "NONE" && <section className={`episode-review-receipt panel is-${reviewReceipt.status.toLowerCase()}`} role={reviewReceipt.status === "REJECTED" ? "alert" : "status"} aria-label="Episode review handoff receipt">
         <span className="episode-review-receipt-icon">{reviewReceipt.status === "ACCEPTED" ? <ShieldCheck size={22} weight="fill" /> : reviewReceipt.status === "REJECTED" ? <WarningCircle size={22} weight="fill" /> : <Pulse size={22} />}</span>
         <div><span className="eyebrow">Review handoff receipt · navigation only</span><h3>{reviewReceipt.title}</h3><p>{reviewReceipt.detail}</p>
-          {reviewReceipt.status === "ACCEPTED" && <span className="episode-review-receipt-facts"><code>{reviewReceipt.targetLabel}</code><small>{reviewReceipt.comparison ? "Two pinned publications re-read" : "One pinned publication re-read"}</small><small>No sender authentication</small></span>}
+          {reviewReceipt.status === "ACCEPTED" && <span className="episode-review-receipt-facts"><code>{reviewReceipt.targetLabel}</code><small>{reviewReceipt.comparison ? "Two pinned publications re-read" : "One pinned publication re-read"}</small><small>No sender authentication</small>{reviewAnchorContinuity.status === "ANCHORED" && <small>Shared anchor active for this tab</small>}</span>}
         </div>
       </section>}
       <section className="episode-compare-control panel" aria-label="Episode pair selection">
