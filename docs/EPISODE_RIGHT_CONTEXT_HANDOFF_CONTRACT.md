@@ -1,9 +1,9 @@
 # E15 Episode right Context handoff contract
 
-Status: E15A-E15C approved; E15D is the `v0.30.0` release candidate. Final
-promotion still requires the reviewed commit to merge to `main`.
+Status: E15A-E15D approved and promoted as the `v0.30.0` read-only baseline;
+frontend minimum `801231f`, merged to `main` by `b487b01`.
 
-The candidate validation evidence is recorded in
+The established release evidence is recorded in
 `EPISODE_RIGHT_CONTEXT_HANDOFF_BASELINE.md`.
 
 ## Decision

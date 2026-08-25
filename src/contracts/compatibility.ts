@@ -206,12 +206,12 @@ export const EPISODE_ASSET_FOCUS_BASELINE = {
 
 export const EPISODE_RIGHT_CONTEXT_HANDOFF_BASELINE = {
   id: "rolo-vis-episode-right-context-handoff/2026-08",
-  status: "candidate",
+  status: "baseline",
   mode: "read-only",
   extends: EPISODE_ASSET_FOCUS_BASELINE.id,
   release: "0.30.0",
   frontendMinimum: "801231f",
-  frontendMainMerge: null,
+  frontendMainMerge: "b487b01",
   producerMinimum: "463d501",
   producerMainMerge: "891cbf1",
   requiredFeature: "workbench.episode-read-model/v1",

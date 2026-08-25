@@ -379,11 +379,11 @@ The review contract is `EPISODE_ASSET_OCCURRENCE_FOCUS_CONTRACT.md`.
 The established release evidence is recorded in
 `EPISODE_ASSET_OCCURRENCE_FOCUS_BASELINE.md`.
 
-## E15 candidate: right Context handoff
+## E15 baseline: right Context handoff
 
-Status: E15A-E15C are approved at frontend minimum `801231f`; E15D is the
-`v0.30.0` release candidate. Final promotion waits for review, the feature merge to
-`main`, remote CI, and the immutable tag.
+Status: E15A-E15D are approved and promoted as the `v0.30.0` read-only baseline.
+Frontend minimum `801231f` was merged to `main` by `b487b01` after all complete local,
+Sites, static authority, and isolated live gates passed.
 
 - Make an exact visible right Event, Finding, or Asset actionable only by swapping the
   two already pinned Episode/revision orientations.
@@ -396,5 +396,5 @@ Status: E15A-E15C are approved at frontend minimum `801231f`; E15D is the
 
 The review contract is `EPISODE_RIGHT_CONTEXT_HANDOFF_CONTRACT.md`.
 
-The E15D release-candidate evidence is recorded in
+The established release evidence is recorded in
 `EPISODE_RIGHT_CONTEXT_HANDOFF_BASELINE.md`.

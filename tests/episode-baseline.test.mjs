@@ -114,12 +114,12 @@ test("Episode diagnostic baseline succeeds v0.20 without mutating the v0.19 MVP 
   assert.equal(EPISODE_ASSET_FOCUS_BASELINE.opensEvidenceRecord, false);
   assert.equal(EPISODE_ASSET_FOCUS_BASELINE.readsAssetBytes, false);
   assert.equal(EPISODE_ASSET_FOCUS_BASELINE.supportsWrite, false);
-  assert.equal(EPISODE_RIGHT_CONTEXT_HANDOFF_BASELINE.status, "candidate");
+  assert.equal(EPISODE_RIGHT_CONTEXT_HANDOFF_BASELINE.status, "baseline");
   assert.equal(EPISODE_RIGHT_CONTEXT_HANDOFF_BASELINE.mode, "read-only");
   assert.equal(EPISODE_RIGHT_CONTEXT_HANDOFF_BASELINE.extends, EPISODE_ASSET_FOCUS_BASELINE.id);
   assert.equal(EPISODE_RIGHT_CONTEXT_HANDOFF_BASELINE.release, "0.30.0");
   assert.equal(EPISODE_RIGHT_CONTEXT_HANDOFF_BASELINE.frontendMinimum, "801231f");
-  assert.equal(EPISODE_RIGHT_CONTEXT_HANDOFF_BASELINE.frontendMainMerge, null);
+  assert.equal(EPISODE_RIGHT_CONTEXT_HANDOFF_BASELINE.frontendMainMerge, "b487b01");
   assert.equal(EPISODE_RIGHT_CONTEXT_HANDOFF_BASELINE.producerMinimum, "463d501");
   assert.deepEqual(EPISODE_RIGHT_CONTEXT_HANDOFF_BASELINE.sourceParameters, ["event", "finding", "asset"]);
   assert.equal(EPISODE_RIGHT_CONTEXT_HANDOFF_BASELINE.orientationAuthority, "PAIR_ORIENTATION_HANDOFF_ONLY");
@@ -224,7 +224,7 @@ test("Episode Asset occurrence focus baseline freezes v0.29 without content or w
   assert.doesNotMatch(manifest, /episode\.(media|replay|export|write)/);
 });
 
-test("Episode right Context handoff forms the v0.30 release candidate without ranking or write authority", async () => {
+test("Episode right Context handoff freezes v0.30 without ranking or write authority", async () => {
   const [baseline, contract, check, manifest, packageJson] = await Promise.all([
     read("../docs/EPISODE_RIGHT_CONTEXT_HANDOFF_BASELINE.md"),
     read("../docs/EPISODE_RIGHT_CONTEXT_HANDOFF_CONTRACT.md"),
@@ -232,12 +232,12 @@ test("Episode right Context handoff forms the v0.30 release candidate without ra
     read("../rolo.plugin.json"),
     read("../package.json"),
   ]);
-  assert.match(baseline, /Target version: `0\.30\.0`/);
+  assert.match(baseline, /Version: `0\.30\.0`/);
   assert.match(baseline, /Frontend minimum: `801231f`/);
-  assert.match(baseline, /Frontend main merge: pending final promotion/);
+  assert.match(baseline, /Frontend main merge: `b487b01`/);
   assert.match(baseline, /PAIR_ORIENTATION_HANDOFF_ONLY/);
   assert.match(baseline, /deterministic inverse/i);
-  assert.match(contract, /E15D is the `v0\.30\.0` release candidate/i);
+  assert.match(contract, /approved and promoted as the `v0\.30\.0` read-only baseline/i);
   assert.match(check, /inverse_orientation_restored: true/);
   assert.match(check, /side_parameter_added: false/);
   assert.match(check, /opens_evidence_record: false/);
