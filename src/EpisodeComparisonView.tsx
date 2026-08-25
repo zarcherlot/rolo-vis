@@ -1,4 +1,3 @@
-import { useEffect, useState } from "react";
 import { ArrowRight, ArrowsLeftRight, Crosshair, Info, ShieldCheck, ShieldWarning, WarningCircle, X } from "@phosphor-icons/react";
 import type { EpisodeEvidenceSource, EpisodePairComparison, EpisodePairMetric } from "./episodeComparison";
 import type { EpisodeEvidenceOccurrenceLane, EpisodeEvidenceReferenceContext } from "./episodeEvidenceContext";
@@ -84,9 +83,14 @@ function OccurrenceLane({ title, lane }: { title: string; lane: EpisodeEvidenceO
   </article>;
 }
 
-export function EpisodeComparisonView({ comparison, evidenceContext, onClear, onOpenEvidence }: { comparison: EpisodePairComparison; evidenceContext: EpisodeEvidenceReferenceContext; onClear: () => void; onOpenEvidence: (evidenceId: string) => void }) {
-  const [selectedEvidenceId, setSelectedEvidenceId] = useState<string | null>(null);
-  useEffect(() => setSelectedEvidenceId(null), [comparison.left.episodeId, comparison.left.revision, comparison.right.episodeId, comparison.right.revision]);
+export function EpisodeComparisonView({ comparison, evidenceContext, selectedEvidenceId, onSelectEvidenceContext, onClear, onOpenEvidence }: {
+  comparison: EpisodePairComparison;
+  evidenceContext: EpisodeEvidenceReferenceContext;
+  selectedEvidenceId: string | null;
+  onSelectEvidenceContext: (evidenceId: string | null) => void;
+  onClear: () => void;
+  onOpenEvidence: (evidenceId: string) => void;
+}) {
   const selectedContext = selectedEvidenceId ? evidenceContext.items.find((item) => item.evidenceId === selectedEvidenceId) || null : null;
   const descriptiveOnly = comparison.comparability === "DESCRIPTIVE_ONLY";
   return (
@@ -158,13 +162,13 @@ export function EpisodeComparisonView({ comparison, evidenceContext, onClear, on
             <EvidenceSources sources={item.leftSources} />
             <EvidenceSources sources={item.rightSources} />
             <span className="episode-evidence-actions">
-              <button className="is-context" aria-pressed={selectedEvidenceId === item.evidenceId} onClick={() => setSelectedEvidenceId((current) => current === item.evidenceId ? null : item.evidenceId)} aria-label={`Show reference context for ${item.evidenceId}`}><Crosshair size={14} /><span>Context</span></button>
+              <button className="is-context" aria-pressed={selectedEvidenceId === item.evidenceId} onClick={() => onSelectEvidenceContext(selectedEvidenceId === item.evidenceId ? null : item.evidenceId)} aria-label={`Show reference context for ${item.evidenceId}`}><Crosshair size={14} /><span>Context</span></button>
               <button onClick={() => onOpenEvidence(item.evidenceId)} aria-label={`Open evidence ${item.evidenceId}`}><ShieldCheck size={14} /><span>Inspect</span><ArrowRight size={12} /></button>
             </span>
           </div>)}
         </div> : <div className="episode-compare-evidence-empty"><Info size={16} /><span>No Evidence IDs are referenced by the bounded comparison inputs.</span></div>}
         {selectedContext && <section className="episode-evidence-context" aria-label={`Reference occurrence context for ${selectedContext.evidenceId}`}>
-          <header><div><span><Crosshair size={14} /> Reference occurrence context</span><h4>{selectedContext.evidenceId}</h4><p>These are bounded attachment points, not Evidence content or proof of semantic equivalence.</p></div><strong>{evidenceContext.authority.replaceAll("_", " ")}</strong><button onClick={() => setSelectedEvidenceId(null)} aria-label="Close reference context"><X size={13} /></button></header>
+          <header><div><span><Crosshair size={14} /> Reference occurrence context</span><h4>{selectedContext.evidenceId}</h4><p>These are bounded attachment points, not Evidence content or proof of semantic equivalence.</p></div><strong>{evidenceContext.authority.replaceAll("_", " ")}</strong><button onClick={() => onSelectEvidenceContext(null)} aria-label="Close reference context"><X size={13} /></button></header>
           <div><OccurrenceLane title="LEFT OCCURRENCES" lane={selectedContext.left} /><OccurrenceLane title="RIGHT OCCURRENCES" lane={selectedContext.right} /></div>
         </section>}
         {(comparison.evidenceTrace.timelineCoverage.left === "BOUNDED_PARTIAL" || comparison.evidenceTrace.timelineCoverage.right === "BOUNDED_PARTIAL" || comparison.evidenceTrace.truncatedCount > 0) && <footer>

@@ -317,3 +317,21 @@ The detailed contract is `EPISODE_EVIDENCE_REFERENCE_CONTEXT_CONTRACT.md`.
 
 The established release evidence is recorded in
 `EPISODE_EVIDENCE_REFERENCE_CONTEXT_BASELINE.md`.
+
+## E12 candidate: Evidence context navigation continuity
+
+Status: E12A–E12C were approved on 2026-08-25 as the next read-only candidate; no
+successor baseline has been promoted.
+
+- Pin one selected v0.26 Evidence context row as `compare_evidence` alongside both
+  comparison identities and revisions.
+- Restore the selection only after the derived context validates the ID as visible;
+  stale, hidden, malformed, or failed comparison selections are removed.
+- Keep Context expansion separate from the Evidence drawer and preserve unrelated
+  workbench query state.
+- Clear the selection when either comparison side changes instead of carrying context
+  across a different pair.
+- Add no source-focus action, producer schema, endpoint, feature flag, content read,
+  artifact access, release signal, or write authority.
+
+The detailed contract is `EPISODE_EVIDENCE_CONTEXT_NAVIGATION_CONTRACT.md`.

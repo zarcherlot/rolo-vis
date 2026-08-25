@@ -5,7 +5,7 @@ export const EPISODE_VISIBLE_EVENT_LIMIT = 500;
 export const EPISODE_TIMELINE_PROJECTION_BUDGET_MS = 25;
 
 const IDENTIFIER = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
-const NAV_KEYS = ["view", "robot", "episode", "revision", "event", "finding", "compare", "compare_revision", "cohort_days"] as const;
+const NAV_KEYS = ["view", "robot", "episode", "revision", "event", "finding", "compare", "compare_revision", "compare_evidence", "cohort_days"] as const;
 
 export interface EpisodeDeepLinkTarget {
   robotId: string;
@@ -15,6 +15,7 @@ export interface EpisodeDeepLinkTarget {
   findingId: string | null;
   compareEpisodeId: string | null;
   compareRevision: number | null;
+  compareEvidenceId: string | null;
   cohortDays: 7 | 30 | 90 | null;
 }
 
@@ -28,6 +29,7 @@ export function readEpisodeDeepLink(url: string): EpisodeDeepLinkTarget | null {
   const findingId = parsed.searchParams.get("finding");
   const compareEpisodeId = parsed.searchParams.get("compare");
   const compareRevisionValue = parsed.searchParams.get("compare_revision");
+  const compareEvidenceId = parsed.searchParams.get("compare_evidence");
   const cohortDaysValue = parsed.searchParams.get("cohort_days");
   if (!IDENTIFIER.test(robotId) || !IDENTIFIER.test(episodeId)) return null;
   const revision = revisionValue === null ? null : Number(revisionValue);
@@ -38,14 +40,16 @@ export function readEpisodeDeepLink(url: string): EpisodeDeepLinkTarget | null {
   const compareRevision = compareRevisionValue === null ? null : Number(compareRevisionValue);
   if (compareEpisodeId !== null && !IDENTIFIER.test(compareEpisodeId)) return null;
   if (compareRevision !== null && (!Number.isInteger(compareRevision) || compareRevision < 1)) return null;
+  if (compareEvidenceId !== null && (!IDENTIFIER.test(compareEvidenceId) || compareEpisodeId === null)) return null;
   if (compareEpisodeId === episodeId && (revision === null || compareRevision === revision)) return null;
   const cohortDays = cohortDaysValue === null ? null : Number(cohortDaysValue);
   if (cohortDays !== null && cohortDays !== 7 && cohortDays !== 30 && cohortDays !== 90) return null;
-  return { robotId, episodeId, revision, eventId, findingId, compareEpisodeId, compareRevision, cohortDays };
+  return { robotId, episodeId, revision, eventId, findingId, compareEpisodeId, compareRevision, compareEvidenceId, cohortDays };
 }
 
 export function buildEpisodeDeepLink(url: string, target: EpisodeDeepLinkTarget): string {
   const parsed = new URL(url, "http://rolo-vis.local");
+  if (target.compareEvidenceId !== null && !IDENTIFIER.test(target.compareEvidenceId)) throw new Error("Episode Evidence context deep links require a safe identifier.");
   parsed.searchParams.set("view", "episode");
   parsed.searchParams.set("robot", target.robotId);
   parsed.searchParams.set("episode", target.episodeId);
@@ -58,11 +62,15 @@ export function buildEpisodeDeepLink(url: string, target: EpisodeDeepLinkTarget)
   if ((target.compareEpisodeId === null) !== (target.compareRevision === null)) throw new Error("Episode comparison deep links require both identity and revision.");
   if (target.compareEpisodeId === target.episodeId && (target.revision === null || target.compareRevision === target.revision)) throw new Error("Episode comparison deep links require two distinct published revisions.");
   if (target.compareEpisodeId === null) {
+    if (target.compareEvidenceId !== null) throw new Error("Episode Evidence context deep links require a pinned comparison.");
     parsed.searchParams.delete("compare");
     parsed.searchParams.delete("compare_revision");
+    parsed.searchParams.delete("compare_evidence");
   } else {
     parsed.searchParams.set("compare", target.compareEpisodeId);
     parsed.searchParams.set("compare_revision", String(target.compareRevision));
+    if (target.compareEvidenceId === null) parsed.searchParams.delete("compare_evidence");
+    else parsed.searchParams.set("compare_evidence", target.compareEvidenceId);
   }
   if (target.cohortDays === null) parsed.searchParams.delete("cohort_days");
   else parsed.searchParams.set("cohort_days", String(target.cohortDays));

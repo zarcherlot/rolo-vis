@@ -39,7 +39,7 @@ test("Episode pair loading and URL state are explicitly bounded and revision-pin
 
 test("Episode pair evidence trace reuses the validated Evidence drawer and keeps reference presence non-authoritative", async () => {
   const [studio, view, contract] = await Promise.all([readFile(studioPath, "utf8"), readFile(viewPath, "utf8"), readFile(evidenceContractPath, "utf8")]);
-  assert.match(studio, /<EpisodeComparisonView comparison=\{comparison\} evidenceContext=\{evidenceContext\} onClear=\{clearComparison\} onOpenEvidence=\{onOpenEvidence\}/);
+  assert.match(studio, /<EpisodeComparisonView comparison=\{comparison\} evidenceContext=\{evidenceContext\} selectedEvidenceId=\{selectedComparisonEvidenceId \|\| null\}/);
   assert.match(view, /Reference presence across both sides/);
   assert.match(view, /evidenceTrace\.authority/);
   assert.match(view, /do not establish evidence quality, verification, or causal support/);
@@ -92,4 +92,19 @@ test("E11D live check preserves bounded occurrence authority across dense and pa
   assert.match(check, /BOUNDED_PARTIAL/);
   assert.match(check, /error instanceof RoloApiError && error\.status === 404/);
   assert.match(check, /supports_write: false/);
+});
+
+test("E12 comparison context selection is URL-pinned, controlled by Studio, and rejected when stale", async () => {
+  const [studio, view, contract] = await Promise.all([
+    readFile(studioPath, "utf8"),
+    readFile(viewPath, "utf8"),
+    readFile(new URL("../docs/EPISODE_EVIDENCE_CONTEXT_NAVIGATION_CONTRACT.md", import.meta.url), "utf8"),
+  ]);
+  assert.match(studio, /initialTarget\.compareEvidenceId/);
+  assert.match(studio, /context\.items\.some\(\(item\) => item\.evidenceId === current\)/);
+  assert.match(studio, /compareEvidenceId:.*selectedComparisonEvidenceId \|\| null/);
+  assert.match(view, /onSelectEvidenceContext\(selectedEvidenceId === item\.evidenceId \? null : item\.evidenceId\)/);
+  assert.doesNotMatch(view, /useState<string \| null>/);
+  assert.match(contract, /must exist in the visible, validated v0\.26 context/i);
+  assert.match(contract, /does not open the\s+Evidence drawer/i);
 });
