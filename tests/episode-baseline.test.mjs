@@ -7,6 +7,7 @@ import {
   EPISODE_COHORT_BASELINE,
   EPISODE_COHORT_INVESTIGATION_BASELINE,
   EPISODE_COMPARISON_EVIDENCE_BASELINE,
+  EPISODE_EVIDENCE_CONTEXT_BASELINE,
   EPISODE_READONLY_BASELINE,
   EPISODE_REVISION_BASELINE,
   EPISODE_SCHEMA_COMPATIBILITY,
@@ -64,6 +65,15 @@ test("Episode diagnostic baseline succeeds v0.20 without mutating the v0.19 MVP 
   assert.equal(EPISODE_COMPARISON_EVIDENCE_BASELINE.producerMinimum, "463d501");
   assert.equal(EPISODE_COMPARISON_EVIDENCE_BASELINE.derivedComparisonSchema, "rolo-vis-episode-pair-comparison/v2");
   assert.equal(EPISODE_COMPARISON_EVIDENCE_BASELINE.evidenceTraceAuthority, "REFERENCE_PRESENCE_ONLY");
+  assert.equal(EPISODE_EVIDENCE_CONTEXT_BASELINE.status, "baseline");
+  assert.equal(EPISODE_EVIDENCE_CONTEXT_BASELINE.mode, "read-only");
+  assert.equal(EPISODE_EVIDENCE_CONTEXT_BASELINE.extends, EPISODE_COMPARISON_EVIDENCE_BASELINE.id);
+  assert.equal(EPISODE_EVIDENCE_CONTEXT_BASELINE.release, "0.26.0");
+  assert.equal(EPISODE_EVIDENCE_CONTEXT_BASELINE.frontendMinimum, "e863266");
+  assert.equal(EPISODE_EVIDENCE_CONTEXT_BASELINE.frontendMainMerge, "838e2c2");
+  assert.equal(EPISODE_EVIDENCE_CONTEXT_BASELINE.producerMinimum, "463d501");
+  assert.equal(EPISODE_EVIDENCE_CONTEXT_BASELINE.derivedContextSchema, "rolo-vis-episode-evidence-reference-context/v1");
+  assert.equal(EPISODE_EVIDENCE_CONTEXT_BASELINE.referenceContextAuthority, "REFERENCE_OCCURRENCE_ONLY");
 });
 
 test("Episode Comparison Evidence baseline freezes v0.25 without adding producer or write authority", async () => {
@@ -78,8 +88,26 @@ test("Episode Comparison Evidence baseline freezes v0.25 without adding producer
   assert.match(baseline, /REFERENCE_PRESENCE_ONLY/);
   assert.match(baseline, /rejected the unresolved referenced record with HTTP\s+404/i);
   assert.match(contract, /approved and promoted as the `v0\.25\.0` read-only baseline/i);
-  assert.equal(JSON.parse(manifest).version, "0.25.0");
-  assert.equal(JSON.parse(packageJson).version, "0.25.0");
+  assert.equal(JSON.parse(manifest).version, "0.26.0");
+  assert.equal(JSON.parse(packageJson).version, "0.26.0");
+  assert.doesNotMatch(manifest, /episode\.(media|replay|export|write)/);
+});
+
+test("Episode Evidence reference context baseline freezes v0.26 without content or write authority", async () => {
+  const [baseline, contract, manifest, packageJson] = await Promise.all([
+    read("../docs/EPISODE_EVIDENCE_REFERENCE_CONTEXT_BASELINE.md"),
+    read("../docs/EPISODE_EVIDENCE_REFERENCE_CONTEXT_CONTRACT.md"),
+    read("../rolo.plugin.json"),
+    read("../package.json"),
+  ]);
+  assert.match(baseline, /Version: `0\.26\.0`/);
+  assert.match(baseline, /Frontend minimum: `e863266` \(merged to main by `838e2c2`\)/);
+  assert.match(baseline, /REFERENCE_OCCURRENCE_ONLY/);
+  assert.match(baseline, /20 visible occurrences per side/i);
+  assert.match(baseline, /unresolved Evidence record remained rejected with HTTP 404/i);
+  assert.match(contract, /approved and promoted as the `v0\.26\.0` read-only baseline/i);
+  assert.equal(JSON.parse(manifest).version, "0.26.0");
+  assert.equal(JSON.parse(packageJson).version, "0.26.0");
   assert.doesNotMatch(manifest, /episode\.(media|replay|export|write)/);
 });
 

@@ -1,6 +1,6 @@
 # E11 / v0.26 Episode Evidence reference context contract
 
-Status: E11A–E11C review candidate. It is not a promoted `v0.26.0` baseline.
+Status: E11A–E11D approved and promoted as the `v0.26.0` read-only baseline.
 
 Extends: rolo-vis `v0.25.0` / `rolo-vis-episode-comparison-evidence/2026-08`
 
@@ -71,8 +71,10 @@ The model freezes `supportsEvidenceContent`, `supportsSemanticEquivalence`,
 - **E11B — derived model:** build and cross-check bounded occurrence lanes.
 - **E11C — workbench surface:** expand one visible Evidence row into left/right context
   without replacing the existing Evidence drawer action.
-- **E11D — validation and baseline proposal:** after review, exercise dense, partial,
-  unresolved, and mixed-source live inputs before proposing `v0.26.0`.
+- **E11D — validation and baseline:** approved on 2026-08-25 after exercising live
+  producer reads plus controlled dense, partial, unresolved, and mixed-source derived
+  projections. Promotion evidence is frozen in
+  `EPISODE_EVIDENCE_REFERENCE_CONTEXT_BASELINE.md`.
 
 ## Deferred
 

@@ -81,3 +81,15 @@ test("E10D live check validates bounded reference authority and unresolved recor
   assert.match(check, /error\.status === 404/);
   assert.match(check, /supports_write: false/);
 });
+
+test("E11D live check preserves bounded occurrence authority across dense and partial projections", async () => {
+  const check = await readFile(new URL("../scripts/check-episode-evidence-reference-context.mjs", import.meta.url), "utf8");
+  assert.match(check, /rolo-vis-episode-evidence-reference-context\/v1/);
+  assert.match(check, /REFERENCE_OCCURRENCE_ONLY/);
+  assert.match(check, /EPISODE_EVIDENCE_OCCURRENCE_LIMIT_PER_SIDE/);
+  assert.match(check, /FINDING_SUPPORTING/);
+  assert.match(check, /FINDING_CONTRADICTING/);
+  assert.match(check, /BOUNDED_PARTIAL/);
+  assert.match(check, /error instanceof RoloApiError && error\.status === 404/);
+  assert.match(check, /supports_write: false/);
+});
