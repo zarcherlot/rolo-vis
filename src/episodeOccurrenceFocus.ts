@@ -3,7 +3,8 @@ import type { EpisodeDetail, EpisodeTimelineEvent, EpisodeTimelineLane } from ".
 
 export type EpisodeOccurrenceFocus =
   | { kind: "EVENT"; eventId: string; lane: EpisodeTimelineLane }
-  | { kind: "FINDING"; findingId: string; role: "SUPPORTING" | "CONTRADICTING" };
+  | { kind: "FINDING"; findingId: string; role: "SUPPORTING" | "CONTRADICTING" }
+  | { kind: "ASSET"; assetId: string };
 
 export function resolveEpisodeOccurrenceFocus(
   evidenceId: string,
@@ -27,6 +28,12 @@ export function resolveEpisodeOccurrenceFocus(
     const finding = detail.findings.find((item) => item.finding_id === occurrence.contextId);
     if (!finding || !finding.contradicting_evidence_ids.includes(evidenceId)) return null;
     return { kind: "FINDING", findingId: finding.finding_id, role: "CONTRADICTING" };
+  }
+
+  if (occurrence.source === "ASSET" && occurrence.role === "REFERENCE") {
+    const asset = detail.assets.find((item) => item.asset_id === occurrence.contextId);
+    if (!asset || asset.evidence_id !== evidenceId) return null;
+    return { kind: "ASSET", assetId: asset.asset_id };
   }
 
   return null;

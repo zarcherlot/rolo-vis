@@ -193,9 +193,9 @@ function EpisodeFindingCard({ finding, active, onFocus }: { finding: EpisodeFind
   );
 }
 
-function EpisodeAssetCard({ asset, onOpenEvidence }: { asset: EpisodeAssetSummary; onOpenEvidence: (evidenceId: string) => void }) {
+function EpisodeAssetCard({ asset, active, onOpenEvidence }: { asset: EpisodeAssetSummary; active: boolean; onOpenEvidence: (evidenceId: string) => void }) {
   return (
-    <article className={`episode-asset is-${asset.availability.toLowerCase()}`}>
+    <article id={`episode-asset-${asset.asset_id}`} className={`episode-asset is-${asset.availability.toLowerCase()} ${active ? "is-selected" : ""}`} aria-current={active ? "true" : undefined} tabIndex={active ? -1 : undefined}>
       <header><span><strong>{asset.source_label}</strong><small>{asset.modality} · {asset.media_type}</small></span><em className={`world-${asset.world_kind.toLowerCase()}`}>{asset.world_kind}</em></header>
       <dl>
         <div><dt>Evidence kind</dt><dd>{asset.evidence_kind}</dd></div>
@@ -278,6 +278,7 @@ export function EpisodeStudio({ robotId, initialTarget, revisionHistorySupported
   const [timelineLoading, setTimelineLoading] = useState(false);
   const [selectedEventId, setSelectedEventId] = useState(() => initialTarget?.robotId === robotId ? initialTarget.eventId || "" : "");
   const [selectedFindingId, setSelectedFindingId] = useState(() => initialTarget?.robotId === robotId ? initialTarget.findingId || "" : "");
+  const [selectedAssetId, setSelectedAssetId] = useState(() => initialTarget?.robotId === robotId ? initialTarget.assetId || "" : "");
   const [detailReload, setDetailReload] = useState(0);
   const [query, setQuery] = useState("");
   const [stateFilter, setStateFilter] = useState("all");
@@ -340,6 +341,7 @@ export function EpisodeStudio({ robotId, initialTarget, revisionHistorySupported
     setNextCursor(null);
     setSelectedEventId("");
     setSelectedFindingId("");
+    setSelectedAssetId("");
     setDetailMessage("");
     setTimelineNotice("");
     if (!selectedEpisodeId) return;
@@ -377,11 +379,14 @@ export function EpisodeStudio({ robotId, initialTarget, revisionHistorySupported
       setNextCursor(cursor);
       const deepEventFound = deepTarget?.eventId && accumulated.some((item) => item.event_id === deepTarget.eventId);
       const deepFindingFound = deepTarget?.findingId && episodeDetail.findings.some((item) => item.finding_id === deepTarget.findingId);
+      const deepAssetFound = deepTarget?.assetId && episodeDetail.assets.some((item) => item.asset_id === deepTarget.assetId);
       setSelectedEventId(deepEventFound ? deepTarget.eventId || "" : accumulated[0]?.event_id || "");
       setSelectedFindingId(deepFindingFound ? deepTarget.findingId || "" : "");
+      setSelectedAssetId(deepAssetFound ? deepTarget.assetId || "" : "");
       const notices: string[] = [];
       if (deepTarget?.eventId && !deepEventFound) notices.push(`Event ${deepTarget.eventId} is not present in the bounded ${EPISODE_VISIBLE_EVENT_LIMIT}-event view.`);
       if (deepTarget?.findingId && !deepFindingFound) notices.push(`Finding ${deepTarget.findingId} is not present in this published revision.`);
+      if (deepTarget?.assetId && !deepAssetFound) notices.push(`Asset ${deepTarget.assetId} is not present in this published revision.`);
       if (cursor && accumulated.length >= EPISODE_VISIBLE_EVENT_LIMIT) notices.push(`The visible timeline is capped at ${EPISODE_VISIBLE_EVENT_LIMIT} events.`);
       setTimelineNotice(notices.join(" "));
       setVisibleLanes(new Set(episodeDetail.available_lanes));
@@ -402,6 +407,7 @@ export function EpisodeStudio({ robotId, initialTarget, revisionHistorySupported
     setComparison(null);
     setEvidenceContext(null);
     setSelectedComparisonEvidenceId("");
+    setSelectedAssetId("");
     setComparisonMessage("");
   }, [selectedEpisodeId, selectedRevision, compareEpisodeId, compareRevision, revisionHistorySupported]);
 
@@ -428,6 +434,7 @@ export function EpisodeStudio({ robotId, initialTarget, revisionHistorySupported
     }).catch((error: unknown) => {
       if (!controller.signal.aborted) {
         setSelectedComparisonEvidenceId("");
+        setSelectedAssetId("");
         setComparisonMessage(error instanceof Error ? error.message : "Episode comparison could not be derived.");
       }
     }).finally(() => {
@@ -475,13 +482,14 @@ export function EpisodeStudio({ robotId, initialTarget, revisionHistorySupported
       revision: detail.revision,
       eventId: selectedEventId || null,
       findingId: selectedFindingId || null,
+      assetId: selectedComparisonEvidenceId ? selectedAssetId || null : null,
       compareEpisodeId: compareEpisodeId && (compareEpisodeId !== detail.episode_id || compareRevision !== detail.revision) ? compareEpisodeId : null,
       compareRevision: compareEpisodeId && (compareEpisodeId !== detail.episode_id || compareRevision !== detail.revision) ? compareRevision : null,
       compareEvidenceId: compareEpisodeId && (compareEpisodeId !== detail.episode_id || compareRevision !== detail.revision) ? selectedComparisonEvidenceId || null : null,
       cohortDays: cohortSupported ? cohortDays : null,
     });
     window.history.replaceState(null, "", next);
-  }, [robotId, detail, selectedEventId, selectedFindingId, compareEpisodeId, compareRevision, selectedComparisonEvidenceId, cohortDays, cohortSupported]);
+  }, [robotId, detail, selectedEventId, selectedFindingId, selectedAssetId, compareEpisodeId, compareRevision, selectedComparisonEvidenceId, cohortDays, cohortSupported]);
 
   const loadMoreTimeline = async () => {
     if (!detail || !nextCursor || timelineLoading || events.length >= EPISODE_VISIBLE_EVENT_LIMIT) return;
@@ -527,6 +535,20 @@ export function EpisodeStudio({ robotId, initialTarget, revisionHistorySupported
   }, [detail, events, selectedFindingId]);
   const focusedEventIds = useMemo(() => diagnosticFocus ? new Set(diagnosticFocus.coincidentEvents.map((event) => event.eventId)) : null, [diagnosticFocus]);
   useEffect(() => {
+    if (!selectedAssetId || comparisonLoading || !comparison || !evidenceContext || !detail) return;
+    const contextItem = evidenceContext.items.find((item) => item.evidenceId === selectedComparisonEvidenceId);
+    const occurrenceAttached = contextItem?.left.items.some((occurrence) => occurrence.source === "ASSET" && occurrence.contextId === selectedAssetId) || false;
+    const assetAttached = detail.assets.some((asset) => asset.asset_id === selectedAssetId && asset.evidence_id === selectedComparisonEvidenceId);
+    if (!occurrenceAttached || !assetAttached) {
+      setSelectedAssetId("");
+      return;
+    }
+    window.requestAnimationFrame(() => document.getElementById(`episode-asset-${selectedAssetId}`)?.scrollIntoView({
+      behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
+      block: "center",
+    }));
+  }, [selectedAssetId, selectedComparisonEvidenceId, comparisonLoading, comparison, evidenceContext, detail]);
+  useEffect(() => {
     const first = diagnosticFocus?.coincidentEvents[0];
     if (!first) return;
     setSelectedEventId(first.eventId);
@@ -561,6 +583,7 @@ export function EpisodeStudio({ robotId, initialTarget, revisionHistorySupported
     setComparison(null);
     setEvidenceContext(null);
     setSelectedComparisonEvidenceId("");
+    setSelectedAssetId("");
     setComparisonMessage("");
     setComparisonLoading(false);
   };
@@ -572,6 +595,7 @@ export function EpisodeStudio({ robotId, initialTarget, revisionHistorySupported
     const option = compareOptions.find((item) => `${item.episodeId}@@${item.revision}` === key);
     if (!option) return;
     setSelectedComparisonEvidenceId("");
+    setSelectedAssetId("");
     setCompareEpisodeId(option.episodeId);
     setCompareRevision(option.revision);
   };
@@ -590,6 +614,7 @@ export function EpisodeStudio({ robotId, initialTarget, revisionHistorySupported
     setComparison(null);
     setEvidenceContext(null);
     setSelectedComparisonEvidenceId("");
+    setSelectedAssetId("");
     setComparisonMessage("");
     setComparisonLoading(false);
     setCompareEpisodeId(member.episode_id);
@@ -608,6 +633,7 @@ export function EpisodeStudio({ robotId, initialTarget, revisionHistorySupported
     if (!target) return;
     if (target.kind === "EVENT") {
       setSelectedFindingId("");
+      setSelectedAssetId("");
       setSelectedEventId(target.eventId);
       setVisibleLanes((current) => new Set(current).add(target.lane));
       window.requestAnimationFrame(() => document.getElementById("episode-timeline")?.scrollIntoView({
@@ -616,7 +642,13 @@ export function EpisodeStudio({ robotId, initialTarget, revisionHistorySupported
       }));
       return;
     }
-    setSelectedFindingId(target.findingId);
+    if (target.kind === "FINDING") {
+      setSelectedAssetId("");
+      setSelectedFindingId(target.findingId);
+      return;
+    }
+    setSelectedFindingId("");
+    setSelectedAssetId(target.assetId);
   };
 
   if (collectionLoading && !collection) return <section className="content-view episode-view"><div className="page-title"><div><div className="eyebrow">Read-only execution record</div><h2>Episode Studio</h2><p>Loading published Episode revisions without inferring live runtime state.</p></div></div><div className="panel episode-state-view"><Pulse size={28} /><div><strong>Reading Episode index</strong><p>Only a feature-negotiated, versioned read model can populate this workspace.</p></div></div></section>;
@@ -635,7 +667,7 @@ export function EpisodeStudio({ robotId, initialTarget, revisionHistorySupported
       </section>
       {comparisonLoading && <div className="episode-compare-state panel"><Pulse size={20} /><span><strong>Reading both pinned revisions</strong><small>Each side is bounded to {EPISODE_COMPARE_PAGE_BUDGET} timeline pages and {EPISODE_VISIBLE_EVENT_LIMIT} visible events.</small></span></div>}
       {comparisonMessage && <div className="episode-compare-state is-error panel" role="alert"><WarningCircle size={20} weight="fill" /><span><strong>Comparison rejected</strong><small>{comparisonMessage}</small></span></div>}
-      {comparison && evidenceContext && <EpisodeComparisonView comparison={comparison} evidenceContext={evidenceContext} selectedEvidenceId={selectedComparisonEvidenceId || null} onSelectEvidenceContext={(evidenceId) => setSelectedComparisonEvidenceId(evidenceId || "")} onFocusLeftOccurrence={focusLeftOccurrence} onClear={clearComparison} onOpenEvidence={onOpenEvidence} />}
+      {comparison && evidenceContext && <EpisodeComparisonView comparison={comparison} evidenceContext={evidenceContext} selectedEvidenceId={selectedComparisonEvidenceId || null} onSelectEvidenceContext={(evidenceId) => { setSelectedAssetId(""); setSelectedComparisonEvidenceId(evidenceId || ""); }} onFocusLeftOccurrence={focusLeftOccurrence} onClear={clearComparison} onOpenEvidence={onOpenEvidence} />}
       {cohortSupported && <EpisodeCohortView cohort={cohort} review={cohortReview} loading={cohortLoading} message={cohortMessage} windowDays={cohortDays} disabled={!detail || detailLoading} onWindowDays={setCohortDays} onOpenMember={openCohortMember} onCompareMember={compareCohortMember} />}
       <div className="episode-shell">
         <aside className="episode-index panel">
@@ -657,7 +689,7 @@ export function EpisodeStudio({ robotId, initialTarget, revisionHistorySupported
             </header>
             {detail.synchronization !== "SYNCED" && <div className="episode-sync-warning"><WarningCircle size={17} weight="fill" /><span><strong>{detail.synchronization} clock synchronization</strong><small>offset_ms remains the ordering authority; precise cross-sensor timing claims are withheld.</small></span></div>}
             <div className="episode-lane-filter" aria-label="Episode timeline lane filters">{detail.available_lanes.map((lane) => <button key={lane} className={visibleLanes.has(lane) ? "is-active" : ""} onClick={() => setVisibleLanes((current) => { const next = new Set(current); if (next.has(lane) && next.size > 1) next.delete(lane); else next.add(lane); return next; })}>{lane}<span>{events.filter((event) => event.lane === lane).length}</span></button>)}</div>
-            <EpisodeTimeline detail={detail} events={events} selectedEventId={selectedEventId} visibleLanes={visibleLanes} focusedEventIds={focusedEventIds} onSelectEvent={setSelectedEventId} />
+            <EpisodeTimeline detail={detail} events={events} selectedEventId={selectedEventId} visibleLanes={visibleLanes} focusedEventIds={focusedEventIds} onSelectEvent={(eventId) => { setSelectedAssetId(""); setSelectedEventId(eventId); }} />
             <div className="episode-timeline-footer"><span>Loaded {events.length} of {detail.event_count} sequence-ordered events · keyboard: arrows / Home / End</span>{nextCursor && events.length < EPISODE_VISIBLE_EVENT_LIMIT && <button className="secondary-button" disabled={timelineLoading} onClick={() => void loadMoreTimeline()}>{timelineLoading ? "Loading…" : "Load next pinned page"}</button>}</div>
             {timelineNotice && <div className="episode-timeline-notice" role="status"><Info size={16} /><span>{timelineNotice}</span></div>}
             {diagnosticFocus && <EpisodeDiagnosticFocusView focus={diagnosticFocus} onSelectEvent={setSelectedEventId} onOpenEvidence={onOpenEvidence} onClear={() => setSelectedFindingId("")} />}
@@ -677,12 +709,12 @@ export function EpisodeStudio({ robotId, initialTarget, revisionHistorySupported
 
         <section className="episode-findings-section">
           <header><div><span>Diagnosis and verification</span><h3>Findings</h3></div><small>{detail.findings.length} published · authority never inferred from confidence</small></header>
-          <div className="episode-finding-grid">{detail.findings.map((finding) => <EpisodeFindingCard key={finding.finding_id} finding={finding} active={finding.finding_id === selectedFindingId} onFocus={() => setSelectedFindingId(finding.finding_id)} />)}{!detail.findings.length && <div className="panel episode-section-empty"><Info size={18} /><span>No evidence-backed findings were published.</span></div>}</div>
+          <div className="episode-finding-grid">{detail.findings.map((finding) => <EpisodeFindingCard key={finding.finding_id} finding={finding} active={finding.finding_id === selectedFindingId} onFocus={() => { setSelectedAssetId(""); setSelectedFindingId(finding.finding_id); }} />)}{!detail.findings.length && <div className="panel episode-section-empty"><Info size={18} /><span>No evidence-backed findings were published.</span></div>}</div>
         </section>
 
         <section className="episode-assets-section">
           <header><div><span>Metadata-only perspective tray</span><h3>Observation assets</h3></div><small>{detail.assets.length} records · bytes and storage locations withheld</small></header>
-          <div className="episode-asset-grid">{detail.assets.map((asset) => <EpisodeAssetCard key={asset.asset_id} asset={asset} onOpenEvidence={onOpenEvidence} />)}{!detail.assets.length && <div className="panel episode-section-empty"><FileText size={18} /><span>No public asset metadata was published.</span></div>}</div>
+          <div className="episode-asset-grid">{detail.assets.map((asset) => <EpisodeAssetCard key={asset.asset_id} asset={asset} active={asset.asset_id === selectedAssetId} onOpenEvidence={onOpenEvidence} />)}{!detail.assets.length && <div className="panel episode-section-empty"><FileText size={18} /><span>No public asset metadata was published.</span></div>}</div>
         </section>
 
         {detail.limitations.length > 0 && <section className="episode-limitations panel"><header><WarningCircle size={17} weight="fill" /><span><strong>Episode limitations</strong><small>{detail.limitations.length} bounded diagnostics</small></span></header><ul>{detail.limitations.map((limitation) => <li key={limitation}>{limitation}</li>)}</ul></section>}

@@ -359,3 +359,23 @@ The frozen contract is `EPISODE_EVIDENCE_OCCURRENCE_FOCUS_CONTRACT.md`.
 
 The established release evidence is recorded in
 `EPISODE_OCCURRENCE_FOCUS_BASELINE.md`.
+
+## E14 candidate: Asset occurrence focus continuity
+
+Status: E14A–E14C are approved at frontend minimum `7123f01`; E14D is the
+`v0.29.0` release candidate. Final baseline promotion waits for review, the feature
+merge to `main`, remote CI, and the immutable tag.
+
+- Add one bounded `asset` deep-link field scoped to an existing selected
+  `compare_evidence` context and both revision-pinned comparison identities.
+- Revalidate the exact left Asset occurrence and its public `evidence_id` attachment
+  before focusing the existing metadata-only card.
+- Clear stale focus when Context, pair, revision, or Episode identity changes.
+- Keep right-side Asset and every Episode-level occurrence context-only.
+- Add no producer contract, endpoint, Asset bytes, media delivery, raw path, Evidence
+  content read, verdict, release signal, or write authority.
+
+The review contract is `EPISODE_ASSET_OCCURRENCE_FOCUS_CONTRACT.md`.
+
+The E14D release-candidate evidence is recorded in
+`EPISODE_ASSET_OCCURRENCE_FOCUS_BASELINE.md`.

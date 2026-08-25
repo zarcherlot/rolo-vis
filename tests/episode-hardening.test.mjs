@@ -45,18 +45,20 @@ test("Episode deep links pin robot, Episode, revision, and event while preservin
     revision: 3,
     eventId: "event-42",
     findingId: "finding-agent",
+    assetId: "asset-camera",
     compareEpisodeId: "ep-candidate",
     compareRevision: 7,
     compareEvidenceId: "ev-nav-result",
     cohortDays: 30,
   });
-  assert.equal(link, "/?theme=dark&view=episode&robot=mentorpi&episode=ep-regression&revision=3&event=event-42&finding=finding-agent&compare=ep-candidate&compare_revision=7&compare_evidence=ev-nav-result&cohort_days=30");
+  assert.equal(link, "/?theme=dark&view=episode&robot=mentorpi&episode=ep-regression&revision=3&event=event-42&finding=finding-agent&asset=asset-camera&compare=ep-candidate&compare_revision=7&compare_evidence=ev-nav-result&cohort_days=30");
   assert.deepEqual(readEpisodeDeepLink(`https://workbench.test${link}`), {
     robotId: "mentorpi",
     episodeId: "ep-regression",
     revision: 3,
     eventId: "event-42",
     findingId: "finding-agent",
+    assetId: "asset-camera",
     compareEpisodeId: "ep-candidate",
     compareRevision: 7,
     compareEvidenceId: "ev-nav-result",
@@ -69,12 +71,14 @@ test("Episode deep links fail closed on malformed identity or revision", () => {
   assert.equal(readEpisodeDeepLink("https://workbench.test/?view=episode&robot=../secret&episode=ep-1&revision=1"), null);
   assert.equal(readEpisodeDeepLink("https://workbench.test/?view=episode&robot=r1&episode=ep-1&revision=0"), null);
   assert.equal(readEpisodeDeepLink("https://workbench.test/?view=episode&robot=r1&episode=ep-1&revision=1&finding=../unsafe"), null);
+  assert.equal(readEpisodeDeepLink("https://workbench.test/?view=episode&robot=r1&episode=ep-1&revision=1&asset=../unsafe&compare=ep-2&compare_revision=1&compare_evidence=ev-1"), null);
+  assert.equal(readEpisodeDeepLink("https://workbench.test/?view=episode&robot=r1&episode=ep-1&revision=1&asset=asset-1"), null);
   assert.equal(readEpisodeDeepLink("https://workbench.test/?view=episode&robot=r1&episode=ep-1&revision=1&compare=ep-2"), null);
   assert.equal(readEpisodeDeepLink("https://workbench.test/?view=episode&robot=r1&episode=ep-1&revision=1&compare_evidence=ev-1"), null);
   assert.equal(readEpisodeDeepLink("https://workbench.test/?view=episode&robot=r1&episode=ep-1&revision=1&compare=ep-2&compare_revision=1&compare_evidence=../unsafe"), null);
   assert.equal(readEpisodeDeepLink("https://workbench.test/?view=episode&robot=r1&episode=ep-1&revision=1&compare=ep-1&compare_revision=1"), null);
   assert.deepEqual(readEpisodeDeepLink("https://workbench.test/?view=episode&robot=r1&episode=ep-1&revision=1&compare=ep-1&compare_revision=2"), {
-    robotId: "r1", episodeId: "ep-1", revision: 1, eventId: null, findingId: null,
+    robotId: "r1", episodeId: "ep-1", revision: 1, eventId: null, findingId: null, assetId: null,
     compareEpisodeId: "ep-1", compareRevision: 2,
     compareEvidenceId: null,
     cohortDays: null,
@@ -113,6 +117,18 @@ test("Episode deep links fail closed on malformed identity or revision", () => {
     compareEvidenceId: "ev-1",
     cohortDays: null,
   }), /require a pinned comparison/);
+  assert.throws(() => buildEpisodeDeepLink("https://workbench.test/", {
+    robotId: "r1",
+    episodeId: "ep-1",
+    revision: 1,
+    eventId: null,
+    findingId: null,
+    assetId: "asset-1",
+    compareEpisodeId: "ep-2",
+    compareRevision: 1,
+    compareEvidenceId: null,
+    cohortDays: null,
+  }), /selected Evidence context/);
 });
 
 test("timeline keyboard navigation follows sequence order across visible lanes", () => {

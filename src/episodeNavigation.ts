@@ -5,7 +5,7 @@ export const EPISODE_VISIBLE_EVENT_LIMIT = 500;
 export const EPISODE_TIMELINE_PROJECTION_BUDGET_MS = 25;
 
 const IDENTIFIER = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
-const NAV_KEYS = ["view", "robot", "episode", "revision", "event", "finding", "compare", "compare_revision", "compare_evidence", "cohort_days"] as const;
+const NAV_KEYS = ["view", "robot", "episode", "revision", "event", "finding", "asset", "compare", "compare_revision", "compare_evidence", "cohort_days"] as const;
 
 export interface EpisodeDeepLinkTarget {
   robotId: string;
@@ -13,6 +13,7 @@ export interface EpisodeDeepLinkTarget {
   revision: number | null;
   eventId: string | null;
   findingId: string | null;
+  assetId: string | null;
   compareEpisodeId: string | null;
   compareRevision: number | null;
   compareEvidenceId: string | null;
@@ -27,6 +28,7 @@ export function readEpisodeDeepLink(url: string): EpisodeDeepLinkTarget | null {
   const revisionValue = parsed.searchParams.get("revision");
   const eventId = parsed.searchParams.get("event");
   const findingId = parsed.searchParams.get("finding");
+  const assetId = parsed.searchParams.get("asset");
   const compareEpisodeId = parsed.searchParams.get("compare");
   const compareRevisionValue = parsed.searchParams.get("compare_revision");
   const compareEvidenceId = parsed.searchParams.get("compare_evidence");
@@ -41,15 +43,18 @@ export function readEpisodeDeepLink(url: string): EpisodeDeepLinkTarget | null {
   if (compareEpisodeId !== null && !IDENTIFIER.test(compareEpisodeId)) return null;
   if (compareRevision !== null && (!Number.isInteger(compareRevision) || compareRevision < 1)) return null;
   if (compareEvidenceId !== null && (!IDENTIFIER.test(compareEvidenceId) || compareEpisodeId === null)) return null;
+  if (assetId !== null && (!IDENTIFIER.test(assetId) || compareEvidenceId === null)) return null;
   if (compareEpisodeId === episodeId && (revision === null || compareRevision === revision)) return null;
   const cohortDays = cohortDaysValue === null ? null : Number(cohortDaysValue);
   if (cohortDays !== null && cohortDays !== 7 && cohortDays !== 30 && cohortDays !== 90) return null;
-  return { robotId, episodeId, revision, eventId, findingId, compareEpisodeId, compareRevision, compareEvidenceId, cohortDays };
+  return { robotId, episodeId, revision, eventId, findingId, assetId, compareEpisodeId, compareRevision, compareEvidenceId, cohortDays };
 }
 
 export function buildEpisodeDeepLink(url: string, target: EpisodeDeepLinkTarget): string {
   const parsed = new URL(url, "http://rolo-vis.local");
+  const assetId = target.assetId ?? null;
   if (target.compareEvidenceId !== null && !IDENTIFIER.test(target.compareEvidenceId)) throw new Error("Episode Evidence context deep links require a safe identifier.");
+  if (assetId !== null && (!IDENTIFIER.test(assetId) || target.compareEvidenceId === null)) throw new Error("Episode Asset focus deep links require a safe Asset and selected Evidence context.");
   parsed.searchParams.set("view", "episode");
   parsed.searchParams.set("robot", target.robotId);
   parsed.searchParams.set("episode", target.episodeId);
@@ -59,6 +64,8 @@ export function buildEpisodeDeepLink(url: string, target: EpisodeDeepLinkTarget)
   else parsed.searchParams.set("event", target.eventId);
   if (target.findingId === null) parsed.searchParams.delete("finding");
   else parsed.searchParams.set("finding", target.findingId);
+  if (assetId === null) parsed.searchParams.delete("asset");
+  else parsed.searchParams.set("asset", assetId);
   if ((target.compareEpisodeId === null) !== (target.compareRevision === null)) throw new Error("Episode comparison deep links require both identity and revision.");
   if (target.compareEpisodeId === target.episodeId && (target.revision === null || target.compareRevision === target.revision)) throw new Error("Episode comparison deep links require two distinct published revisions.");
   if (target.compareEpisodeId === null) {
