@@ -182,6 +182,28 @@ export const EPISODE_OCCURRENCE_FOCUS_BASELINE = {
   supportsWrite: false,
 } as const;
 
+export const EPISODE_ASSET_FOCUS_BASELINE = {
+  id: "rolo-vis-episode-asset-occurrence-focus/2026-08",
+  status: "candidate",
+  mode: "read-only",
+  extends: EPISODE_OCCURRENCE_FOCUS_BASELINE.id,
+  release: "0.29.0",
+  frontendMinimum: "7123f01",
+  frontendMainMerge: null,
+  producerMinimum: "463d501",
+  producerMainMerge: "891cbf1",
+  requiredFeature: "workbench.episode-read-model/v1",
+  requiredRevisionFeature: "workbench.episode-revision-history/v1",
+  requiredCohortFeature: "workbench.episode-cohort-read-model/v1",
+  selectedReferenceParameter: "compare_evidence",
+  assetParameter: "asset",
+  focusAuthority: "ASSET_METADATA_FOCUS_ONLY",
+  focusSide: "LEFT_ONLY",
+  opensEvidenceRecord: false,
+  readsAssetBytes: false,
+  supportsWrite: false,
+} as const;
+
 export function supportsSchema(
   family: keyof typeof MVP_SCHEMA_COMPATIBILITY,
   model: "collection" | "summary" | "detail",

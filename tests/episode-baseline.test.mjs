@@ -4,6 +4,7 @@ import { readFile } from "node:fs/promises";
 
 import {
   EPISODE_BASELINE,
+  EPISODE_ASSET_FOCUS_BASELINE,
   EPISODE_COHORT_BASELINE,
   EPISODE_COHORT_INVESTIGATION_BASELINE,
   EPISODE_COMPARISON_EVIDENCE_BASELINE,
@@ -98,6 +99,20 @@ test("Episode diagnostic baseline succeeds v0.20 without mutating the v0.19 MVP 
   assert.equal(EPISODE_OCCURRENCE_FOCUS_BASELINE.focusSide, "LEFT_ONLY");
   assert.equal(EPISODE_OCCURRENCE_FOCUS_BASELINE.opensEvidenceRecord, false);
   assert.equal(EPISODE_OCCURRENCE_FOCUS_BASELINE.supportsWrite, false);
+  assert.equal(EPISODE_ASSET_FOCUS_BASELINE.status, "candidate");
+  assert.equal(EPISODE_ASSET_FOCUS_BASELINE.mode, "read-only");
+  assert.equal(EPISODE_ASSET_FOCUS_BASELINE.extends, EPISODE_OCCURRENCE_FOCUS_BASELINE.id);
+  assert.equal(EPISODE_ASSET_FOCUS_BASELINE.release, "0.29.0");
+  assert.equal(EPISODE_ASSET_FOCUS_BASELINE.frontendMinimum, "7123f01");
+  assert.equal(EPISODE_ASSET_FOCUS_BASELINE.frontendMainMerge, null);
+  assert.equal(EPISODE_ASSET_FOCUS_BASELINE.producerMinimum, "463d501");
+  assert.equal(EPISODE_ASSET_FOCUS_BASELINE.selectedReferenceParameter, "compare_evidence");
+  assert.equal(EPISODE_ASSET_FOCUS_BASELINE.assetParameter, "asset");
+  assert.equal(EPISODE_ASSET_FOCUS_BASELINE.focusAuthority, "ASSET_METADATA_FOCUS_ONLY");
+  assert.equal(EPISODE_ASSET_FOCUS_BASELINE.focusSide, "LEFT_ONLY");
+  assert.equal(EPISODE_ASSET_FOCUS_BASELINE.opensEvidenceRecord, false);
+  assert.equal(EPISODE_ASSET_FOCUS_BASELINE.readsAssetBytes, false);
+  assert.equal(EPISODE_ASSET_FOCUS_BASELINE.supportsWrite, false);
 });
 
 test("Episode Comparison Evidence baseline freezes v0.25 without adding producer or write authority", async () => {
@@ -112,8 +127,8 @@ test("Episode Comparison Evidence baseline freezes v0.25 without adding producer
   assert.match(baseline, /REFERENCE_PRESENCE_ONLY/);
   assert.match(baseline, /rejected the unresolved referenced record with HTTP\s+404/i);
   assert.match(contract, /approved and promoted as the `v0\.25\.0` read-only baseline/i);
-  assert.equal(JSON.parse(manifest).version, "0.28.0");
-  assert.equal(JSON.parse(packageJson).version, "0.28.0");
+  assert.equal(JSON.parse(manifest).version, "0.29.0");
+  assert.equal(JSON.parse(packageJson).version, "0.29.0");
   assert.doesNotMatch(manifest, /episode\.(media|replay|export|write)/);
 });
 
@@ -130,8 +145,8 @@ test("Episode Evidence reference context baseline freezes v0.26 without content 
   assert.match(baseline, /20 visible occurrences per side/i);
   assert.match(baseline, /unresolved Evidence record remained rejected with HTTP 404/i);
   assert.match(contract, /approved and promoted as the `v0\.26\.0` read-only baseline/i);
-  assert.equal(JSON.parse(manifest).version, "0.28.0");
-  assert.equal(JSON.parse(packageJson).version, "0.28.0");
+  assert.equal(JSON.parse(manifest).version, "0.29.0");
+  assert.equal(JSON.parse(packageJson).version, "0.29.0");
   assert.doesNotMatch(manifest, /episode\.(media|replay|export|write)/);
 });
 
@@ -148,8 +163,8 @@ test("Episode Evidence context navigation baseline freezes v0.27 without record 
   assert.match(baseline, /does not request, open, or infer an Evidence record/i);
   assert.match(baseline, /stale ID\s+was removed, malformed input was rejected/i);
   assert.match(contract, /approved and promoted as the `v0\.27\.0` read-only baseline/i);
-  assert.equal(JSON.parse(manifest).version, "0.28.0");
-  assert.equal(JSON.parse(packageJson).version, "0.28.0");
+  assert.equal(JSON.parse(manifest).version, "0.29.0");
+  assert.equal(JSON.parse(packageJson).version, "0.29.0");
   assert.doesNotMatch(manifest, /episode\.(media|replay|export|write)/);
 });
 
@@ -166,8 +181,31 @@ test("Episode occurrence focus baseline freezes v0.28 without right-side or writ
   assert.match(baseline, /right-side.*remain context only/i);
   assert.match(baseline, /live fixture exposes no Finding occurrence/i);
   assert.match(contract, /approved and promoted as the `v0\.28\.0` read-only baseline/i);
-  assert.equal(JSON.parse(manifest).version, "0.28.0");
-  assert.equal(JSON.parse(packageJson).version, "0.28.0");
+  assert.equal(JSON.parse(manifest).version, "0.29.0");
+  assert.equal(JSON.parse(packageJson).version, "0.29.0");
+  assert.doesNotMatch(manifest, /episode\.(media|replay|export|write)/);
+});
+
+test("Episode Asset occurrence focus forms the v0.29 release candidate without content or write authority", async () => {
+  const [baseline, contract, check, manifest, packageJson] = await Promise.all([
+    read("../docs/EPISODE_ASSET_OCCURRENCE_FOCUS_BASELINE.md"),
+    read("../docs/EPISODE_ASSET_OCCURRENCE_FOCUS_CONTRACT.md"),
+    read("../scripts/check-episode-asset-occurrence-focus.mjs"),
+    read("../rolo.plugin.json"),
+    read("../package.json"),
+  ]);
+  assert.match(baseline, /Target version: `0\.29\.0`/);
+  assert.match(baseline, /Frontend minimum: `7123f01`/);
+  assert.match(baseline, /Frontend main merge: pending final promotion/);
+  assert.match(baseline, /ASSET_METADATA_FOCUS_ONLY/);
+  assert.match(baseline, /metadata-only `MISSING` Asset/i);
+  assert.match(contract, /E14D is the `v0\.29\.0` release candidate/i);
+  assert.match(check, /occurrence\.source === "ASSET"/);
+  assert.match(check, /reads_asset_bytes: false/);
+  assert.match(check, /supports_write: false/);
+  assert.doesNotMatch(check, /client\.evidence\(/);
+  assert.equal(JSON.parse(manifest).version, "0.29.0");
+  assert.equal(JSON.parse(packageJson).version, "0.29.0");
   assert.doesNotMatch(manifest, /episode\.(media|replay|export|write)/);
 });
 

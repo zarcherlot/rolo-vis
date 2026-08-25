@@ -362,8 +362,9 @@ The established release evidence is recorded in
 
 ## E14 candidate: Asset occurrence focus continuity
 
-Status: E14A–E14C are implemented for review on the v0.28.0 consumer baseline; no
-v0.29.0 baseline has been established.
+Status: E14A–E14C are approved at frontend minimum `7123f01`; E14D is the
+`v0.29.0` release candidate. Final baseline promotion waits for review, the feature
+merge to `main`, remote CI, and the immutable tag.
 
 - Add one bounded `asset` deep-link field scoped to an existing selected
   `compare_evidence` context and both revision-pinned comparison identities.
@@ -375,3 +376,6 @@ v0.29.0 baseline has been established.
   content read, verdict, release signal, or write authority.
 
 The review contract is `EPISODE_ASSET_OCCURRENCE_FOCUS_CONTRACT.md`.
+
+The E14D release-candidate evidence is recorded in
+`EPISODE_ASSET_OCCURRENCE_FOCUS_BASELINE.md`.

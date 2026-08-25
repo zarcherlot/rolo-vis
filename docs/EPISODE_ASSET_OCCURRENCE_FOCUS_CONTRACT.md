@@ -1,6 +1,10 @@
 # E14 Episode Asset occurrence focus contract
 
-Status: E14A–E14C review candidate. This document does not establish the v0.29 baseline.
+Status: E14A–E14C approved; E14D is the `v0.29.0` release candidate. Final
+promotion still requires the reviewed commit to merge to `main`.
+
+The candidate validation evidence is recorded in
+`EPISODE_ASSET_OCCURRENCE_FOCUS_BASELINE.md`.
 
 ## Purpose
 
