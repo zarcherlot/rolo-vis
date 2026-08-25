@@ -26,15 +26,16 @@ import { roloClient } from "./roloClient";
 import {
   appendTimelineEvents,
   buildEpisodeDeepLink,
-  buildEpisodeReviewLink,
   EPISODE_TIMELINE_PAGE_LIMIT,
   EPISODE_VISIBLE_EVENT_LIMIT,
   nextTimelineEventId,
   projectTimelineLayout,
   readEpisodeDeepLink,
-  writeEpisodeReviewLink,
+  readEpisodeReviewHandoff,
+  writeEpisodeReviewHandoffLink,
   type EpisodeDeepLinkTarget,
 } from "./episodeNavigation";
+import { assessEpisodeReviewReceipt } from "./episodeReviewReceipt";
 import "./episode.css";
 import "./episode-polish.css";
 import type {
@@ -309,6 +310,7 @@ export function EpisodeStudio({ robotId, initialTarget, revisionHistorySupported
   const [handoffValidation, setHandoffValidation] = useState<{ target: EpisodeDeepLinkTarget; evidenceId: string; occurrence: EpisodeEvidenceOccurrence } | null>(null);
   const [reviewLinkState, setReviewLinkState] = useState<"idle" | "copied" | "error">("idle");
   const [reviewLinkMessage, setReviewLinkMessage] = useState("");
+  const [reviewHandoffIntent] = useState(() => readEpisodeReviewHandoff(window.location.href));
 
   const loadCollection = useCallback(async () => {
     collectionRequest.current?.abort();
@@ -567,9 +569,9 @@ export function EpisodeStudio({ robotId, initialTarget, revisionHistorySupported
       if (!navigator.clipboard?.writeText) {
         throw new Error("Clipboard access is unavailable in this browser context.");
       }
-      await writeEpisodeReviewLink(navigator.clipboard, window.location.href, target);
+      await writeEpisodeReviewHandoffLink(navigator.clipboard, window.location.href, target);
       setReviewLinkState("copied");
-      setReviewLinkMessage("Canonical read-only review link copied.");
+      setReviewLinkMessage("Canonical read-only review handoff copied.");
     } catch (error) {
       setReviewLinkState("error");
       setReviewLinkMessage(error instanceof Error ? error.message : "The review link could not be copied.");
@@ -614,6 +616,18 @@ export function EpisodeStudio({ robotId, initialTarget, revisionHistorySupported
     return episodes.filter((item) => (stateFilter === "all" || item.state === stateFilter) && (!normalized || `${item.task_label} ${item.episode_id} ${item.operation || ""}`.toLowerCase().includes(normalized)));
   }, [episodes, query, stateFilter]);
   const selectedEvent = events.find((event) => event.event_id === selectedEventId) || null;
+  const reviewReceipt = useMemo(() => assessEpisodeReviewReceipt({
+    intent: reviewHandoffIntent,
+    robotId,
+    detail,
+    events,
+    detailLoading,
+    detailError: detailMessage,
+    comparison,
+    evidenceContext,
+    comparisonLoading,
+    comparisonError: comparisonMessage,
+  }), [reviewHandoffIntent, robotId, detail, events, detailLoading, detailMessage, comparison, evidenceContext, comparisonLoading, comparisonMessage]);
   const diagnosticFocus = useMemo(() => {
     if (!detail || !selectedFindingId) return null;
     return buildEpisodeDiagnosticFocus(detail, events, selectedFindingId);
@@ -827,6 +841,12 @@ export function EpisodeStudio({ robotId, initialTarget, revisionHistorySupported
           <div className="episode-revision-lock"><ShieldCheck size={17} /><span><strong>Revision {detail.revision} pinned</strong><small>{detail.immutable ? "Immutable publication" : "Live publication"} · {detail.coverage.replaceAll("_", " ")}</small></span></div>
         </div>}
       </div>
+      {reviewReceipt.status !== "NONE" && <section className={`episode-review-receipt panel is-${reviewReceipt.status.toLowerCase()}`} role={reviewReceipt.status === "REJECTED" ? "alert" : "status"} aria-label="Episode review handoff receipt">
+        <span className="episode-review-receipt-icon">{reviewReceipt.status === "ACCEPTED" ? <ShieldCheck size={22} weight="fill" /> : reviewReceipt.status === "REJECTED" ? <WarningCircle size={22} weight="fill" /> : <Pulse size={22} />}</span>
+        <div><span className="eyebrow">Review handoff receipt · navigation only</span><h3>{reviewReceipt.title}</h3><p>{reviewReceipt.detail}</p>
+          {reviewReceipt.status === "ACCEPTED" && <span className="episode-review-receipt-facts"><code>{reviewReceipt.targetLabel}</code><small>{reviewReceipt.comparison ? "Two pinned publications re-read" : "One pinned publication re-read"}</small><small>No sender authentication</small></span>}
+        </div>
+      </section>}
       <section className="episode-compare-control panel" aria-label="Episode pair selection">
         <div><ArrowsLeftRight size={18} /><span><h3>Compare a second published Episode</h3><p>Both revisions are read independently; differences remain descriptive and release-neutral.</p></span></div>
         <div className="episode-compare-picker">

@@ -5,7 +5,9 @@ export const EPISODE_VISIBLE_EVENT_LIMIT = 500;
 export const EPISODE_TIMELINE_PROJECTION_BUDGET_MS = 25;
 
 const IDENTIFIER = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
-const NAV_KEYS = ["view", "robot", "episode", "revision", "event", "finding", "asset", "compare", "compare_revision", "compare_evidence", "cohort_days"] as const;
+const REVIEW_HANDOFF_KEY = "review_handoff";
+const REVIEW_HANDOFF_VALUE = "1";
+const NAV_KEYS = ["view", "robot", "episode", "revision", "event", "finding", "asset", "compare", "compare_revision", "compare_evidence", "cohort_days", REVIEW_HANDOFF_KEY] as const;
 
 export const WORKBENCH_VIEW_IDS = ["fleet", "overview", "stack", "capabilities", "lifecycle", "episode", "wiki", "evidence"] as const;
 export type WorkbenchViewId = (typeof WORKBENCH_VIEW_IDS)[number];
@@ -33,6 +35,11 @@ export interface EpisodeDeepLinkTarget {
   compareEvidenceId: string | null;
   cohortDays: 7 | 30 | 90 | null;
 }
+
+export type EpisodeReviewHandoffIntent =
+  | { kind: "NONE" }
+  | { kind: "VALID"; target: EpisodeDeepLinkTarget }
+  | { kind: "INVALID"; reason: "NON_CANONICAL_REVIEW_HANDOFF" };
 
 export function isEpisodeIdentifier(value: unknown): value is string {
   return typeof value === "string" && IDENTIFIER.test(value);
@@ -176,12 +183,54 @@ export function buildEpisodeReviewLink(url: string, target: EpisodeDeepLinkTarge
   return absolute.href;
 }
 
+export function buildEpisodeReviewHandoffLink(url: string, target: EpisodeDeepLinkTarget): string {
+  const absolute = new URL(buildEpisodeReviewLink(url, target));
+  absolute.searchParams.set(REVIEW_HANDOFF_KEY, REVIEW_HANDOFF_VALUE);
+  return absolute.href;
+}
+
+export function readEpisodeReviewHandoff(url: string): EpisodeReviewHandoffIntent {
+  let source: URL;
+  try {
+    source = new URL(url);
+  } catch {
+    return { kind: "NONE" };
+  }
+  const markers = source.searchParams.getAll(REVIEW_HANDOFF_KEY);
+  if (!markers.length) return { kind: "NONE" };
+  if (markers.length !== 1 || markers[0] !== REVIEW_HANDOFF_VALUE) {
+    return { kind: "INVALID", reason: "NON_CANONICAL_REVIEW_HANDOFF" };
+  }
+  const target = readEpisodeDeepLink(source.href);
+  if (!target || target.revision === null) {
+    return { kind: "INVALID", reason: "NON_CANONICAL_REVIEW_HANDOFF" };
+  }
+  try {
+    const canonical = buildEpisodeReviewHandoffLink(`${source.origin}${source.pathname}`, target);
+    return canonical === source.href
+      ? { kind: "VALID", target }
+      : { kind: "INVALID", reason: "NON_CANONICAL_REVIEW_HANDOFF" };
+  } catch {
+    return { kind: "INVALID", reason: "NON_CANONICAL_REVIEW_HANDOFF" };
+  }
+}
+
 export async function writeEpisodeReviewLink(
   clipboard: Pick<Clipboard, "writeText">,
   url: string,
   target: EpisodeDeepLinkTarget,
 ): Promise<string> {
   const link = buildEpisodeReviewLink(url, target);
+  await clipboard.writeText(link);
+  return link;
+}
+
+export async function writeEpisodeReviewHandoffLink(
+  clipboard: Pick<Clipboard, "writeText">,
+  url: string,
+  target: EpisodeDeepLinkTarget,
+): Promise<string> {
+  const link = buildEpisodeReviewHandoffLink(url, target);
   await clipboard.writeText(link);
   return link;
 }

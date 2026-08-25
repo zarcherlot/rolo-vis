@@ -449,3 +449,21 @@ The review contract is `EPISODE_REVIEW_LINK_HANDOFF_CONTRACT.md`.
 
 The established release evidence is recorded in
 `EPISODE_REVIEW_LINK_HANDOFF_BASELINE.md`.
+
+## E18 candidate: Episode review handoff receipt
+
+Status: E18A-E18C are in review development; E18D baseline promotion is deferred.
+
+- Extend the E17 link with one canonical `review_handoff=1` navigation marker while
+  retaining the frozen E17 builder as an independently testable boundary.
+- Show a recipient receipt only after the exact robot, immutable revision, bounded
+  focus, optional comparison pair, Evidence context, and Asset attachment are re-read
+  and revalidated.
+- Reject duplicate, malformed, fragmented, credential-bearing, or non-canonical receipt
+  URLs without treating ordinary Episode navigation as authenticated.
+- State that the receipt does not prove sender identity, Evidence quality, outcome,
+  verification, cause, or release authority.
+- Add no endpoint, producer contract, browser storage, signature, content export,
+  execution replay, release signal, or write authority.
+
+The review contract is `EPISODE_REVIEW_HANDOFF_RECEIPT_CONTRACT.md`.

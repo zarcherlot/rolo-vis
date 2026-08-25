@@ -269,6 +269,24 @@ export const EPISODE_REVIEW_LINK_HANDOFF_BASELINE = {
   supportsWrite: false,
 } as const;
 
+export const EPISODE_REVIEW_HANDOFF_RECEIPT_CANDIDATE = {
+  id: "rolo-vis-episode-review-handoff-receipt/candidate-2026-08",
+  status: "candidate",
+  mode: "read-only",
+  extends: EPISODE_REVIEW_LINK_HANDOFF_BASELINE.id,
+  targetRelease: "0.33.0",
+  requiredFeature: "workbench.episode-read-model/v1",
+  requiredRevisionFeature: "workbench.episode-revision-history/v1",
+  requiredCohortFeature: "workbench.episode-cohort-read-model/v1",
+  marker: "review_handoff=1",
+  receiptAuthority: "NAVIGATION_RESTORATION_RECEIPT_ONLY",
+  validationPolicy: "INDEPENDENT_PUBLIC_READ_REVALIDATION",
+  authenticatesSender: false,
+  addsEndpoint: false,
+  exportsContent: false,
+  supportsWrite: false,
+} as const;
+
 export function supportsSchema(
   family: keyof typeof MVP_SCHEMA_COMPATIBILITY,
   model: "collection" | "summary" | "detail",

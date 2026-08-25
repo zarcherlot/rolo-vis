@@ -47,7 +47,7 @@ test("E17B exposes a user-initiated clipboard action behind immutable publicatio
   assert.match(studio, /Copy review link/);
   assert.match(studio, /!detail\.immutable/);
   assert.match(studio, /navigator\.clipboard\?\.writeText/);
-  assert.match(studio, /writeEpisodeReviewLink\(navigator\.clipboard, window\.location\.href, target\)/);
+  assert.match(studio, /writeEpisodeReview(?:Handoff)?Link\(navigator\.clipboard, window\.location\.href, target\)/);
   assert.match(studio, /comparison\.publication\.left\.immutable/);
   assert.match(studio, /comparison\.publication\.right\.immutable/);
   assert.match(studio, /evidenceContext\.items\.find/);
