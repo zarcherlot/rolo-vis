@@ -12,6 +12,7 @@ import {
   Pulse,
   ShieldCheck,
   WarningCircle,
+  XCircle,
 } from "@phosphor-icons/react";
 import { buildEpisodePairComparison, type EpisodePairComparison } from "./episodeComparison";
 import { buildEpisodeEvidenceReferenceContext, type EpisodeEvidenceOccurrence, type EpisodeEvidenceReferenceContext } from "./episodeEvidenceContext";
@@ -38,6 +39,12 @@ import {
 import { assessEpisodeReviewReceipt } from "./episodeReviewReceipt";
 import { deriveEpisodeReviewAnchorContinuity } from "./episodeReviewAnchor";
 import { buildEpisodeReviewMarkerSafeNavigation } from "./episodeReviewMarkerLifecycle";
+import {
+  advanceEpisodeReviewSession,
+  buildEpisodeReviewSessionReleaseNavigation,
+  releaseEpisodeReviewSession,
+  type EpisodeReviewSessionState,
+} from "./episodeReviewSession";
 import "./episode.css";
 import "./episode-polish.css";
 import type {
@@ -313,7 +320,7 @@ export function EpisodeStudio({ robotId, initialTarget, revisionHistorySupported
   const [reviewLinkState, setReviewLinkState] = useState<"idle" | "copied" | "error">("idle");
   const [reviewLinkMessage, setReviewLinkMessage] = useState("");
   const [reviewHandoffIntent] = useState(() => readEpisodeReviewHandoff(window.location.href));
-  const [reviewAnchorAccepted, setReviewAnchorAccepted] = useState(false);
+  const [reviewSessionState, setReviewSessionState] = useState<EpisodeReviewSessionState>("PENDING");
 
   const loadCollection = useCallback(async () => {
     collectionRequest.current?.abort();
@@ -499,7 +506,7 @@ export function EpisodeStudio({ robotId, initialTarget, revisionHistorySupported
 
   useEffect(() => {
     if (!detail || detail.episode_id !== selectedEpisodeId || detail.revision !== selectedRevision) return;
-    const next = buildEpisodeReviewMarkerSafeNavigation({
+    const markerSafeNext = buildEpisodeReviewMarkerSafeNavigation({
       url: window.location.href,
       intent: reviewHandoffIntent,
       current: {
@@ -515,8 +522,11 @@ export function EpisodeStudio({ robotId, initialTarget, revisionHistorySupported
       cohortDays: cohortSupported ? cohortDays : null,
       },
     });
+    const next = reviewSessionState === "RELEASED"
+      ? buildEpisodeReviewSessionReleaseNavigation(markerSafeNext)
+      : markerSafeNext;
     window.history.replaceState(null, "", next);
-  }, [robotId, detail, selectedEpisodeId, selectedRevision, selectedEventId, selectedFindingId, selectedAssetId, compareEpisodeId, compareRevision, selectedComparisonEvidenceId, cohortDays, cohortSupported, reviewHandoffIntent]);
+  }, [robotId, detail, selectedEpisodeId, selectedRevision, selectedEventId, selectedFindingId, selectedAssetId, compareEpisodeId, compareRevision, selectedComparisonEvidenceId, cohortDays, cohortSupported, reviewHandoffIntent, reviewSessionState]);
 
   useEffect(() => {
     setReviewLinkState("idle");
@@ -652,14 +662,18 @@ export function EpisodeStudio({ robotId, initialTarget, revisionHistorySupported
     comparisonError: comparisonMessage,
   }), [reviewHandoffIntent, robotId, detail, events, detailLoading, detailMessage, comparison, evidenceContext, comparisonLoading, comparisonMessage]);
   useEffect(() => {
-    if (reviewReceipt.status === "ACCEPTED") setReviewAnchorAccepted(true);
+    setReviewSessionState((current) => advanceEpisodeReviewSession(current, reviewReceipt.status));
   }, [reviewReceipt.status]);
   const reviewAnchorContinuity = useMemo(() => deriveEpisodeReviewAnchorContinuity({
     intent: reviewHandoffIntent,
-    anchorAccepted: reviewAnchorAccepted,
+    anchorAccepted: reviewSessionState === "ACTIVE",
     current: currentReviewTarget,
     workbenchUrl: window.location.href,
-  }), [reviewHandoffIntent, reviewAnchorAccepted, currentReviewTarget]);
+  }), [reviewHandoffIntent, reviewSessionState, currentReviewTarget]);
+  const endAnchoredReview = () => {
+    setReviewSessionState((current) => releaseEpisodeReviewSession(current));
+    window.history.replaceState(null, "", buildEpisodeReviewSessionReleaseNavigation(window.location.href));
+  };
   const diagnosticFocus = useMemo(() => {
     if (!detail || !selectedFindingId) return null;
     return buildEpisodeDiagnosticFocus(detail, events, selectedFindingId);
@@ -873,16 +887,22 @@ export function EpisodeStudio({ robotId, initialTarget, revisionHistorySupported
           <div className="episode-revision-lock"><ShieldCheck size={17} /><span><strong>Revision {detail.revision} pinned</strong><small>{detail.immutable ? "Immutable publication" : "Live publication"} · {detail.coverage.replaceAll("_", " ")}</small></span></div>
         </div>}
       </div>
-      {reviewAnchorContinuity.status === "EXPLORING" ? <section className="episode-review-receipt panel is-exploring" role="status" aria-label="Episode review anchor continuity">
+      {reviewSessionState === "RELEASED" ? <section className="episode-review-receipt panel is-released" role="status" aria-label="Episode review session ended">
+        <span className="episode-review-receipt-icon"><XCircle size={22} weight="fill" /></span>
+        <div><span className="eyebrow">Shared review anchor · local session ended</span><h3>Anchored review ended for this tab</h3><p>The current Episode context remains open as ordinary navigation. Reopen the original shared link to start a new independently validated session.</p>
+          <span className="episode-review-receipt-facts"><small>No review state was written back</small><small>No sender notification</small></span>
+        </div>
+      </section> : reviewAnchorContinuity.status === "EXPLORING" ? <section className="episode-review-receipt panel is-exploring" role="status" aria-label="Episode review anchor continuity">
         <span className="episode-review-receipt-icon"><Crosshair size={22} weight="fill" /></span>
         <div><span className="eyebrow">Shared review anchor · local exploration</span><h3>Exploring beyond the restored handoff</h3><p>The shared anchor remains immutable in this tab. Current exploration does not change what the sender handed off or create a new review claim. Current address is ordinary navigation and no longer carries the shared handoff marker.</p>
           <span className="episode-review-receipt-facts"><code>{reviewAnchorContinuity.target.episodeId}@{reviewAnchorContinuity.target.revision}</code>{reviewAnchorContinuity.differences.map((field) => <small key={field}>{field} changed</small>)}</span>
-          <a className="secondary-button episode-review-anchor-return" href={reviewAnchorContinuity.returnLink}><ArrowRight size={14} /> Return to shared anchor</a>
+          <span className="episode-review-session-actions"><a className="secondary-button episode-review-anchor-return" href={reviewAnchorContinuity.returnLink}><ArrowRight size={14} /> Return to shared anchor</a><button className="secondary-button episode-review-session-end" type="button" onClick={endAnchoredReview}><XCircle size={14} /> End anchored review</button></span>
         </div>
       </section> : reviewReceipt.status !== "NONE" && <section className={`episode-review-receipt panel is-${reviewReceipt.status.toLowerCase()}`} role={reviewReceipt.status === "REJECTED" ? "alert" : "status"} aria-label="Episode review handoff receipt">
         <span className="episode-review-receipt-icon">{reviewReceipt.status === "ACCEPTED" ? <ShieldCheck size={22} weight="fill" /> : reviewReceipt.status === "REJECTED" ? <WarningCircle size={22} weight="fill" /> : <Pulse size={22} />}</span>
         <div><span className="eyebrow">Review handoff receipt · navigation only</span><h3>{reviewReceipt.title}</h3><p>{reviewReceipt.detail}</p>
           {reviewReceipt.status === "ACCEPTED" && <span className="episode-review-receipt-facts"><code>{reviewReceipt.targetLabel}</code><small>{reviewReceipt.comparison ? "Two pinned publications re-read" : "One pinned publication re-read"}</small><small>No sender authentication</small>{reviewAnchorContinuity.status === "ANCHORED" && <small>Shared anchor active for this tab</small>}</span>}
+          {reviewReceipt.status === "ACCEPTED" && reviewSessionState === "ACTIVE" && <button className="secondary-button episode-review-session-end" type="button" onClick={endAnchoredReview}><XCircle size={14} /> End anchored review</button>}
         </div>
       </section>}
       <section className="episode-compare-control panel" aria-label="Episode pair selection">

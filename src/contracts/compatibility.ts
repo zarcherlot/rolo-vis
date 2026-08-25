@@ -328,6 +328,22 @@ export const EPISODE_REVIEW_MARKER_LIFECYCLE_BASELINE = {
   supportsWrite: false,
 } as const;
 
+export const EPISODE_REVIEW_SESSION_RELEASE_CANDIDATE = {
+  id: "rolo-vis-episode-review-session-release/candidate-2026-08",
+  status: "candidate",
+  mode: "read-only",
+  extends: EPISODE_REVIEW_MARKER_LIFECYCLE_BASELINE.id,
+  targetRelease: "0.36.0",
+  sessionStates: ["PENDING", "ACTIVE", "RELEASED"],
+  activationPolicy: "ACCEPTED_RECEIPT_ONLY",
+  releasePolicy: "EXPLICIT_USER_ACTION_ONLY",
+  releasedReactivation: "NEW_CANONICAL_NAVIGATION_ONLY",
+  markerPolicy: "REMOVE_ON_RELEASE",
+  addsEndpoint: false,
+  persistsState: false,
+  supportsWrite: false,
+} as const;
+
 export function supportsSchema(
   family: keyof typeof MVP_SCHEMA_COMPATIBILITY,
   model: "collection" | "summary" | "detail",

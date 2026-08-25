@@ -55,8 +55,9 @@ test("E19B exposes an explicit return link without automatic navigation", async 
   assert.match(studio, /Shared anchor active for this tab/);
   assert.match(studio, /Return to shared anchor/);
   assert.match(studio, /href=\{reviewAnchorContinuity\.returnLink\}/);
-  const continuityBlock = studio.slice(studio.indexOf("reviewAnchorContinuity.status === \"EXPLORING\""), studio.indexOf("reviewReceipt.status !== \"NONE\""));
-  assert.doesNotMatch(continuityBlock, /onClick|location\.(assign|replace)|history\.(pushState|replaceState)|dispatchEvent/);
+  const returnLinkStart = studio.indexOf('<a className="secondary-button episode-review-anchor-return"');
+  const returnLink = studio.slice(returnLinkStart, studio.indexOf("</a>", returnLinkStart) + 4);
+  assert.doesNotMatch(returnLink, /onClick|location\.(assign|replace)|history\.(pushState|replaceState)|dispatchEvent/);
 });
 
 test("E19 remains tab-memory navigation continuity without new authority", async () => {

@@ -511,3 +511,20 @@ baseline. Feature commit `dbe5028` was fast-forwarded to `main` and passed CI ru
 The frozen contract and release evidence are recorded in
 `EPISODE_REVIEW_MARKER_LIFECYCLE_CONTRACT.md` and
 `EPISODE_REVIEW_MARKER_LIFECYCLE_BASELINE.md`.
+
+## E21 candidate: Episode review session release
+
+Status: E21A-E21C are in review development; E21D baseline promotion is deferred.
+
+- Replace the one-way accepted-anchor boolean with explicit `PENDING`, `ACTIVE`, and
+  terminal current-component `RELEASED` states.
+- Activate only from an independently accepted E18 receipt and release only from an
+  explicit recipient action.
+- End the current-tab anchor without changing the currently visible Episode,
+  comparison, Evidence context, cohort window, ordinary query state, or fragment.
+- Remove the E20 marker on release so a refresh remains ordinary navigation; reopening
+  the original canonical link starts fresh validation.
+- Add no endpoint, producer contract, persistence, identity, review progress, content,
+  release influence, execution replay, or write authority.
+
+The review contract is `EPISODE_REVIEW_SESSION_RELEASE_CONTRACT.md`.
