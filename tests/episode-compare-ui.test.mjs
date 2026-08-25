@@ -6,6 +6,7 @@ const studioPath = new URL("../src/EpisodeStudio.tsx", import.meta.url);
 const viewPath = new URL("../src/EpisodeComparisonView.tsx", import.meta.url);
 const clientPath = new URL("../src/roloClient.ts", import.meta.url);
 const evidenceContractPath = new URL("../docs/EPISODE_COMPARISON_EVIDENCE_TRACE_CONTRACT.md", import.meta.url);
+const contextContractPath = new URL("../docs/EPISODE_EVIDENCE_REFERENCE_CONTEXT_CONTRACT.md", import.meta.url);
 
 test("Episode pair UI derives from two existing read surfaces without a compare endpoint", async () => {
   const [studio, client] = await Promise.all([readFile(studioPath, "utf8"), readFile(clientPath, "utf8")]);
@@ -38,7 +39,7 @@ test("Episode pair loading and URL state are explicitly bounded and revision-pin
 
 test("Episode pair evidence trace reuses the validated Evidence drawer and keeps reference presence non-authoritative", async () => {
   const [studio, view, contract] = await Promise.all([readFile(studioPath, "utf8"), readFile(viewPath, "utf8"), readFile(evidenceContractPath, "utf8")]);
-  assert.match(studio, /<EpisodeComparisonView comparison=\{comparison\} onClear=\{clearComparison\} onOpenEvidence=\{onOpenEvidence\}/);
+  assert.match(studio, /<EpisodeComparisonView comparison=\{comparison\} evidenceContext=\{evidenceContext\} onClear=\{clearComparison\} onOpenEvidence=\{onOpenEvidence\}/);
   assert.match(view, /Reference presence across both sides/);
   assert.match(view, /evidenceTrace\.authority/);
   assert.match(view, /do not establish evidence quality, verification, or causal support/);
@@ -52,6 +53,23 @@ test("Episode pair evidence trace reuses the validated Evidence drawer and keeps
   assert.match(contract, /does not assert that the record exists/);
   assert.match(contract, /supportsEvidenceQuality/);
   assert.doesNotMatch(view, /evidence score|evidence verdict|verified by presence/i);
+});
+
+test("E11 occurrence context is derived from the same pair inputs and keeps the Evidence drawer separate", async () => {
+  const [studio, view, contract] = await Promise.all([
+    readFile(studioPath, "utf8"),
+    readFile(viewPath, "utf8"),
+    readFile(contextContractPath, "utf8"),
+  ]);
+  assert.match(studio, /buildEpisodeEvidenceReferenceContext\(pair, left\.detail, left\.events, right\.detail, right\.events\)/);
+  assert.match(view, /evidenceContext\.authority/);
+  assert.match(view, /bounded attachment points, not Evidence content or proof of semantic equivalence/);
+  assert.match(view, /LEFT OCCURRENCES/);
+  assert.match(view, /RIGHT OCCURRENCES/);
+  assert.match(view, /onOpenEvidence\(item\.evidenceId\)/);
+  assert.match(contract, /at most 20 occurrences per side/i);
+  assert.match(contract, /supportsEvidenceContent/);
+  assert.doesNotMatch(view, /content match|equivalent evidence|quality score|sufficient evidence/i);
 });
 
 test("E10D live check validates bounded reference authority and unresolved records", async () => {
