@@ -91,6 +91,7 @@ const deepLink = buildEpisodeDeepLink("https://workbench.test/?theme=dark", {
   findingId: null,
   compareEpisodeId: member.episode_id,
   compareRevision: member.revision,
+  compareEvidenceId: null,
   cohortDays: windowDays,
 });
 const restored = readEpisodeDeepLink(deepLink);

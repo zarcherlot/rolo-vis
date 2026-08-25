@@ -285,6 +285,7 @@ export function EpisodeStudio({ robotId, initialTarget, revisionHistorySupported
   const [compareRevision, setCompareRevision] = useState<number | null>(() => initialTarget?.robotId === robotId ? initialTarget.compareRevision : null);
   const [comparison, setComparison] = useState<EpisodePairComparison | null>(null);
   const [evidenceContext, setEvidenceContext] = useState<EpisodeEvidenceReferenceContext | null>(null);
+  const [selectedComparisonEvidenceId, setSelectedComparisonEvidenceId] = useState(() => initialTarget?.robotId === robotId ? initialTarget.compareEvidenceId || "" : "");
   const [comparisonLoading, setComparisonLoading] = useState(false);
   const [comparisonMessage, setComparisonMessage] = useState("");
   const [cohortDays, setCohortDays] = useState<7 | 30 | 90>(() => initialTarget?.robotId === robotId ? initialTarget.cohortDays ?? 30 : 30);
@@ -399,6 +400,7 @@ export function EpisodeStudio({ robotId, initialTarget, revisionHistorySupported
     setCompareRevision(null);
     setComparison(null);
     setEvidenceContext(null);
+    setSelectedComparisonEvidenceId("");
     setComparisonMessage("");
   }, [selectedEpisodeId, selectedRevision, compareEpisodeId, compareRevision, revisionHistorySupported]);
 
@@ -421,8 +423,12 @@ export function EpisodeStudio({ robotId, initialTarget, revisionHistorySupported
       const context = buildEpisodeEvidenceReferenceContext(pair, left.detail, left.events, right.detail, right.events);
       setComparison(pair);
       setEvidenceContext(context);
+      setSelectedComparisonEvidenceId((current) => current && context.items.some((item) => item.evidenceId === current) ? current : "");
     }).catch((error: unknown) => {
-      if (!controller.signal.aborted) setComparisonMessage(error instanceof Error ? error.message : "Episode comparison could not be derived.");
+      if (!controller.signal.aborted) {
+        setSelectedComparisonEvidenceId("");
+        setComparisonMessage(error instanceof Error ? error.message : "Episode comparison could not be derived.");
+      }
     }).finally(() => {
       if (!controller.signal.aborted) setComparisonLoading(false);
       if (comparisonRequest.current === controller) comparisonRequest.current = null;
@@ -470,10 +476,11 @@ export function EpisodeStudio({ robotId, initialTarget, revisionHistorySupported
       findingId: selectedFindingId || null,
       compareEpisodeId: compareEpisodeId && (compareEpisodeId !== detail.episode_id || compareRevision !== detail.revision) ? compareEpisodeId : null,
       compareRevision: compareEpisodeId && (compareEpisodeId !== detail.episode_id || compareRevision !== detail.revision) ? compareRevision : null,
+      compareEvidenceId: compareEpisodeId && (compareEpisodeId !== detail.episode_id || compareRevision !== detail.revision) ? selectedComparisonEvidenceId || null : null,
       cohortDays: cohortSupported ? cohortDays : null,
     });
     window.history.replaceState(null, "", next);
-  }, [robotId, detail, selectedEventId, selectedFindingId, compareEpisodeId, compareRevision, cohortDays, cohortSupported]);
+  }, [robotId, detail, selectedEventId, selectedFindingId, compareEpisodeId, compareRevision, selectedComparisonEvidenceId, cohortDays, cohortSupported]);
 
   const loadMoreTimeline = async () => {
     if (!detail || !nextCursor || timelineLoading || events.length >= EPISODE_VISIBLE_EVENT_LIMIT) return;
@@ -552,6 +559,7 @@ export function EpisodeStudio({ robotId, initialTarget, revisionHistorySupported
     setCompareRevision(null);
     setComparison(null);
     setEvidenceContext(null);
+    setSelectedComparisonEvidenceId("");
     setComparisonMessage("");
     setComparisonLoading(false);
   };
@@ -562,6 +570,7 @@ export function EpisodeStudio({ robotId, initialTarget, revisionHistorySupported
     }
     const option = compareOptions.find((item) => `${item.episodeId}@@${item.revision}` === key);
     if (!option) return;
+    setSelectedComparisonEvidenceId("");
     setCompareEpisodeId(option.episodeId);
     setCompareRevision(option.revision);
   };
@@ -579,6 +588,7 @@ export function EpisodeStudio({ robotId, initialTarget, revisionHistorySupported
     comparisonRequest.current?.abort();
     setComparison(null);
     setEvidenceContext(null);
+    setSelectedComparisonEvidenceId("");
     setComparisonMessage("");
     setComparisonLoading(false);
     setCompareEpisodeId(member.episode_id);
@@ -605,13 +615,13 @@ export function EpisodeStudio({ robotId, initialTarget, revisionHistorySupported
       </section>
       {comparisonLoading && <div className="episode-compare-state panel"><Pulse size={20} /><span><strong>Reading both pinned revisions</strong><small>Each side is bounded to {EPISODE_COMPARE_PAGE_BUDGET} timeline pages and {EPISODE_VISIBLE_EVENT_LIMIT} visible events.</small></span></div>}
       {comparisonMessage && <div className="episode-compare-state is-error panel" role="alert"><WarningCircle size={20} weight="fill" /><span><strong>Comparison rejected</strong><small>{comparisonMessage}</small></span></div>}
-      {comparison && evidenceContext && <EpisodeComparisonView comparison={comparison} evidenceContext={evidenceContext} onClear={clearComparison} onOpenEvidence={onOpenEvidence} />}
+      {comparison && evidenceContext && <EpisodeComparisonView comparison={comparison} evidenceContext={evidenceContext} selectedEvidenceId={selectedComparisonEvidenceId || null} onSelectEvidenceContext={(evidenceId) => setSelectedComparisonEvidenceId(evidenceId || "")} onClear={clearComparison} onOpenEvidence={onOpenEvidence} />}
       {cohortSupported && <EpisodeCohortView cohort={cohort} review={cohortReview} loading={cohortLoading} message={cohortMessage} windowDays={cohortDays} disabled={!detail || detailLoading} onWindowDays={setCohortDays} onOpenMember={openCohortMember} onCompareMember={compareCohortMember} />}
       <div className="episode-shell">
         <aside className="episode-index panel">
           <header><span>Published Episodes</span><strong>{collection?.total || episodes.length}</strong></header>
           <div className="episode-index-tools"><label className="search-box"><MagnifyingGlass size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search Episode" aria-label="Search Episodes" /></label><label className="select-control"><Funnel size={14} /><select value={stateFilter} onChange={(event) => setStateFilter(event.target.value)} aria-label="Filter Episode state"><option value="all">All states</option><option value="RUNNING">Running</option><option value="COMPLETED">Completed</option><option value="FAILED">Failed</option><option value="CANCELLED">Cancelled</option><option value="PARTIAL">Partial</option></select></label></div>
-          <div className="episode-index-list">{filteredEpisodes.map((item) => <EpisodeListItem key={`${item.episode_id}-${item.revision}`} item={item} active={item.episode_id === selectedEpisodeId && item.revision === selectedRevision} onClick={() => { if (item.episode_id === compareEpisodeId && item.revision === compareRevision) clearComparison(); setSelectedEpisodeId(item.episode_id); setSelectedRevision(item.revision); }} />)}{!filteredEpisodes.length && <div className="episode-index-empty"><MagnifyingGlass size={20} /><span>No Episodes match this view.</span></div>}</div>
+          <div className="episode-index-list">{filteredEpisodes.map((item) => <EpisodeListItem key={`${item.episode_id}-${item.revision}`} item={item} active={item.episode_id === selectedEpisodeId && item.revision === selectedRevision} onClick={() => { if (item.episode_id === compareEpisodeId && item.revision === compareRevision) clearComparison(); else setSelectedComparisonEvidenceId(""); setSelectedEpisodeId(item.episode_id); setSelectedRevision(item.revision); }} />)}{!filteredEpisodes.length && <div className="episode-index-empty"><MagnifyingGlass size={20} /><span>No Episodes match this view.</span></div>}</div>
           {collection?.next_offset !== null && <footer><button className="secondary-button" disabled={collectionLoading} onClick={() => void loadMoreEpisodes()}>{collectionLoading ? "Loading…" : "Load more Episodes"}</button></footer>}
         </aside>
 
