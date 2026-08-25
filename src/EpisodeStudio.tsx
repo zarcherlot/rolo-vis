@@ -7,6 +7,7 @@ import {
   FileText,
   Funnel,
   Info,
+  LinkSimple,
   MagnifyingGlass,
   Pulse,
   ShieldCheck,
@@ -25,10 +26,13 @@ import { roloClient } from "./roloClient";
 import {
   appendTimelineEvents,
   buildEpisodeDeepLink,
+  buildEpisodeReviewLink,
   EPISODE_TIMELINE_PAGE_LIMIT,
   EPISODE_VISIBLE_EVENT_LIMIT,
   nextTimelineEventId,
   projectTimelineLayout,
+  readEpisodeDeepLink,
+  writeEpisodeReviewLink,
   type EpisodeDeepLinkTarget,
 } from "./episodeNavigation";
 import "./episode.css";
@@ -303,6 +307,8 @@ export function EpisodeStudio({ robotId, initialTarget, revisionHistorySupported
   const initialTargetConsumed = useRef(false);
   const pendingHandoffTarget = useRef<EpisodeDeepLinkTarget | null>(null);
   const [handoffValidation, setHandoffValidation] = useState<{ target: EpisodeDeepLinkTarget; evidenceId: string; occurrence: EpisodeEvidenceOccurrence } | null>(null);
+  const [reviewLinkState, setReviewLinkState] = useState<"idle" | "copied" | "error">("idle");
+  const [reviewLinkMessage, setReviewLinkMessage] = useState("");
 
   const loadCollection = useCallback(async () => {
     collectionRequest.current?.abort();
@@ -502,6 +508,73 @@ export function EpisodeStudio({ robotId, initialTarget, revisionHistorySupported
     });
     window.history.replaceState(null, "", next);
   }, [robotId, detail, selectedEpisodeId, selectedRevision, selectedEventId, selectedFindingId, selectedAssetId, compareEpisodeId, compareRevision, selectedComparisonEvidenceId, cohortDays, cohortSupported]);
+
+  useEffect(() => {
+    setReviewLinkState("idle");
+    setReviewLinkMessage("");
+  }, [robotId, selectedEpisodeId, selectedRevision, selectedEventId, selectedFindingId, selectedAssetId, compareEpisodeId, compareRevision, selectedComparisonEvidenceId, cohortDays]);
+
+  const copyReviewLink = async () => {
+    setReviewLinkState("idle");
+    setReviewLinkMessage("");
+    try {
+      if (!detail || detail.episode_id !== selectedEpisodeId || detail.revision !== selectedRevision || !detail.immutable) {
+        throw new Error("Only an immutable, revision-pinned Episode can be handed off for review.");
+      }
+      const target = readEpisodeDeepLink(window.location.href);
+      if (!target || target.robotId !== robotId || target.episodeId !== detail.episode_id || target.revision !== detail.revision) {
+        throw new Error("The current Episode URL no longer matches the validated publication.");
+      }
+      if (target.eventId && !events.some((event) => event.event_id === target.eventId)) {
+        throw new Error("The selected timeline event is not present in the validated bounded timeline.");
+      }
+      if (target.findingId && !detail.findings.some((finding) => finding.finding_id === target.findingId)) {
+        throw new Error("The selected finding is not attached to this Episode revision.");
+      }
+      if (target.assetId && !detail.assets.some((asset) => asset.asset_id === target.assetId)) {
+        throw new Error("The selected Asset metadata is not attached to this Episode revision.");
+      }
+      if (target.compareEpisodeId) {
+        const comparisonMatches = comparison
+          && comparison.left.robotId === robotId
+          && comparison.left.episodeId === target.episodeId
+          && comparison.left.revision === target.revision
+          && comparison.right.episodeId === target.compareEpisodeId
+          && comparison.right.revision === target.compareRevision
+          && comparison.publication.left.immutable
+          && comparison.publication.right.immutable;
+        if (!comparisonMatches || comparisonLoading || !evidenceContext) {
+          throw new Error("The revision-pinned comparison has not completed independent validation.");
+        }
+        const selectedContext = target.compareEvidenceId
+          ? evidenceContext.items.find((item) => item.evidenceId === target.compareEvidenceId)
+          : null;
+        if (target.compareEvidenceId && !selectedContext) {
+          throw new Error("The selected Evidence context is not visible in the validated comparison.");
+        }
+        if (target.assetId) {
+          const occurrence = selectedContext?.left.items.find((item) => item.source === "ASSET"
+            && item.role === "REFERENCE"
+            && item.contextId === target.assetId);
+          const focus = occurrence
+            ? resolveEpisodeOccurrenceFocus(target.compareEvidenceId!, occurrence, detail, events)
+            : null;
+          if (focus?.kind !== "ASSET" || focus.assetId !== target.assetId) {
+            throw new Error("The selected Asset focus is not attached to the validated Evidence context.");
+          }
+        }
+      }
+      if (!navigator.clipboard?.writeText) {
+        throw new Error("Clipboard access is unavailable in this browser context.");
+      }
+      await writeEpisodeReviewLink(navigator.clipboard, window.location.href, target);
+      setReviewLinkState("copied");
+      setReviewLinkMessage("Canonical read-only review link copied.");
+    } catch (error) {
+      setReviewLinkState("error");
+      setReviewLinkMessage(error instanceof Error ? error.message : "The review link could not be copied.");
+    }
+  };
 
   const loadMoreTimeline = async () => {
     if (!detail || !nextCursor || timelineLoading || events.length >= EPISODE_VISIBLE_EVENT_LIMIT) return;
@@ -742,7 +815,18 @@ export function EpisodeStudio({ robotId, initialTarget, revisionHistorySupported
 
   return (
     <section className="content-view episode-view">
-      <div className="page-title episode-page-title"><div><div className="eyebrow">Read-only execution record</div><h2>Episode Studio</h2><p>Sequence-ordered execution context, observations, inferences, and Verify-stage results.</p></div>{detail && <div className="episode-revision-tools">{revisionHistorySupported && revisionHistory && revisionHistory.items.length > 1 && <label className="select-control episode-revision-selector"><Clock size={14} /><select value={detail.revision} onChange={(event) => { clearComparison(); setSelectedRevision(Number(event.target.value)); }} aria-label="Select Episode revision">{revisionHistory.items.map((item) => <option key={item.revision} value={item.revision}>Revision {item.revision}{item.is_current ? " · current" : ""}</option>)}</select></label>}<div className="episode-revision-lock"><ShieldCheck size={17} /><span><strong>Revision {detail.revision} pinned</strong><small>{detail.immutable ? "Immutable publication" : "Live publication"} · {detail.coverage.replaceAll("_", " ")}</small></span></div></div>}</div>
+      <div className="page-title episode-page-title">
+        <div><div className="eyebrow">Read-only execution record</div><h2>Episode Studio</h2><p>Sequence-ordered execution context, observations, inferences, and Verify-stage results.</p></div>
+        {detail && <div className="episode-revision-tools">
+          {revisionHistorySupported && revisionHistory && revisionHistory.items.length > 1 && <label className="select-control episode-revision-selector"><Clock size={14} /><select value={detail.revision} onChange={(event) => { clearComparison(); setSelectedRevision(Number(event.target.value)); }} aria-label="Select Episode revision">{revisionHistory.items.map((item) => <option key={item.revision} value={item.revision}>Revision {item.revision}{item.is_current ? " · current" : ""}</option>)}</select></label>}
+          <div className="episode-review-link">
+            <button className="secondary-button" disabled={!detail.immutable || comparisonLoading} onClick={() => void copyReviewLink()}><LinkSimple size={15} /> Copy review link</button>
+            <small>Identifiers only · no Evidence or Asset content</small>
+            {reviewLinkMessage && <span className={`is-${reviewLinkState}`} role={reviewLinkState === "error" ? "alert" : "status"}>{reviewLinkMessage}</span>}
+          </div>
+          <div className="episode-revision-lock"><ShieldCheck size={17} /><span><strong>Revision {detail.revision} pinned</strong><small>{detail.immutable ? "Immutable publication" : "Live publication"} · {detail.coverage.replaceAll("_", " ")}</small></span></div>
+        </div>}
+      </div>
       <section className="episode-compare-control panel" aria-label="Episode pair selection">
         <div><ArrowsLeftRight size={18} /><span><h3>Compare a second published Episode</h3><p>Both revisions are read independently; differences remain descriptive and release-neutral.</p></span></div>
         <div className="episode-compare-picker">

@@ -87,3 +87,4 @@
   }
 }
 .episode-revision-tools{display:flex;align-items:center;justify-content:flex-end;gap:10px;flex-wrap:wrap}.episode-revision-selector select{min-width:130px}@media(max-width:640px){.episode-revision-tools{width:100%;align-items:stretch;flex-direction:column}.episode-revision-selector{width:100%}.episode-revision-selector select{width:100%}}
+.episode-review-link{display:flex;align-items:flex-end;flex-direction:column;gap:4px}.episode-review-link>small{color:#718097;font-size:7px}.episode-review-link>span{max-width:260px;color:#85b999;font-size:8px;text-align:right}.episode-review-link>span.is-error{color:#ff8d94}@media(max-width:640px){.episode-review-link{align-items:stretch}.episode-review-link>button{justify-content:center}.episode-review-link>span{text-align:left}}

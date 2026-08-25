@@ -144,6 +144,48 @@ export function buildEpisodeDeepLink(url: string, target: EpisodeDeepLinkTarget)
   return `${parsed.pathname}${parsed.search}${parsed.hash}`;
 }
 
+function sameEpisodeDeepLinkTarget(left: EpisodeDeepLinkTarget, right: EpisodeDeepLinkTarget): boolean {
+  return left.robotId === right.robotId
+    && left.episodeId === right.episodeId
+    && left.revision === right.revision
+    && left.eventId === right.eventId
+    && left.findingId === right.findingId
+    && left.assetId === right.assetId
+    && left.compareEpisodeId === right.compareEpisodeId
+    && left.compareRevision === right.compareRevision
+    && left.compareEvidenceId === right.compareEvidenceId
+    && left.cohortDays === right.cohortDays;
+}
+
+export function buildEpisodeReviewLink(url: string, target: EpisodeDeepLinkTarget): string {
+  const source = new URL(url);
+  if (!["http:", "https:"].includes(source.protocol) || source.username || source.password) {
+    throw new Error("Episode review links require an HTTP(S) workbench origin without embedded credentials.");
+  }
+  if (target.revision === null) {
+    throw new Error("Episode review links require an exact published revision.");
+  }
+  const cleanBase = new URL(source.pathname, source.origin);
+  const relative = buildEpisodeDeepLink(cleanBase.href, target);
+  const absolute = new URL(relative, source.origin);
+  absolute.hash = "";
+  const restored = readEpisodeDeepLink(absolute.href);
+  if (!restored || !sameEpisodeDeepLinkTarget(restored, target)) {
+    throw new Error("Episode review link state did not survive strict canonical validation.");
+  }
+  return absolute.href;
+}
+
+export async function writeEpisodeReviewLink(
+  clipboard: Pick<Clipboard, "writeText">,
+  url: string,
+  target: EpisodeDeepLinkTarget,
+): Promise<string> {
+  const link = buildEpisodeReviewLink(url, target);
+  await clipboard.writeText(link);
+  return link;
+}
+
 export function buildWorkbenchViewLink(url: string, view: WorkbenchViewId): string {
   const parsed = new URL(url, "http://rolo-vis.local");
   for (const key of NAV_KEYS) parsed.searchParams.delete(key);

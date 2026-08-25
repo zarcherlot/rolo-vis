@@ -424,3 +424,26 @@ The review contract is `EPISODE_NAVIGATION_REHYDRATION_CONTRACT.md`.
 
 The established release evidence is recorded in
 `EPISODE_NAVIGATION_REHYDRATION_BASELINE.md`.
+
+## E17 candidate: Episode review link handoff
+
+Status: E17A-E17B approved; E17C is implemented and locally validated on
+`codex/episode-review-link-handoff`, pending review; target baseline rolo-vis
+`v0.32.0`.
+
+- Build one absolute canonical review link only from an immutable, revision-pinned
+  Episode state that survives the strict E16 parser unchanged.
+- Strip unknown query state, hash fragments, credentials, and non-HTTP(S) origins.
+- Revalidate visible Event, Finding, Asset, comparison, and Evidence-context focus
+  before a user-initiated clipboard write.
+- Keep the recipient on the existing independent read and feature-negotiation path.
+- Add no endpoint, producer contract, browser storage, content export, verdict, release
+  signal, execution replay, or robot write authority.
+- E17C covers canonical and comparison round trips, unrelated-state stripping,
+  same/cross-robot restore planning, stale state, and clipboard denial; E17D will
+  freeze the reviewed contract as `v0.32.0`.
+- E17C passed 177 application tests, TypeScript, production/Sites packaging, the live
+  two-Episode gate, and rebuilt-preview copy/restore/stale-context validation without
+  adding console errors or authority.
+
+The review contract is `EPISODE_REVIEW_LINK_HANDOFF_CONTRACT.md`.
