@@ -10,7 +10,7 @@ import {
   writeEpisodeReviewHandoffLink,
 } from "../src/episodeNavigation.ts";
 import { assessEpisodeReviewReceipt } from "../src/episodeReviewReceipt.ts";
-import { EPISODE_REVIEW_HANDOFF_RECEIPT_CANDIDATE } from "../src/contracts/compatibility.ts";
+import { EPISODE_REVIEW_HANDOFF_RECEIPT_BASELINE } from "../src/contracts/compatibility.ts";
 
 const target = {
   robotId: "mentorpi",
@@ -60,9 +60,9 @@ test("E18A adds one canonical receipt marker without mutating the frozen E17 bui
   assert.deepEqual(readEpisodeReviewHandoff(e18), { kind: "VALID", target });
   assert.deepEqual(readEpisodeReviewHandoff(e17), { kind: "NONE" });
   assert.equal(buildWorkbenchViewLink(e18, "wiki"), "/console?view=wiki");
-  assert.equal(EPISODE_REVIEW_HANDOFF_RECEIPT_CANDIDATE.extends, "rolo-vis-episode-review-link-handoff/2026-08");
-  assert.equal(EPISODE_REVIEW_HANDOFF_RECEIPT_CANDIDATE.authenticatesSender, false);
-  assert.equal(EPISODE_REVIEW_HANDOFF_RECEIPT_CANDIDATE.supportsWrite, false);
+  assert.equal(EPISODE_REVIEW_HANDOFF_RECEIPT_BASELINE.extends, "rolo-vis-episode-review-link-handoff/2026-08");
+  assert.equal(EPISODE_REVIEW_HANDOFF_RECEIPT_BASELINE.authenticatesSender, false);
+  assert.equal(EPISODE_REVIEW_HANDOFF_RECEIPT_BASELINE.supportsWrite, false);
 });
 
 test("E18A rejects non-canonical receipt claims while ordinary navigation remains separate", () => {

@@ -1,6 +1,6 @@
 # E18 Episode review handoff receipt contract
 
-Status: E18A-E18C review candidate; E18D baseline promotion requires explicit approval
+Status: E18A-E18D approved and promoted as the `v0.33.0` read-only baseline
 
 Target baseline: rolo-vis `v0.33.0`
 
@@ -51,10 +51,12 @@ attestation, outcome, verification, or release decision.
 - Keep static negative-authority checks for endpoints, storage, content export,
   sender authentication, execution replay, and writes.
 
-## E18D: deferred baseline promotion
+## E18D: baseline promotion
 
-Promotion to `v0.33.0`, baseline metadata, main merge, tag, and production deployment
-remain deferred until E18A-E18C receive explicit review approval.
+The reviewed E18 contract is frozen as rolo-vis `v0.33.0`, with frontend minimum
+and main merge `347abd8`. Release evidence is recorded in
+`EPISODE_REVIEW_HANDOFF_RECEIPT_BASELINE.md`. Production deployment remains a
+separate action.
 
 ## Authority boundary
 

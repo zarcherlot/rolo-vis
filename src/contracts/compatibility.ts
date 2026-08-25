@@ -269,12 +269,16 @@ export const EPISODE_REVIEW_LINK_HANDOFF_BASELINE = {
   supportsWrite: false,
 } as const;
 
-export const EPISODE_REVIEW_HANDOFF_RECEIPT_CANDIDATE = {
-  id: "rolo-vis-episode-review-handoff-receipt/candidate-2026-08",
-  status: "candidate",
+export const EPISODE_REVIEW_HANDOFF_RECEIPT_BASELINE = {
+  id: "rolo-vis-episode-review-handoff-receipt/2026-08",
+  status: "baseline",
   mode: "read-only",
   extends: EPISODE_REVIEW_LINK_HANDOFF_BASELINE.id,
-  targetRelease: "0.33.0",
+  release: "0.33.0",
+  frontendMinimum: "347abd8",
+  frontendMainMerge: "347abd8",
+  producerMinimum: "463d501",
+  producerMainMerge: "891cbf1",
   requiredFeature: "workbench.episode-read-model/v1",
   requiredRevisionFeature: "workbench.episode-revision-history/v1",
   requiredCohortFeature: "workbench.episode-cohort-read-model/v1",

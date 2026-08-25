@@ -452,7 +452,9 @@ The established release evidence is recorded in
 
 ## E18 candidate: Episode review handoff receipt
 
-Status: E18A-E18C are in review development; E18D baseline promotion is deferred.
+Status: E18A-E18D approved and promoted as the rolo-vis `v0.33.0` read-only
+baseline. Frontend minimum `347abd8` was fast-forwarded to `main` as `347abd8`;
+main CI #46 passed before baseline promotion.
 
 - Extend the E17 link with one canonical `review_handoff=1` navigation marker while
   retaining the frozen E17 builder as an independently testable boundary.
@@ -467,3 +469,6 @@ Status: E18A-E18C are in review development; E18D baseline promotion is deferred
   execution replay, release signal, or write authority.
 
 The review contract is `EPISODE_REVIEW_HANDOFF_RECEIPT_CONTRACT.md`.
+
+The established release evidence is recorded in
+`EPISODE_REVIEW_HANDOFF_RECEIPT_BASELINE.md`.
