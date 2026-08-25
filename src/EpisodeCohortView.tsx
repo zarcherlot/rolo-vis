@@ -1,5 +1,6 @@
 import {
   ArrowRight,
+  ArrowsLeftRight,
   ChartBar,
   Clock,
   Info,
@@ -37,16 +38,19 @@ function CategoryCounts({ title, values }: { title: string; values: Record<strin
   );
 }
 
-function MemberRow({ member, onOpen }: { member: EpisodeCohortMember; onOpen: () => void }) {
+function MemberRow({ member, onOpen, onCompare }: { member: EpisodeCohortMember; onOpen: () => void; onCompare: () => void }) {
   return (
-    <button className="episode-cohort-member" onClick={onOpen}>
-      <span><strong>{member.task_label}</strong><code>{member.episode_id} · rev {member.revision}</code></span>
-      <time>{new Date(member.started_at).toLocaleString()}</time>
-      <span>{formatMetric("duration_ms", member.duration_ms)}</span>
-      <span>{member.outcome}</span>
-      <span>{member.verification.replaceAll("_", " ")}</span>
-      <ArrowRight size={14} />
-    </button>
+    <article className="episode-cohort-member">
+      <button className="episode-cohort-member-open" onClick={onOpen} aria-label={`Open ${member.task_label}, revision ${member.revision}`}>
+        <span><strong>{member.task_label}</strong><code>{member.episode_id} · rev {member.revision}</code></span>
+        <time>{new Date(member.started_at).toLocaleString()}</time>
+        <span>{formatMetric("duration_ms", member.duration_ms)}</span>
+        <span>{member.outcome}</span>
+        <span>{member.verification.replaceAll("_", " ")}</span>
+        <ArrowRight size={14} />
+      </button>
+      <button className="episode-cohort-member-compare" onClick={onCompare} aria-label={`Compare ${member.task_label}, revision ${member.revision}, with pinned reference`}><ArrowsLeftRight size={13} />Compare</button>
+    </article>
   );
 }
 
@@ -59,6 +63,7 @@ export function EpisodeCohortView({
   disabled,
   onWindowDays,
   onOpenMember,
+  onCompareMember,
 }: {
   cohort: EpisodeCohort | null;
   review: EpisodeCohortReview | null;
@@ -68,6 +73,7 @@ export function EpisodeCohortView({
   disabled: boolean;
   onWindowDays: (days: 7 | 30 | 90) => void;
   onOpenMember: (member: EpisodeCohortMember) => void;
+  onCompareMember: (member: EpisodeCohortMember) => void;
 }) {
   return (
     <section className="episode-cohort panel" aria-label="Exact-match Episode cohort review">
@@ -110,7 +116,7 @@ export function EpisodeCohortView({
         <section className="episode-cohort-members">
           <header><span><h4>Newest-first members</h4><small>Outcome and verification remain separate.</small></span><code>current publications only</code></header>
           {cohort.items.length > 0
-            ? <div><div className="episode-cohort-member is-header"><span>Episode</span><span>Started</span><span>Duration</span><span>Outcome</span><span>Verification</span><i /></div>{cohort.items.map((member) => <MemberRow key={`${member.episode_id}-${member.revision}`} member={member} onOpen={() => onOpenMember(member)} />)}</div>
+            ? <div><div className="episode-cohort-member is-header"><div className="episode-cohort-member-open"><span>Episode</span><span>Started</span><span>Duration</span><span>Outcome</span><span>Verification</span><i /></div><span>Investigate</span></div>{cohort.items.map((member) => <MemberRow key={`${member.episode_id}-${member.revision}`} member={member} onOpen={() => onOpenMember(member)} onCompare={() => onCompareMember(member)} />)}</div>
             : <div className="episode-cohort-empty"><Info size={18} /><span><strong>No eligible members</strong><small>The exact identity and selected window produced no immutable current publications from other Episode IDs.</small></span></div>}
         </section>
 
