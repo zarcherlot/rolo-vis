@@ -5,6 +5,7 @@ import { readFile } from "node:fs/promises";
 import {
   EPISODE_BASELINE,
   EPISODE_COHORT_BASELINE,
+  EPISODE_COHORT_INVESTIGATION_BASELINE,
   EPISODE_READONLY_BASELINE,
   EPISODE_REVISION_BASELINE,
   EPISODE_SCHEMA_COMPATIBILITY,
@@ -45,6 +46,27 @@ test("Episode diagnostic baseline succeeds v0.20 without mutating the v0.19 MVP 
   assert.equal(EPISODE_COHORT_BASELINE.producerMinimum, "463d501");
   assert.equal(EPISODE_COHORT_BASELINE.producerMainMerge, "891cbf1");
   assert.equal(EPISODE_COHORT_BASELINE.requiredCohortFeature, "workbench.episode-cohort-read-model/v1");
+  assert.equal(EPISODE_COHORT_INVESTIGATION_BASELINE.status, "baseline");
+  assert.equal(EPISODE_COHORT_INVESTIGATION_BASELINE.mode, "read-only");
+  assert.equal(EPISODE_COHORT_INVESTIGATION_BASELINE.extends, EPISODE_COHORT_BASELINE.id);
+  assert.equal(EPISODE_COHORT_INVESTIGATION_BASELINE.release, "0.24.0");
+  assert.equal(EPISODE_COHORT_INVESTIGATION_BASELINE.frontendMinimum, "858c824");
+  assert.equal(EPISODE_COHORT_INVESTIGATION_BASELINE.frontendMainMerge, "a42adeb");
+  assert.equal(EPISODE_COHORT_INVESTIGATION_BASELINE.producerMinimum, "463d501");
+  assert.equal(EPISODE_COHORT_INVESTIGATION_BASELINE.requiredCohortFeature, "workbench.episode-cohort-read-model/v1");
+});
+
+test("Episode Cohort Investigation baseline freezes reference continuity without new authority", async () => {
+  const [baseline, manifest, studio] = await Promise.all([
+    read("../docs/EPISODE_COHORT_INVESTIGATION_BASELINE.md"),
+    read("../rolo.plugin.json"),
+    read("../src/EpisodeStudio.tsx"),
+  ]);
+  assert.match(baseline, /Version: `0\.24\.0`/);
+  assert.match(baseline, /without replacing that reference/i);
+  assert.match(baseline, /no new endpoint, producer schema, feature flag, or write authority/i);
+  assert.doesNotMatch(manifest, /episode\.(media|replay|export|write)/);
+  assert.doesNotMatch(studio, /roloClient\.(invoke|cancel|replay|export|collect|recollect)/);
 });
 
 test("Episode compatibility accepts only the reviewed v1 family", () => {

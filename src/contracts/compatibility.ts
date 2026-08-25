@@ -92,6 +92,21 @@ export const EPISODE_COHORT_BASELINE = {
   requiredCohortFeature: "workbench.episode-cohort-read-model/v1",
 } as const;
 
+export const EPISODE_COHORT_INVESTIGATION_BASELINE = {
+  id: "rolo-vis-episode-cohort-investigation/2026-08",
+  status: "baseline",
+  mode: "read-only",
+  extends: EPISODE_COHORT_BASELINE.id,
+  release: "0.24.0",
+  frontendMinimum: "858c824",
+  frontendMainMerge: "a42adeb",
+  producerMinimum: "463d501",
+  producerMainMerge: "891cbf1",
+  requiredFeature: "workbench.episode-read-model/v1",
+  requiredRevisionFeature: "workbench.episode-revision-history/v1",
+  requiredCohortFeature: "workbench.episode-cohort-read-model/v1",
+} as const;
+
 export function supportsSchema(
   family: keyof typeof MVP_SCHEMA_COMPATIBILITY,
   model: "collection" | "summary" | "detail",
