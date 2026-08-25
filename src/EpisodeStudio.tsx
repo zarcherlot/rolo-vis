@@ -565,6 +565,19 @@ export function EpisodeStudio({ robotId, initialTarget, revisionHistorySupported
       block: "start",
     }));
   };
+  const compareCohortMember = (member: EpisodeCohortMember) => {
+    if (!detail || (member.episode_id === detail.episode_id && member.revision === detail.revision)) return;
+    comparisonRequest.current?.abort();
+    setComparison(null);
+    setComparisonMessage("");
+    setComparisonLoading(false);
+    setCompareEpisodeId(member.episode_id);
+    setCompareRevision(member.revision);
+    window.requestAnimationFrame(() => document.querySelector(".episode-compare-control")?.scrollIntoView({
+      behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
+      block: "start",
+    }));
+  };
 
   if (collectionLoading && !collection) return <section className="content-view episode-view"><div className="page-title"><div><div className="eyebrow">Read-only execution record</div><h2>Episode Studio</h2><p>Loading published Episode revisions without inferring live runtime state.</p></div></div><div className="panel episode-state-view"><Pulse size={28} /><div><strong>Reading Episode index</strong><p>Only a feature-negotiated, versioned read model can populate this workspace.</p></div></div></section>;
   if (collectionMessage && !collection) return <section className="content-view episode-view"><div className="page-title"><div><div className="eyebrow">Read-only execution record</div><h2>Episode Studio</h2><p>Published execution history with explicit authority and verification boundaries.</p></div></div><div className="panel episode-state-view is-error"><WarningCircle size={28} weight="fill" /><div><strong>Episode read model unavailable</strong><p>{collectionMessage}</p><small>No Lifecycle or fixture data was substituted.</small><button className="secondary-button" onClick={() => void loadCollection()}>Retry Episode index</button></div></div></section>;
@@ -583,7 +596,7 @@ export function EpisodeStudio({ robotId, initialTarget, revisionHistorySupported
       {comparisonLoading && <div className="episode-compare-state panel"><Pulse size={20} /><span><strong>Reading both pinned revisions</strong><small>Each side is bounded to {EPISODE_COMPARE_PAGE_BUDGET} timeline pages and {EPISODE_VISIBLE_EVENT_LIMIT} visible events.</small></span></div>}
       {comparisonMessage && <div className="episode-compare-state is-error panel" role="alert"><WarningCircle size={20} weight="fill" /><span><strong>Comparison rejected</strong><small>{comparisonMessage}</small></span></div>}
       {comparison && <EpisodeComparisonView comparison={comparison} onClear={clearComparison} />}
-      {cohortSupported && <EpisodeCohortView cohort={cohort} review={cohortReview} loading={cohortLoading} message={cohortMessage} windowDays={cohortDays} disabled={!detail || detailLoading} onWindowDays={setCohortDays} onOpenMember={openCohortMember} />}
+      {cohortSupported && <EpisodeCohortView cohort={cohort} review={cohortReview} loading={cohortLoading} message={cohortMessage} windowDays={cohortDays} disabled={!detail || detailLoading} onWindowDays={setCohortDays} onOpenMember={openCohortMember} onCompareMember={compareCohortMember} />}
       <div className="episode-shell">
         <aside className="episode-index panel">
           <header><span>Published Episodes</span><strong>{collection?.total || episodes.length}</strong></header>

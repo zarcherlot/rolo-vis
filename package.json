@@ -12,6 +12,8 @@
     "check:episode-live": "node scripts/check-episode-read-model.mjs",
     "check:episode-revisions-live": "node scripts/check-episode-revision-history.mjs",
     "check:episode-cohort-live": "node scripts/check-episode-cohort.mjs",
+    "check:episode-investigation-live": "node scripts/check-episode-cohort-investigation.mjs",
+    "prepare:episode-investigation-live": "node scripts/prepare-episode-investigation-live-data.mjs",
     "test:sites": "node --test tests/sites-worker.test.mjs",
     "verify:baseline": "npm test && npm run typecheck && npm run build && npm run test:sites"
   },
