@@ -15,6 +15,7 @@ import {
 import { buildEpisodePairComparison, type EpisodePairComparison } from "./episodeComparison";
 import { buildEpisodeEvidenceReferenceContext, type EpisodeEvidenceOccurrence, type EpisodeEvidenceReferenceContext } from "./episodeEvidenceContext";
 import { resolveEpisodeOccurrenceFocus } from "./episodeOccurrenceFocus";
+import { buildEpisodeRightContextHandoffTarget, type EpisodeComparisonInputs } from "./episodeRightContextHandoff";
 import { buildEpisodeCohortReview } from "./episodeCohort";
 import { EpisodeCohortView } from "./EpisodeCohortView";
 import { EpisodeComparisonView } from "./EpisodeComparisonView";
@@ -286,6 +287,7 @@ export function EpisodeStudio({ robotId, initialTarget, revisionHistorySupported
   const [compareEpisodeId, setCompareEpisodeId] = useState(() => initialTarget?.robotId === robotId ? initialTarget.compareEpisodeId || "" : "");
   const [compareRevision, setCompareRevision] = useState<number | null>(() => initialTarget?.robotId === robotId ? initialTarget.compareRevision : null);
   const [comparison, setComparison] = useState<EpisodePairComparison | null>(null);
+  const [comparisonInputs, setComparisonInputs] = useState<EpisodeComparisonInputs | null>(null);
   const [evidenceContext, setEvidenceContext] = useState<EpisodeEvidenceReferenceContext | null>(null);
   const [selectedComparisonEvidenceId, setSelectedComparisonEvidenceId] = useState(() => initialTarget?.robotId === robotId ? initialTarget.compareEvidenceId || "" : "");
   const [comparisonLoading, setComparisonLoading] = useState(false);
@@ -299,6 +301,8 @@ export function EpisodeStudio({ robotId, initialTarget, revisionHistorySupported
   const comparisonRequest = useRef<AbortController | null>(null);
   const cohortRequest = useRef<AbortController | null>(null);
   const initialTargetConsumed = useRef(false);
+  const pendingHandoffTarget = useRef<EpisodeDeepLinkTarget | null>(null);
+  const [handoffValidation, setHandoffValidation] = useState<{ target: EpisodeDeepLinkTarget; evidenceId: string; occurrence: EpisodeEvidenceOccurrence } | null>(null);
 
   const loadCollection = useCallback(async () => {
     collectionRequest.current?.abort();
@@ -349,7 +353,8 @@ export function EpisodeStudio({ robotId, initialTarget, revisionHistorySupported
     const controller = new AbortController();
     detailRequest.current = controller;
     setDetailLoading(true);
-    const deepTarget = !initialTargetConsumed.current && initialTarget?.robotId === robotId && initialTarget.episodeId === selectedEpisodeId ? initialTarget : null;
+    const pendingTarget = pendingHandoffTarget.current?.robotId === robotId && pendingHandoffTarget.current.episodeId === selectedEpisodeId ? pendingHandoffTarget.current : null;
+    const deepTarget = pendingTarget || (!initialTargetConsumed.current && initialTarget?.robotId === robotId && initialTarget.episodeId === selectedEpisodeId ? initialTarget : null);
     const initiallyRequestedRevision = selectedRevision ?? deepTarget?.revision ?? summary?.revision ?? null;
     void (async () => {
       const history = revisionHistorySupported ? await readRevisionHistory(robotId, selectedEpisodeId, controller.signal) : null;
@@ -371,6 +376,7 @@ export function EpisodeStudio({ robotId, initialTarget, revisionHistorySupported
         cursor = timeline.next_cursor;
       }
       if (controller.signal.aborted) return;
+      if (pendingTarget === deepTarget) pendingHandoffTarget.current = null;
       initialTargetConsumed.current = true;
       setSelectedRevision(episodeDetail.revision);
       setRevisionHistory(history);
@@ -401,23 +407,27 @@ export function EpisodeStudio({ robotId, initialTarget, revisionHistorySupported
 
   useEffect(() => {
     if (selectedEpisodeId !== compareEpisodeId || (revisionHistorySupported && selectedRevision !== compareRevision)) return;
+    pendingHandoffTarget.current = null;
     comparisonRequest.current?.abort();
     setCompareEpisodeId("");
     setCompareRevision(null);
     setComparison(null);
+    setComparisonInputs(null);
     setEvidenceContext(null);
     setSelectedComparisonEvidenceId("");
     setSelectedAssetId("");
+    setHandoffValidation(null);
     setComparisonMessage("");
   }, [selectedEpisodeId, selectedRevision, compareEpisodeId, compareRevision, revisionHistorySupported]);
 
   useEffect(() => {
     comparisonRequest.current?.abort();
     setComparison(null);
+    setComparisonInputs(null);
     setEvidenceContext(null);
     setComparisonMessage("");
     setComparisonLoading(false);
-    if (!detail || !compareEpisodeId || compareRevision === null) return;
+    if (!detail || detail.episode_id !== selectedEpisodeId || detail.revision !== selectedRevision || !compareEpisodeId || compareRevision === null) return;
     const controller = new AbortController();
     comparisonRequest.current = controller;
     setComparisonLoading(true);
@@ -429,12 +439,14 @@ export function EpisodeStudio({ robotId, initialTarget, revisionHistorySupported
       const pair = buildEpisodePairComparison(left.detail, left.events, right.detail, right.events);
       const context = buildEpisodeEvidenceReferenceContext(pair, left.detail, left.events, right.detail, right.events);
       setComparison(pair);
+      setComparisonInputs({ left, right });
       setEvidenceContext(context);
       setSelectedComparisonEvidenceId((current) => current && context.items.some((item) => item.evidenceId === current) ? current : "");
     }).catch((error: unknown) => {
       if (!controller.signal.aborted) {
         setSelectedComparisonEvidenceId("");
         setSelectedAssetId("");
+        setHandoffValidation(null);
         setComparisonMessage(error instanceof Error ? error.message : "Episode comparison could not be derived.");
       }
     }).finally(() => {
@@ -442,7 +454,7 @@ export function EpisodeStudio({ robotId, initialTarget, revisionHistorySupported
       if (comparisonRequest.current === controller) comparisonRequest.current = null;
     });
     return () => controller.abort();
-  }, [robotId, detail, compareEpisodeId, compareRevision, revisionHistorySupported]);
+  }, [robotId, detail, selectedEpisodeId, selectedRevision, compareEpisodeId, compareRevision, revisionHistorySupported]);
 
   useEffect(() => {
     cohortRequest.current?.abort();
@@ -475,7 +487,7 @@ export function EpisodeStudio({ robotId, initialTarget, revisionHistorySupported
   }, [robotId, detail, cohortDays, cohortSupported]);
 
   useEffect(() => {
-    if (!detail) return;
+    if (!detail || detail.episode_id !== selectedEpisodeId || detail.revision !== selectedRevision) return;
     const next = buildEpisodeDeepLink(window.location.href, {
       robotId,
       episodeId: detail.episode_id,
@@ -489,7 +501,7 @@ export function EpisodeStudio({ robotId, initialTarget, revisionHistorySupported
       cohortDays: cohortSupported ? cohortDays : null,
     });
     window.history.replaceState(null, "", next);
-  }, [robotId, detail, selectedEventId, selectedFindingId, selectedAssetId, compareEpisodeId, compareRevision, selectedComparisonEvidenceId, cohortDays, cohortSupported]);
+  }, [robotId, detail, selectedEpisodeId, selectedRevision, selectedEventId, selectedFindingId, selectedAssetId, compareEpisodeId, compareRevision, selectedComparisonEvidenceId, cohortDays, cohortSupported]);
 
   const loadMoreTimeline = async () => {
     if (!detail || !nextCursor || timelineLoading || events.length >= EPISODE_VISIBLE_EVENT_LIMIT) return;
@@ -549,6 +561,36 @@ export function EpisodeStudio({ robotId, initialTarget, revisionHistorySupported
     }));
   }, [selectedAssetId, selectedComparisonEvidenceId, comparisonLoading, comparison, evidenceContext, detail]);
   useEffect(() => {
+    if (!handoffValidation || comparisonLoading || !comparison || !evidenceContext || !detail) return;
+    const target = handoffValidation.target;
+    if (detail.robot_id !== target.robotId || detail.episode_id !== target.episodeId || detail.revision !== target.revision) return;
+    const contextItem = evidenceContext.items.find((item) => item.evidenceId === handoffValidation.evidenceId);
+    const occurrence = contextItem?.left.items.find((item) => item.source === handoffValidation.occurrence.source
+      && item.role === handoffValidation.occurrence.role
+      && item.contextId === handoffValidation.occurrence.contextId);
+    const focus = occurrence ? resolveEpisodeOccurrenceFocus(handoffValidation.evidenceId, occurrence, detail, events) : null;
+    const focusMatches = focus?.kind === "EVENT" ? focus.eventId === target.eventId
+      : focus?.kind === "FINDING" ? focus.findingId === target.findingId
+        : focus?.kind === "ASSET" ? focus.assetId === target.assetId
+          : false;
+    if (!focus || !focusMatches) {
+      setSelectedEventId(events[0]?.event_id || "");
+      setSelectedFindingId("");
+      setSelectedAssetId("");
+      setComparisonMessage("Right Context handoff source focus was cleared because its attachment changed after the orientation load.");
+      setHandoffValidation(null);
+      return;
+    }
+    if (focus.kind === "EVENT") {
+      setVisibleLanes((current) => new Set(current).add(focus.lane));
+      window.requestAnimationFrame(() => document.getElementById("episode-timeline")?.scrollIntoView({
+        behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
+        block: "center",
+      }));
+    }
+    setHandoffValidation(null);
+  }, [handoffValidation, comparisonLoading, comparison, evidenceContext, detail, events]);
+  useEffect(() => {
     const first = diagnosticFocus?.coincidentEvents[0];
     if (!first) return;
     setSelectedEventId(first.eventId);
@@ -577,10 +619,13 @@ export function EpisodeStudio({ robotId, initialTarget, revisionHistorySupported
   const cohortReview = useMemo(() => cohort && detail ? buildEpisodeCohortReview(cohort, detail) : null, [cohort, detail]);
   const compareSelectionMissing = Boolean(comparisonKey) && !compareOptions.some((item) => `${item.episodeId}@@${item.revision}` === comparisonKey);
   const clearComparison = () => {
+    pendingHandoffTarget.current = null;
+    setHandoffValidation(null);
     comparisonRequest.current?.abort();
     setCompareEpisodeId("");
     setCompareRevision(null);
     setComparison(null);
+    setComparisonInputs(null);
     setEvidenceContext(null);
     setSelectedComparisonEvidenceId("");
     setSelectedAssetId("");
@@ -594,6 +639,9 @@ export function EpisodeStudio({ robotId, initialTarget, revisionHistorySupported
     }
     const option = compareOptions.find((item) => `${item.episodeId}@@${item.revision}` === key);
     if (!option) return;
+    pendingHandoffTarget.current = null;
+    setHandoffValidation(null);
+    setComparisonInputs(null);
     setSelectedComparisonEvidenceId("");
     setSelectedAssetId("");
     setCompareEpisodeId(option.episodeId);
@@ -612,9 +660,12 @@ export function EpisodeStudio({ robotId, initialTarget, revisionHistorySupported
     if (!detail || (member.episode_id === detail.episode_id && member.revision === detail.revision)) return;
     comparisonRequest.current?.abort();
     setComparison(null);
+    setComparisonInputs(null);
     setEvidenceContext(null);
     setSelectedComparisonEvidenceId("");
     setSelectedAssetId("");
+    pendingHandoffTarget.current = null;
+    setHandoffValidation(null);
     setComparisonMessage("");
     setComparisonLoading(false);
     setCompareEpisodeId(member.episode_id);
@@ -650,6 +701,40 @@ export function EpisodeStudio({ robotId, initialTarget, revisionHistorySupported
     setSelectedFindingId("");
     setSelectedAssetId(target.assetId);
   };
+  const handoffRightOccurrence = (evidenceId: string, occurrence: EpisodeEvidenceOccurrence) => {
+    if (!comparison || !evidenceContext || !comparisonInputs) return;
+    const target = buildEpisodeRightContextHandoffTarget({
+      comparison,
+      evidenceContext,
+      evidenceId,
+      occurrence,
+      rightDetail: comparisonInputs.right.detail,
+      rightEvents: comparisonInputs.right.events,
+      cohortDays: cohortSupported ? cohortDays : null,
+    });
+    if (!target || target.revision === null || target.compareEpisodeId === null || target.compareRevision === null) {
+      setComparisonMessage("Right Context handoff was rejected because the selected source no longer matches the pinned right Episode.");
+      return;
+    }
+    const next = buildEpisodeDeepLink(window.location.href, target);
+    pendingHandoffTarget.current = target;
+    setHandoffValidation({ target, evidenceId, occurrence });
+    comparisonRequest.current?.abort();
+    setComparison(null);
+    setComparisonInputs(null);
+    setEvidenceContext(null);
+    setComparisonMessage("");
+    setComparisonLoading(false);
+    setSelectedEventId(target.eventId || "");
+    setSelectedFindingId(target.findingId || "");
+    setSelectedAssetId(target.assetId || "");
+    setSelectedComparisonEvidenceId(evidenceId);
+    setCompareEpisodeId(target.compareEpisodeId);
+    setCompareRevision(target.compareRevision);
+    setSelectedEpisodeId(target.episodeId);
+    setSelectedRevision(target.revision);
+    window.history.pushState(null, "", next);
+  };
 
   if (collectionLoading && !collection) return <section className="content-view episode-view"><div className="page-title"><div><div className="eyebrow">Read-only execution record</div><h2>Episode Studio</h2><p>Loading published Episode revisions without inferring live runtime state.</p></div></div><div className="panel episode-state-view"><Pulse size={28} /><div><strong>Reading Episode index</strong><p>Only a feature-negotiated, versioned read model can populate this workspace.</p></div></div></section>;
   if (collectionMessage && !collection) return <section className="content-view episode-view"><div className="page-title"><div><div className="eyebrow">Read-only execution record</div><h2>Episode Studio</h2><p>Published execution history with explicit authority and verification boundaries.</p></div></div><div className="panel episode-state-view is-error"><WarningCircle size={28} weight="fill" /><div><strong>Episode read model unavailable</strong><p>{collectionMessage}</p><small>No Lifecycle or fixture data was substituted.</small><button className="secondary-button" onClick={() => void loadCollection()}>Retry Episode index</button></div></div></section>;
@@ -666,14 +751,14 @@ export function EpisodeStudio({ robotId, initialTarget, revisionHistorySupported
         </div>
       </section>
       {comparisonLoading && <div className="episode-compare-state panel"><Pulse size={20} /><span><strong>Reading both pinned revisions</strong><small>Each side is bounded to {EPISODE_COMPARE_PAGE_BUDGET} timeline pages and {EPISODE_VISIBLE_EVENT_LIMIT} visible events.</small></span></div>}
-      {comparisonMessage && <div className="episode-compare-state is-error panel" role="alert"><WarningCircle size={20} weight="fill" /><span><strong>Comparison rejected</strong><small>{comparisonMessage}</small></span></div>}
-      {comparison && evidenceContext && <EpisodeComparisonView comparison={comparison} evidenceContext={evidenceContext} selectedEvidenceId={selectedComparisonEvidenceId || null} onSelectEvidenceContext={(evidenceId) => { setSelectedAssetId(""); setSelectedComparisonEvidenceId(evidenceId || ""); }} onFocusLeftOccurrence={focusLeftOccurrence} onClear={clearComparison} onOpenEvidence={onOpenEvidence} />}
+      {comparisonMessage && <div className="episode-compare-state is-error panel" role="alert"><WarningCircle size={20} weight="fill" /><span><strong>Comparison or handoff rejected</strong><small>{comparisonMessage}</small></span></div>}
+      {comparison && evidenceContext && <EpisodeComparisonView comparison={comparison} evidenceContext={evidenceContext} selectedEvidenceId={selectedComparisonEvidenceId || null} onSelectEvidenceContext={(evidenceId) => { setSelectedAssetId(""); setSelectedComparisonEvidenceId(evidenceId || ""); }} onFocusLeftOccurrence={focusLeftOccurrence} onHandoffRightOccurrence={handoffRightOccurrence} onClear={clearComparison} onOpenEvidence={onOpenEvidence} />}
       {cohortSupported && <EpisodeCohortView cohort={cohort} review={cohortReview} loading={cohortLoading} message={cohortMessage} windowDays={cohortDays} disabled={!detail || detailLoading} onWindowDays={setCohortDays} onOpenMember={openCohortMember} onCompareMember={compareCohortMember} />}
       <div className="episode-shell">
         <aside className="episode-index panel">
           <header><span>Published Episodes</span><strong>{collection?.total || episodes.length}</strong></header>
           <div className="episode-index-tools"><label className="search-box"><MagnifyingGlass size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search Episode" aria-label="Search Episodes" /></label><label className="select-control"><Funnel size={14} /><select value={stateFilter} onChange={(event) => setStateFilter(event.target.value)} aria-label="Filter Episode state"><option value="all">All states</option><option value="RUNNING">Running</option><option value="COMPLETED">Completed</option><option value="FAILED">Failed</option><option value="CANCELLED">Cancelled</option><option value="PARTIAL">Partial</option></select></label></div>
-          <div className="episode-index-list">{filteredEpisodes.map((item) => <EpisodeListItem key={`${item.episode_id}-${item.revision}`} item={item} active={item.episode_id === selectedEpisodeId && item.revision === selectedRevision} onClick={() => { if (item.episode_id === compareEpisodeId && item.revision === compareRevision) clearComparison(); else setSelectedComparisonEvidenceId(""); setSelectedEpisodeId(item.episode_id); setSelectedRevision(item.revision); }} />)}{!filteredEpisodes.length && <div className="episode-index-empty"><MagnifyingGlass size={20} /><span>No Episodes match this view.</span></div>}</div>
+          <div className="episode-index-list">{filteredEpisodes.map((item) => <EpisodeListItem key={`${item.episode_id}-${item.revision}`} item={item} active={item.episode_id === selectedEpisodeId && item.revision === selectedRevision} onClick={() => { pendingHandoffTarget.current = null; setHandoffValidation(null); if (item.episode_id === compareEpisodeId && item.revision === compareRevision) clearComparison(); else setSelectedComparisonEvidenceId(""); setSelectedEpisodeId(item.episode_id); setSelectedRevision(item.revision); }} />)}{!filteredEpisodes.length && <div className="episode-index-empty"><MagnifyingGlass size={20} /><span>No Episodes match this view.</span></div>}</div>
           {collection?.next_offset !== null && <footer><button className="secondary-button" disabled={collectionLoading} onClick={() => void loadMoreEpisodes()}>{collectionLoading ? "Loading…" : "Load more Episodes"}</button></footer>}
         </aside>
 

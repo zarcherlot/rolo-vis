@@ -20,6 +20,10 @@ export interface EpisodeDeepLinkTarget {
   cohortDays: 7 | 30 | 90 | null;
 }
 
+export function isEpisodeIdentifier(value: unknown): value is string {
+  return typeof value === "string" && IDENTIFIER.test(value);
+}
+
 export function readEpisodeDeepLink(url: string): EpisodeDeepLinkTarget | null {
   const parsed = new URL(url, "http://rolo-vis.local");
   if (parsed.searchParams.get("view") !== "episode") return null;

@@ -9,6 +9,8 @@ const evidenceContractPath = new URL("../docs/EPISODE_COMPARISON_EVIDENCE_TRACE_
 const contextContractPath = new URL("../docs/EPISODE_EVIDENCE_REFERENCE_CONTEXT_CONTRACT.md", import.meta.url);
 const occurrenceFocusContractPath = new URL("../docs/EPISODE_EVIDENCE_OCCURRENCE_FOCUS_CONTRACT.md", import.meta.url);
 const assetFocusContractPath = new URL("../docs/EPISODE_ASSET_OCCURRENCE_FOCUS_CONTRACT.md", import.meta.url);
+const rightHandoffPath = new URL("../src/episodeRightContextHandoff.ts", import.meta.url);
+const rightHandoffContractPath = new URL("../docs/EPISODE_RIGHT_CONTEXT_HANDOFF_CONTRACT.md", import.meta.url);
 
 test("Episode pair UI derives from two existing read surfaces without a compare endpoint", async () => {
   const [studio, client] = await Promise.all([readFile(studioPath, "utf8"), readFile(clientPath, "utf8")]);
@@ -133,7 +135,7 @@ test("E13 left occurrence focus reuses pinned Event/Finding links without changi
   assert.match(studio, /setSelectedEventId\(target\.eventId\)/);
   assert.match(studio, /setSelectedFindingId\(target\.findingId\)/);
   assert.match(view, /Focus left source/);
-  assert.match(view, /RIGHT OCCURRENCES · CONTEXT ONLY/);
+  assert.match(view, /RIGHT OCCURRENCES · REORIENT ONLY/);
   assert.match(contract, /compare_evidence.*event.*finding/is);
   assert.match(contract, /does not read Evidence content/i);
   assert.doesNotMatch(view, /Focus right source/);
@@ -164,8 +166,28 @@ test("E14 Asset occurrence focus stays left-only, metadata-only, and Context-sco
   assert.match(studio, /asset\.evidence_id === selectedComparisonEvidenceId/);
   assert.match(studio, /episode-asset-\$\{selectedAssetId\}/);
   assert.match(view, /"ASSET"/);
-  assert.match(view, /RIGHT OCCURRENCES · CONTEXT ONLY/);
+  assert.match(view, /RIGHT OCCURRENCES · REORIENT ONLY/);
   assert.match(contract, /ASSET_METADATA_FOCUS_ONLY/);
   assert.match(contract, /does not open the Evidence drawer/i);
   assert.doesNotMatch(view, /Focus right source/);
+});
+
+test("E15 right occurrence handoff swaps pinned orientation without adding side or write authority", async () => {
+  const [studio, view, handoff, contract] = await Promise.all([
+    readFile(studioPath, "utf8"),
+    readFile(viewPath, "utf8"),
+    readFile(rightHandoffPath, "utf8"),
+    readFile(rightHandoffContractPath, "utf8"),
+  ]);
+  assert.match(view, /RIGHT OCCURRENCES · REORIENT ONLY/);
+  assert.match(view, /Reorient to right source/);
+  assert.match(handoff, /comparison\.right\.episodeId/);
+  assert.match(handoff, /compareEpisodeId: comparison\.left\.episodeId/);
+  assert.match(handoff, /contextItem\.right\.items\.some/);
+  assert.match(handoff, /resolveEpisodeOccurrenceFocus/);
+  assert.match(studio, /pendingHandoffTarget\.current = target/);
+  assert.match(studio, /window\.history\.pushState/);
+  assert.match(studio, /attachment changed after the orientation load/);
+  assert.match(contract, /PAIR_ORIENTATION_HANDOFF_ONLY/);
+  assert.doesNotMatch(`${studio}\n${view}\n${handoff}`, /searchParams\.set\(["']side|client\.evidence\(|supports_write:\s*true/);
 });

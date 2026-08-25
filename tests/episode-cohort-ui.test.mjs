@@ -35,7 +35,7 @@ test("Cohort compare keeps the reference pinned and reuses the independently val
     read("../src/roloClient.ts"),
     read("../docs/EPISODE_COHORT_INVESTIGATION_CONTRACT.md"),
   ]);
-  const handler = studio.slice(studio.indexOf("const compareCohortMember"), studio.indexOf("if (collectionLoading"));
+  const handler = studio.slice(studio.indexOf("const compareCohortMember"), studio.indexOf("const focusLeftOccurrence"));
   assert.match(handler, /setCompareEpisodeId\(member\.episode_id\)/);
   assert.match(handler, /setCompareRevision\(member\.revision\)/);
   assert.doesNotMatch(handler, /setSelectedEpisodeId|setSelectedRevision/);

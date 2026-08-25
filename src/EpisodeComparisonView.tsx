@@ -64,7 +64,7 @@ function EvidenceSources({ sources }: { sources: EpisodeEvidenceSource[] }) {
     : <span className="episode-evidence-absent">Not referenced</span>;
 }
 
-function OccurrenceLane({ title, lane, onFocus }: { title: string; lane: EpisodeEvidenceOccurrenceLane; onFocus?: (occurrence: EpisodeEvidenceOccurrence) => void }) {
+function OccurrenceLane({ title, lane, onAction, actionLabel }: { title: string; lane: EpisodeEvidenceOccurrenceLane; onAction?: (occurrence: EpisodeEvidenceOccurrence) => void; actionLabel?: string }) {
   return <article className="episode-evidence-context-lane">
     <header><span>{title}</span><strong>{lane.visibleCount} / {lane.totalCount}</strong></header>
     {lane.items.length ? <div>{lane.items.map((occurrence) => <section key={`${occurrence.source}-${occurrence.role}-${occurrence.contextId}`}>
@@ -78,18 +78,19 @@ function OccurrenceLane({ title, lane, onFocus }: { title: string; lane: Episode
         occurrence.verification?.replaceAll("_", " "),
         occurrence.availability?.replaceAll("_", " "),
       ].filter(Boolean).join(" · ") || "Episode-level reference"}</small>
-      {onFocus && ["TIMELINE", "FINDING_SUPPORTING", "FINDING_CONTRADICTING", "ASSET"].includes(occurrence.source) && <button className="episode-occurrence-focus" onClick={() => onFocus(occurrence)} aria-label={`Focus left source ${occurrence.contextId}`}><Crosshair size={12} /><span>Focus left source</span><ArrowRight size={11} /></button>}
+      {onAction && actionLabel && ["TIMELINE", "FINDING_SUPPORTING", "FINDING_CONTRADICTING", "ASSET"].includes(occurrence.source) && <button className="episode-occurrence-focus" onClick={() => onAction(occurrence)} aria-label={`${actionLabel} ${occurrence.contextId}`}><Crosshair size={12} /><span>{actionLabel}</span><ArrowRight size={11} /></button>}
     </section>)}</div> : <p>No occurrence on this side.</p>}
     {lane.truncatedCount > 0 && <footer>{lane.truncatedCount} additional occurrences are hidden by the per-side limit.</footer>}
   </article>;
 }
 
-export function EpisodeComparisonView({ comparison, evidenceContext, selectedEvidenceId, onSelectEvidenceContext, onFocusLeftOccurrence, onClear, onOpenEvidence }: {
+export function EpisodeComparisonView({ comparison, evidenceContext, selectedEvidenceId, onSelectEvidenceContext, onFocusLeftOccurrence, onHandoffRightOccurrence, onClear, onOpenEvidence }: {
   comparison: EpisodePairComparison;
   evidenceContext: EpisodeEvidenceReferenceContext;
   selectedEvidenceId: string | null;
   onSelectEvidenceContext: (evidenceId: string | null) => void;
   onFocusLeftOccurrence: (evidenceId: string, occurrence: EpisodeEvidenceOccurrence) => void;
+  onHandoffRightOccurrence: (evidenceId: string, occurrence: EpisodeEvidenceOccurrence) => void;
   onClear: () => void;
   onOpenEvidence: (evidenceId: string) => void;
 }) {
@@ -171,7 +172,7 @@ export function EpisodeComparisonView({ comparison, evidenceContext, selectedEvi
         </div> : <div className="episode-compare-evidence-empty"><Info size={16} /><span>No Evidence IDs are referenced by the bounded comparison inputs.</span></div>}
         {selectedContext && <section className="episode-evidence-context" aria-label={`Reference occurrence context for ${selectedContext.evidenceId}`}>
           <header><div><span><Crosshair size={14} /> Reference occurrence context</span><h4>{selectedContext.evidenceId}</h4><p>These are bounded attachment points, not Evidence content or proof of semantic equivalence.</p></div><strong>{evidenceContext.authority.replaceAll("_", " ")}</strong><button onClick={() => onSelectEvidenceContext(null)} aria-label="Close reference context"><X size={13} /></button></header>
-          <div><OccurrenceLane title="LEFT OCCURRENCES" lane={selectedContext.left} onFocus={(occurrence) => onFocusLeftOccurrence(selectedContext.evidenceId, occurrence)} /><OccurrenceLane title="RIGHT OCCURRENCES · CONTEXT ONLY" lane={selectedContext.right} /></div>
+          <div><OccurrenceLane title="LEFT OCCURRENCES" lane={selectedContext.left} onAction={(occurrence) => onFocusLeftOccurrence(selectedContext.evidenceId, occurrence)} actionLabel="Focus left source" /><OccurrenceLane title="RIGHT OCCURRENCES · REORIENT ONLY" lane={selectedContext.right} onAction={(occurrence) => onHandoffRightOccurrence(selectedContext.evidenceId, occurrence)} actionLabel="Reorient to right source" /></div>
         </section>}
         {(comparison.evidenceTrace.timelineCoverage.left === "BOUNDED_PARTIAL" || comparison.evidenceTrace.timelineCoverage.right === "BOUNDED_PARTIAL" || comparison.evidenceTrace.truncatedCount > 0) && <footer>
           <WarningCircle size={15} weight="fill" />

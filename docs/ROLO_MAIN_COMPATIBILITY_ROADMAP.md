@@ -378,3 +378,19 @@ The review contract is `EPISODE_ASSET_OCCURRENCE_FOCUS_CONTRACT.md`.
 
 The established release evidence is recorded in
 `EPISODE_ASSET_OCCURRENCE_FOCUS_BASELINE.md`.
+
+## E15 design candidate: right Context handoff
+
+Status: E15A-E15C approved on the `v0.29.0` baseline. `v0.30.0` metadata
+remains deferred to E15D validation and promotion.
+
+- Make an exact visible right Event, Finding, or Asset actionable only by swapping the
+  two already pinned Episode/revision orientations.
+- Preserve the selected `compare_evidence` ID and reuse the reviewed left-side focus
+  resolver after the swap.
+- Add no `side` query state, right-detail UI, endpoint, producer contract, content read,
+  verdict, release signal, or write authority.
+- Treat reference/candidate as viewport orientation labels; handoff never promotes a
+  run or changes outcome authority.
+
+The design contract is `EPISODE_RIGHT_CONTEXT_HANDOFF_CONTRACT.md`.
