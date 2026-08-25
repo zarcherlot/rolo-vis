@@ -108,3 +108,15 @@ test("E12 comparison context selection is URL-pinned, controlled by Studio, and 
   assert.match(contract, /must exist in the visible, validated v0\.26 context/i);
   assert.match(contract, /does not open the\s+Evidence drawer/i);
 });
+
+test("E12D live check covers valid, stale, malformed, orphaned, and pair-switched Context selection", async () => {
+  const check = await readFile(new URL("../scripts/check-episode-context-navigation.mjs", import.meta.url), "utf8");
+  assert.match(check, /valid_selection_restored: true/);
+  assert.match(check, /stale_selection_removed: validatedStaleSelection === null/);
+  assert.match(check, /malformed_selection_rejected: malformedRejected/);
+  assert.match(check, /orphan_selection_rejected: orphanRejected/);
+  assert.match(check, /pair_switch_selection_cleared: switched\.compareEvidenceId === null/);
+  assert.match(check, /selection_authority: "CONTEXT_SELECTION_ONLY"/);
+  assert.match(check, /opens_evidence_record: false/);
+  assert.doesNotMatch(check, /client\.evidence\(/);
+});

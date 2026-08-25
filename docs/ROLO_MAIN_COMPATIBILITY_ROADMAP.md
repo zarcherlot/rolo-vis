@@ -318,10 +318,10 @@ The detailed contract is `EPISODE_EVIDENCE_REFERENCE_CONTEXT_CONTRACT.md`.
 The established release evidence is recorded in
 `EPISODE_EVIDENCE_REFERENCE_CONTEXT_BASELINE.md`.
 
-## E12 candidate: Evidence context navigation continuity
+## E12 baseline: Evidence context navigation continuity
 
-Status: E12A–E12C were approved on 2026-08-25 as the next read-only candidate; no
-successor baseline has been promoted.
+Status: E12A–E12D are approved and promoted as the `v0.27.0` read-only baseline;
+frontend minimum `e2e8302`, merged to main by `2263cd8`.
 
 - Pin one selected v0.26 Evidence context row as `compare_evidence` alongside both
   comparison identities and revisions.
@@ -335,3 +335,6 @@ successor baseline has been promoted.
   artifact access, release signal, or write authority.
 
 The detailed contract is `EPISODE_EVIDENCE_CONTEXT_NAVIGATION_CONTRACT.md`.
+
+The established release evidence is recorded in
+`EPISODE_CONTEXT_NAVIGATION_BASELINE.md`.

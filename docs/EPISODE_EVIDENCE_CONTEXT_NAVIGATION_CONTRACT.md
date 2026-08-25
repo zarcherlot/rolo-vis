@@ -1,6 +1,6 @@
 # E12 Evidence context navigation continuity contract
 
-Status: E12A–E12C approved on 2026-08-25. It is not yet a promoted successor baseline.
+Status: E12A–E12D approved and promoted as the `v0.27.0` read-only baseline.
 
 Extends: rolo-vis `v0.26.0` / `rolo-vis-episode-evidence-reference-context/2026-08`
 
@@ -42,6 +42,9 @@ Episode-scoped parameter including `compare_evidence`.
 - **E12B — deep-link model:** parse, build, preserve, and remove `compare_evidence`.
 - **E12C — controlled surface:** lift Context selection into Episode Studio, restore it
   after validation, and remove stale or pair-crossing state.
+- **E12D — validation and baseline:** exercise live restoration, stale cleanup,
+  malformed rejection, and pair-switch clearing before freezing the `v0.27.0`
+  compatibility metadata in `EPISODE_CONTEXT_NAVIGATION_BASELINE.md`.
 
 ## Deferred
 
