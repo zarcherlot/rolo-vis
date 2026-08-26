@@ -33,6 +33,10 @@ test("E16A classifies restorable Episode and ordinary workbench history entries"
     kind: "VIEW",
     view: "wiki",
   });
+  assert.deepEqual(readWorkbenchNavigationIntent("https://workbench.test/?view=deployment"), {
+    kind: "VIEW",
+    view: "deployment",
+  });
   assert.deepEqual(readWorkbenchNavigationIntent("https://workbench.test/?theme=dark"), {
     kind: "VIEW",
     view: "stack",

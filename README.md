@@ -50,6 +50,13 @@ To keep the browser on the same origin while targeting a different local rolo po
 
 The plugin is read-only. It does not provide teleoperation, a free-form terminal, arbitrary file browsing, or operation invocation.
 
+Authenticated Target and Job writes are deliberately shipped as a second plugin under
+`deployment-control/`. Its production artifact is `dist/deployment-control/` and includes its own
+`rolo.plugin.json`; the original `rolo-vis` manifest and browser client remain read-only. The control
+plugin verifies `GET /v1/deployment-session` before exposing its workbench, holds the Controller
+Bearer token in React memory only, and clears it on disconnect or page reload. It never accepts SSH
+private keys or arbitrary commands.
+
 Robot Wiki keeps its trust lanes explicit: machine insights and discovery diffs come from the verified discovery manifest, while human-maintained Wiki text is shown separately as validated, unverified, or unavailable. Human prose is never promoted to a machine-observed fact.
 
 ## Build and verify
@@ -58,6 +65,32 @@ Robot Wiki keeps its trust lanes explicit: machine insights and discovery diffs 
 npm run build
 npm run test:sites
 ```
+
+To verify only the independent deployment-control artifact:
+
+```powershell
+npm run test:deployment-control
+npm run typecheck:deployment-control
+npm run build:deployment-control
+```
+
+The control plugin also contains the W9 Natural-language deployment panel. It sends an explicit
+selected-target allowlist to `POST /v1/session-agent/turns`; the browser bearer authenticates only
+the Controller request and is never forwarded to Codex. The backend feature is disabled by default
+and requires a dedicated Session Agent provider key. Codex can choose only broker catalog actions,
+cannot decide approvals, and the UI rejects raw target output or credential-bearing responses.
+The panel also reads the authenticated W10 readiness report and displays unresolved production gates;
+static configuration checks never suppress the required real-provider, SSH, HA, OS-isolation, or architecture acceptance.
+The same authenticated plugin exposes an R3 target-runtime rollback form backed by
+`POST /v1/targets/{target_id}/runtime-rollback-jobs`. It accepts only the previous package ID,
+exact current/previous manifest digests, an independent approver, TTL, and timeout. Submission
+freezes an Approval and does not immediately mutate the target; shell, argv, SSH credentials, and
+Controller paths remain outside the browser contract.
+The R3 host-provisioning form similarly calls
+`POST /v1/targets/{target_id}/host-provisioning-jobs` with two distinct Ed25519 public keys, an
+independent approver, TTL, and optional current-plan CAS digest. It never accepts private keys. The
+response is limited to Job, Approval, and plan digest; approval and Job execution remain separate
+authenticated actions, and unknown remote outcomes require reconciliation.
 
 For the complete MVP release-candidate gate, run:
 

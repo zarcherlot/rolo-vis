@@ -1,0 +1,47 @@
+.deployment-workbench { padding: 30px 34px 42px; color: var(--text); }
+.deployment-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; margin-bottom: 24px; }
+.deployment-heading h2 { margin: 5px 0 7px; font-size: 28px; letter-spacing: -0.03em; }
+.deployment-heading p { margin: 0; max-width: 700px; color: var(--muted); }
+.deployment-heading-actions { display: flex; align-items: center; gap: 12px; }
+.deployment-heading-actions > span { display: flex; align-items: center; gap: 7px; color: var(--green); font-size: 12px; }
+.deployment-heading-actions button { display: flex; align-items: center; gap: 7px; }
+.deployment-grid { display: grid; grid-template-columns: minmax(270px, 320px) minmax(520px, 1fr); gap: 18px; align-items: start; }
+.deployment-targets { padding: 0; overflow: hidden; min-height: 580px; }
+.deployment-targets > header, .deployment-jobs > header, .deployment-target-summary > header { display: flex; align-items: center; justify-content: space-between; padding: 17px 18px; border-bottom: 1px solid var(--line-soft); }
+.deployment-targets > header div { display: flex; align-items: center; gap: 9px; color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .08em; }
+.deployment-targets > header strong { display: grid; place-items: center; min-width: 22px; height: 20px; border-radius: 10px; background: var(--surface-2); color: var(--text); }
+.deployment-targets > header button { border: 1px solid var(--line); border-radius: 5px; background: transparent; color: var(--subtle); padding: 6px 10px; }
+.deployment-target-list { padding: 9px; display: grid; gap: 6px; }
+.deployment-target-card { width: 100%; display: grid; grid-template-columns: 38px 1fr auto; gap: 10px; align-items: center; padding: 13px 11px; border: 1px solid transparent; border-radius: 7px; background: transparent; color: inherit; text-align: left; }
+.deployment-target-card:hover { background: var(--surface-2); }
+.deployment-target-card.is-selected { border-color: var(--blue); background: color-mix(in srgb, var(--blue) 9%, transparent); box-shadow: inset 2px 0 0 var(--blue); }
+.deployment-target-icon { display: grid; place-items: center; width: 36px; height: 36px; border: 1px solid var(--line); border-radius: 6px; color: var(--blue); }
+.deployment-target-copy { min-width: 0; display: grid; gap: 3px; }
+.deployment-target-copy strong, .deployment-target-copy small, .deployment-target-copy code { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.deployment-target-copy small { color: var(--muted); }.deployment-target-copy code { color: var(--subtle); font-size: 10px; }
+.deployment-state { display: inline-flex; align-items: center; gap: 5px; width: fit-content; border-radius: 4px; padding: 4px 7px; font-size: 10px; font-weight: 650; letter-spacing: .04em; white-space: nowrap; color: var(--blue); background: color-mix(in srgb, var(--blue) 12%, transparent); }
+.deployment-state.is-complete { color: var(--green); background: color-mix(in srgb, var(--green) 12%, transparent); }
+.deployment-state.is-attention { color: var(--amber); background: color-mix(in srgb, var(--amber) 12%, transparent); }
+.deployment-main-column { display: grid; gap: 18px; }
+.deployment-target-summary { padding: 0; overflow: hidden; }
+.deployment-target-summary h3, .deployment-jobs h3 { margin: 4px 0 0; font-size: 17px; }
+.deployment-target-summary header span, .deployment-jobs header span { color: var(--text-muted); font-size: 11px; text-transform: uppercase; letter-spacing: .08em; }
+.deployment-facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; background: var(--line-soft); }
+.deployment-facts > div { min-height: 76px; padding: 15px 18px; background: var(--surface); display: grid; align-content: center; gap: 6px; }
+.deployment-facts small { color: var(--subtle); }.deployment-facts strong, .deployment-facts code { overflow-wrap: anywhere; font-size: 12px; }
+.deployment-jobs { padding: 0; overflow: hidden; min-height: 330px; }
+.deployment-jobs > header small { color: var(--subtle); }
+.deployment-job-list { padding: 8px 18px 20px; }
+.deployment-job-list article { position: relative; display: grid; grid-template-columns: 28px 1fr; gap: 10px; padding: 16px 0; border-bottom: 1px solid var(--line-soft); }
+.deployment-job-list article > svg { color: var(--blue); margin-top: 2px; z-index: 1; background: var(--surface); }
+.deployment-job-rail { position: absolute; left: 9px; top: 30px; bottom: -17px; width: 1px; background: var(--line); }
+.deployment-job-list article:last-of-type .deployment-job-rail { display: none; }
+.deployment-job-list article > div > header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.deployment-job-list article p { margin: 4px 0 10px; color: var(--subtle); font: 10px/1.4 ui-monospace, SFMono-Regular, Consolas, monospace; }
+.deployment-job-meta { display: flex; gap: 18px; color: var(--muted); font-size: 11px; }.deployment-job-meta b { color: var(--text); }
+.deployment-cli { margin-top: 11px; display: grid; grid-template-columns: 18px 1fr; gap: 8px; align-items: start; border: 1px solid var(--line); border-radius: 5px; background: #080d14; padding: 9px 10px; color: var(--subtle); }
+.deployment-cli code { color: var(--muted); overflow-wrap: anywhere; font-size: 10px; line-height: 1.5; }
+.deployment-list-empty, .deployment-empty { padding: 40px 22px; text-align: center; color: var(--subtle); }
+.deployment-empty { margin: 50px auto; max-width: 540px; }.deployment-empty h2 { color: var(--text); }
+.deployment-notice { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; padding: 10px 12px; border: 1px solid color-mix(in srgb, var(--amber) 35%, transparent); border-radius: 6px; color: var(--amber); background: color-mix(in srgb, var(--amber) 7%, transparent); font-size: 12px; }
+@media (max-width: 900px) { .deployment-grid { grid-template-columns: 1fr; }.deployment-targets { min-height: auto; }.deployment-heading { flex-direction: column; }.deployment-heading-actions { width: 100%; justify-content: space-between; } }

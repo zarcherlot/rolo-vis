@@ -32,6 +32,7 @@ import {
   WarningCircle,
   X,
 } from "@phosphor-icons/react";
+import { DeploymentWorkbench } from "./DeploymentWorkbench";
 import { Background, Controls, Handle, Position, ReactFlow } from "@xyflow/react";
 import type { Edge, Node, NodeMouseHandler, NodeProps, ReactFlowInstance } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
@@ -151,6 +152,7 @@ const NAV_ITEMS: Array<{ id: NavId; label: string; icon: typeof House; feature?:
   { id: "stack", label: "Stack Map", icon: GitBranch },
   { id: "capabilities", label: "Capabilities", icon: Stack },
   { id: "lifecycle", label: "Lifecycle", icon: Clock },
+  { id: "deployment", label: "Deployment", icon: ShieldCheck, feature: ROLO_API_FEATURES.deploymentWorkbench },
   { id: "episode", label: "Episode Studio", icon: Pulse, feature: ROLO_API_FEATURES.episodeReadModel },
   { id: "wiki", label: "Robot Wiki", icon: BookOpenText },
   { id: "evidence", label: "Evidence", icon: FileText },
@@ -2604,6 +2606,7 @@ function AppContent() {
           {active === "overview" && <OverviewView robot={robot} pipeline={pipeline} overview={overview} mode={mode} evidenceItems={evidenceItems} onOpenEvidence={openEvidence} onNavigate={navigate} />}
           {active === "capabilities" && (capabilitySource === "demo" ? <DemoCapabilityView onOpenEvidence={setEvidence} /> : capabilitySource === "live" && capabilityList ? <LiveCapabilityView robotId={robot.robot_id} items={capabilityList} limitations={capabilityLimitations} apiFeatures={apiFeatures} onOpenEvidence={openEvidence} /> : <ReadModelUnavailableView title="Capabilities" description="Live capability coverage needs a versioned rolo capability read model." />)}
           {active === "lifecycle" && (lifecycleSource === "demo" ? <DemoLifecycleView pipeline={pipeline} onOpenEvidence={setEvidence} /> : lifecycleSource === "live" && lifecycleRuns ? <LiveLifecycleView pipeline={pipeline} runs={lifecycleRuns} robotId={robot.robot_id} onOpenEvidence={openEvidence} /> : <ReadModelUnavailableView title="Lifecycle" description="Live lifecycle requires trusted stage and run read models." />)}
+          {active === "deployment" && <DeploymentWorkbench enabled={apiFeatures.includes(ROLO_API_FEATURES.deploymentWorkbench)} />}
           {active === "episode" && (episodeSupported ? <EpisodeStudio key={`episode-navigation-${episodeNavigationRevision}`} robotId={robot.robot_id} initialTarget={episodeTarget} revisionHistorySupported={episodeRevisionHistorySupported} cohortSupported={episodeCohortSupported} observationBundleSupported={episodeObservationBundleSupported} onOpenEvidence={openEvidence} /> : <ReadModelUnavailableView title="Episode Studio" description="rolo has not advertised the versioned Episode read model for this robot connection." />)}
           {active === "wiki" && (mode === "demo" ? <ReadModelUnavailableView title="Robot Wiki" description="The labeled demo fixture does not include discovery Wiki evidence." /> : wiki && discoveryHistory ? <WikiView wiki={wiki} history={discoveryHistory} focusLayer={wikiContextFocus} onOpenStackLayer={openStackLayer} onClearFocus={() => setWikiContextFocus(null)} onOpenEvidence={openEvidence} /> : wikiLoading ? <section className="content-view"><PageTitle title="Robot Wiki" description="Reading manifest-verified discovery snapshots…" /><div className="panel read-model-unavailable" role="status"><Pulse size={26} /><div><strong>Loading Robot Wiki</strong><p>Current knowledge and verified history are being resolved independently.</p></div></div></section> : <ReadModelUnavailableView title="Robot Wiki" description={wikiMessage || "Open this surface to read a verified discovery Wiki."} />)}
           {active === "evidence" && (evidenceSource === "demo" ? <EvidenceView onOpenEvidence={openEvidence} /> : evidenceSource === "live" ? <EvidenceView live collection={evidenceList} robotId={robot.robot_id} onOpenEvidence={openEvidence} /> : <ReadModelUnavailableView title="Evidence" description="Live evidence resolution needs a versioned rolo evidence read model." />)}

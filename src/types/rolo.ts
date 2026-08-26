@@ -1182,6 +1182,30 @@ export interface FleetCollection {
   integrity_status: "validated";
 }
 
+export type TargetDeploymentWorkbenchPage = "fleet" | "target" | "job" | "approval" | "blocker";
+
+export interface TargetDeploymentWorkbenchField {
+  name: string;
+  value: string;
+}
+
+export interface TargetDeploymentWorkbenchRow {
+  identity: string;
+  kind: "TARGET" | "JOB" | "APPROVAL" | "BLOCKER";
+  status: string;
+  summary: string;
+  canonical_cli: string | null;
+  fields: TargetDeploymentWorkbenchField[];
+}
+
+export interface TargetDeploymentWorkbenchSnapshot {
+  schema_version: "rolo-target-deployment-workbench-snapshot/v1";
+  page: TargetDeploymentWorkbenchPage;
+  title: string;
+  captured_at: string;
+  rows: TargetDeploymentWorkbenchRow[];
+}
+
 interface FleetBlockerSummaryBase {
   blocker_id: string;
   robot_id: string;

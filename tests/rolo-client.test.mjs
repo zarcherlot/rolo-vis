@@ -861,6 +861,89 @@ test("RoloClient bootstraps the read-only control-plane surface", async () => {
   }
 });
 
+test("RoloClient reads the secret-closed deployment Workbench contract", async () => {
+  const originalFetch = globalThis.fetch;
+  let requestedUrl = "";
+  const snapshot = {
+    schema_version: "rolo-target-deployment-workbench-snapshot/v1",
+    page: "target",
+    title: "Target wheeltec",
+    captured_at: "2026-08-26T00:00:00Z",
+    rows: [{
+      identity: "wheeltec",
+      kind: "TARGET",
+      status: "REGISTERED",
+      summary: "LOCAL / STRICT",
+      canonical_cli: null,
+      fields: [
+        { name: "workspace", value: "C:/robot/ws" },
+        { name: "desired_version", value: "0.2.0" },
+      ],
+    }],
+  };
+  globalThis.fetch = async (url) => {
+    requestedUrl = String(url);
+    return { ok: true, json: async () => snapshot };
+  };
+
+  try {
+    const result = await new RoloClient("http://rolo.test").deploymentWorkbench(
+      "target",
+      { targetId: "wheeltec" },
+    );
+    assert.equal(result.rows[0].identity, "wheeltec");
+    assert.equal(
+      requestedUrl,
+      "http://rolo.test/v1/deployment-workbench?page=target&limit=100&target_id=wheeltec",
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("Deployment Workbench rejects secret-bearing or unapproved response fields", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => ({
+    ok: true,
+    json: async () => ({
+      schema_version: "rolo-target-deployment-workbench-snapshot/v1",
+      page: "target",
+      title: "Target wheeltec",
+      captured_at: "2026-08-26T00:00:00Z",
+      rows: [{
+        identity: "wheeltec",
+        kind: "TARGET",
+        status: "REGISTERED",
+        summary: "SSH / STRICT",
+        canonical_cli: null,
+        fields: [{ name: "credential_ref", value: "file://ssh/wheeltec" }],
+      }],
+    }),
+  });
+
+  try {
+    await assert.rejects(
+      () => new RoloClient("http://rolo.test").deploymentWorkbench(
+        "target",
+        { targetId: "wheeltec" },
+      ),
+      /unapproved field/,
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("Deployment Workbench UI stays read-only and exposes no shell or secret input", async () => {
+  const source = await readFile(new URL("../src/DeploymentWorkbench.tsx", import.meta.url), "utf8");
+  assert.match(source, /Secret-closed read model/);
+  assert.match(source, /Add target<\/button>/);
+  assert.match(source, /<button disabled/);
+  assert.doesNotMatch(source, /type=["']password["']/);
+  assert.doesNotMatch(source, /method:\s*["']POST["']/);
+  assert.doesNotMatch(source, /localStorage|sessionStorage|private_key|privateKey/);
+});
+
 test("RoloClient reads governance metadata without changing Registry capability data", async () => {
   const originalFetch = globalThis.fetch;
   let requestedUrl = "";
@@ -2031,6 +2114,7 @@ test("plugin manifest declares every trusted read-model endpoint", async () => {
       "/health",
       "/v1/fleet",
       "/v1/blockers",
+      "/v1/deployment-workbench",
       "/v1/robots",
       "/v1/robots/{robot_id}/overview",
       "/v1/robots/{robot_id}/pipeline",

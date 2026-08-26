@@ -1,0 +1,60 @@
+{
+  "schema_version": "rolo-plugin/v1",
+  "id": "rolo-deployment-control",
+  "name": "rolo Deployment Control",
+  "version": "0.1.0",
+  "kind": "web-workbench",
+  "entry": "index.html",
+  "capabilities": [
+    "deployment.workbench.read",
+    "deployment.auth.session",
+    "deployment.target.register",
+    "deployment.connection.assess",
+    "deployment.project-evidence.submit",
+    "deployment.source-discovery.submit",
+    "deployment.runtime-evidence.submit",
+    "deployment.host-provisioning.submit",
+    "deployment.bootstrap.submit",
+    "deployment.runtime-rollback.submit",
+    "deployment.adapt.submit",
+    "deployment.session-agent.turn",
+    "deployment.session-agent.readiness",
+    "deployment.job.run",
+    "deployment.job.cancel",
+    "deployment.approval.decide"
+  ],
+  "api": {
+    "base_path": "/rolo-api",
+    "required_endpoints": [
+      "/health",
+      "/v1/deployment-session",
+      "/v1/deployment-workbench",
+      "/v1/session-agent/turns",
+      "/v1/session-agent/readiness",
+      "/v1/targets",
+      "/v1/targets/{target_id}/connection-assessments",
+      "/v1/targets/{target_id}/project-evidence-jobs",
+      "/v1/targets/{target_id}/source-discovery-jobs",
+      "/v1/targets/{target_id}/runtime-evidence-jobs",
+      "/v1/targets/{target_id}/host-provisioning-jobs",
+      "/v1/targets/{target_id}/bootstrap-jobs",
+      "/v1/targets/{target_id}/runtime-rollback-jobs",
+      "/v1/targets/{target_id}/adapt-jobs",
+      "/v1/jobs/{job_id}",
+      "/v1/jobs/{job_id}/events",
+      "/v1/jobs/{job_id}/run",
+      "/v1/jobs/{job_id}/cancel",
+      "/v1/approvals/{approval_id}/decisions"
+    ]
+  },
+  "security": {
+    "mode": "authenticated-control",
+    "authentication": "memory-only-bearer",
+    "required_permissions": ["target:write", "approval:write"],
+    "remote_access": "loopback-or-trusted-reverse-proxy",
+    "persists_credentials": false,
+    "allows_ssh_private_keys": false,
+    "allows_arbitrary_commands": false,
+    "allows_arbitrary_file_browsing": false
+  }
+}

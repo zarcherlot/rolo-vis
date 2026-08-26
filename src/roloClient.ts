@@ -45,6 +45,8 @@ import type {
   SliceStabilityReport,
   StageAssessment,
   TargetOperationSlice,
+  TargetDeploymentWorkbenchPage,
+  TargetDeploymentWorkbenchSnapshot,
   TargetOperationSliceShadowReport,
   TopologyDiff,
   TopologyEdge,
@@ -80,12 +82,72 @@ export const ROLO_API_FEATURES = {
   sliceStabilityComparison: "adapt.slice-stability-comparison/v1",
   sliceStability: "adapt.slice-stability/v1",
   targetOperationSlice: "adapt.target-operation-slice/v1",
+  deploymentWorkbench: "deployment.workbench-read-model/v1",
   blockerDetail: "workbench.blocker-detail/v1",
   episodeReadModel: "workbench.episode-read-model/v1",
   episodeRevisionHistory: "workbench.episode-revision-history/v1",
   episodeCohortReadModel: "workbench.episode-cohort-read-model/v1",
   episodeObservationBundle: "workbench.episode-observation-bundle/v1",
 } as const;
+
+const DEPLOYMENT_FIELD_NAMES = new Set([
+  "action",
+  "approver",
+  "command_sha256",
+  "desired_version",
+  "expires_at",
+  "manifest_sha256",
+  "package_ref",
+  "recovery",
+  "release_key_id",
+  "requester",
+  "risk",
+  "scope_sha256",
+  "ssh_fingerprint",
+  "ssh_host",
+  "ssh_port",
+  "ssh_user",
+  "target",
+  "updated_at",
+  "workspace",
+]);
+
+function parseDeploymentWorkbench(
+  value: unknown,
+  path: string,
+  expectedPage: TargetDeploymentWorkbenchPage,
+): TargetDeploymentWorkbenchSnapshot {
+  requireContract(isRecord(value), "deployment workbench response must be an object", path);
+  requireContract(
+    value.schema_version === "rolo-target-deployment-workbench-snapshot/v1",
+    "unsupported deployment workbench schema",
+    path,
+  );
+  requireContract(value.page === expectedPage, "deployment workbench page does not match request", path);
+  requireContract(typeof value.title === "string" && value.title.length > 0, "invalid deployment workbench title", path);
+  requireContract(isTimestamp(value.captured_at), "invalid deployment workbench timestamp", path);
+  requireContract(Array.isArray(value.rows) && value.rows.length <= 1000, "invalid deployment workbench rows", path);
+  for (const [index, row] of value.rows.entries()) {
+    const rowPath = `${path}/rows/${index}`;
+    requireContract(isRecord(row), "deployment workbench row must be an object", rowPath);
+    requireContract(typeof row.identity === "string" && row.identity.length > 0, "invalid deployment row identity", rowPath);
+    requireContract(["TARGET", "JOB", "APPROVAL", "BLOCKER"].includes(String(row.kind)), "invalid deployment row kind", rowPath);
+    requireContract(typeof row.status === "string" && typeof row.summary === "string", "invalid deployment row state", rowPath);
+    requireContract(row.canonical_cli === null || (typeof row.canonical_cli === "string" && row.canonical_cli.startsWith("robotctl target ")), "invalid deployment canonical CLI", rowPath);
+    requireContract(Array.isArray(row.fields) && row.fields.length <= 64, "invalid deployment row fields", rowPath);
+    for (const [fieldIndex, field] of row.fields.entries()) {
+      const fieldPath = `${rowPath}/fields/${fieldIndex}`;
+      requireContract(isRecord(field), "deployment field must be an object", fieldPath);
+      requireContract(typeof field.name === "string" && DEPLOYMENT_FIELD_NAMES.has(field.name), "deployment response contains an unapproved field", fieldPath);
+      requireContract(typeof field.value === "string" && !/[\0\r\n]/.test(field.value), "invalid deployment field value", fieldPath);
+    }
+  }
+  const serialized = JSON.stringify(value).toLowerCase();
+  for (const forbidden of ["credential_ref", "known_hosts_path", "package_root", "private_key", "public_key_base64", "password", "bearer "]) {
+    requireContract(!serialized.includes(forbidden), "deployment response contains a forbidden secret-bearing field", path);
+  }
+  return value as unknown as TargetDeploymentWorkbenchSnapshot;
+}
 
 export function supportsApiFeature(health: HealthResponse, feature: string): boolean {
   return health.api_features.includes(feature);
@@ -978,6 +1040,19 @@ export class RoloClient {
   async blockers(options?: RequestInit) {
     const path = "/v1/blockers?limit=100&offset=0";
     return parseFleetBlockerCollection(await this.request<unknown>(path, options), path);
+  }
+
+  async deploymentWorkbench(
+    page: TargetDeploymentWorkbenchPage,
+    selection: { targetId?: string; jobId?: string; approvalId?: string } = {},
+    options?: RequestInit,
+  ) {
+    const query = new URLSearchParams({ page, limit: "100" });
+    if (selection.targetId) query.set("target_id", selection.targetId);
+    if (selection.jobId) query.set("job_id", selection.jobId);
+    if (selection.approvalId) query.set("approval_id", selection.approvalId);
+    const path = `/v1/deployment-workbench?${query.toString()}`;
+    return parseDeploymentWorkbench(await this.request<unknown>(path, options), path, page);
   }
 
   async topologySnapshots(robotId: string, options?: RequestInit) {

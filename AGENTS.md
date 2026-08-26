@@ -10,6 +10,9 @@ When implementing from a selected generated mock, treat that image as the source
 
 - The selected visual direction is `docs/design/selected-stack-map.png`: dark, topology-first, restrained, and evidence-led.
 - The MVP is a read-only rolo plugin. Do not add teleoperation, arbitrary shell commands, arbitrary file browsing, or bypasses around rolo runtime policy.
+- Keep `rolo-vis` read-only. Authenticated deployment writes live in the separate `rolo-deployment-control` plugin and must not be merged into the read-only manifest or client.
+- `rolo-deployment-control` may hold a Controller bearer token in React memory only. It must never persist the token in browser storage, URLs, logs, fixtures, or build output, and it must not accept SSH private keys or free-form commands.
+- Natural-language deployment requests are allowed only through `/v1/session-agent/turns`: the browser freezes an explicit target allowlist, never sends the Controller token to Codex, and displays only broker-sanitized receipts. This is not a terminal or arbitrary-command surface.
 - The primary screen is Stack Map. Overview, Capabilities, Lifecycle, and Evidence use the same visual system.
 - Real rolo API data should be preferred; when unavailable, a clearly labeled demo mode may provide realistic fixture data for evaluation.
 
