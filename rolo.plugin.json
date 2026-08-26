@@ -1,10 +1,15 @@
 {
-  "schema_version": "rolo-plugin/v1",
+  "schema_version": "rolo-plugin/v2",
   "id": "rolo-vis",
   "name": "rolo Workbench",
   "version": "0.37.0",
   "kind": "web-workbench",
   "entry": "dist/client/index.html",
+  "delivery": {
+    "mode": "device-local",
+    "mount_path": "/workbench/",
+    "spa_fallback": "scoped"
+  },
   "capabilities": [
     "fleet.overview.read",
     "fleet.blockers.read",
@@ -22,6 +27,7 @@
   ],
   "api": {
     "base_path": "/rolo-api",
+    "required_features": [],
     "required_endpoints": [
       "/health",
       "/v1/fleet",
@@ -54,5 +60,9 @@
     "remote_access": "loopback-or-trusted-reverse-proxy",
     "allows_arbitrary_commands": false,
     "allows_secret_payloads": false
+  },
+  "integrity": {
+    "algorithm": "sha256",
+    "manifest": "SHA256SUMS"
   }
 }

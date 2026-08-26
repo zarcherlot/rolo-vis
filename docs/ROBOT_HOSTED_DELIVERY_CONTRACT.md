@@ -1,6 +1,6 @@
 # E23 robot-hosted delivery consumer contract
 
-Status: E23A review candidate; packaging and runtime changes deferred
+Status: E23A approved; E23B/C implementation review candidate
 
 Target baseline: rolo-vis `v0.38.0`
 
@@ -65,7 +65,7 @@ authority.
 
 ## 4. Build and release contract
 
-After E23C:
+E23C implements the following reviewed build contract:
 
 - `npm run build` performs only the Vite client build into `dist/client`;
 - `npm test` includes robot-hosted delivery contract coverage;
@@ -80,8 +80,8 @@ The following are retired from active delivery in E23C:
 - `scripts/prepare-sites-build.mjs`;
 - `tests/sites-worker.test.mjs` and `npm run test:sites`.
 
-Removing those files is an implementation slice, not an E23A design mutation. The
-deleted Sites project is not recreated, saved, previewed, or deployed.
+Those files are removed by the E23C implementation. The deleted Sites project is not
+recreated, saved, previewed, or deployed.
 
 ## 5. Compatibility and activation behavior
 
@@ -153,4 +153,3 @@ feature contracts; otherwise the current fail-closed compatibility view is shown
 5. Required compatibility is feature-negotiated before activation.
 6. Sites artifacts are removed in E23C, while historical baseline records remain.
 7. `v0.37.0` is not moved; `v0.38.0` becomes the first robot-hosted baseline.
-

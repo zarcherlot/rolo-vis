@@ -17,5 +17,5 @@ Build app UI in `src/`.
 
 - Production delivery is robot-hosted and device-local: rolo serves the validated plugin at `/workbench/` and its API at `/rolo-api` on one robot-owned origin.
 - Do not create or deploy a public Sites project. The deleted Sites project and public production URL are not part of the product architecture.
-- E23A freezes this decision without changing runtime packaging. E23C removes `.openai/hosting.json`, the Sites Worker wrapper, Sites preparation script, and Sites-only tests after the contract is approved.
+- The approved E23 delivery path uses `rolo-plugin/v2`, relative client assets, deterministic checksums, and the robot-hosted package tests. Sites project files and Sites-only build steps must not be restored.
 - Preserve the read-only authority boundary and explicit live-data failure state throughout the delivery migration.

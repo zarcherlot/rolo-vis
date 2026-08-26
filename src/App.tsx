@@ -295,7 +295,7 @@ function Sidebar({ active, apiFeatures, onChange }: { active: NavId; apiFeatures
   const visibleItems = NAV_ITEMS.filter((item) => !item.feature || apiFeatures.includes(item.feature));
   return (
     <aside className="sidebar" aria-label="Primary navigation">
-      <div className="sidebar-brand"><img src="/assets/rolo-mark.png" alt="rolo" /></div>
+      <div className="sidebar-brand"><img src={`${import.meta.env.BASE_URL}assets/rolo-mark.png`} alt="rolo" /></div>
       <nav>
         {visibleItems.map(({ id, label, icon: Icon }) => (
           <button

@@ -18,7 +18,7 @@ test("E23A freezes the v2 package and deterministic integrity boundary", async (
     read("../docs/ROBOT_HOSTED_DELIVERY_CONTRACT.md"),
     read("../rolo.plugin.json").then(JSON.parse),
   ]);
-  assert.equal(manifest.schema_version, "rolo-plugin/v1");
+  assert.equal(manifest.schema_version, "rolo-plugin/v2");
   assert.equal(manifest.entry, "dist/client/index.html");
   assert.equal(manifest.api.base_path, "/rolo-api");
   assert.equal(manifest.security.mode, "read-only");
@@ -29,18 +29,25 @@ test("E23A freezes the v2 package and deterministic integrity boundary", async (
   assert.match(contract, /`SHA256SUMS` covers the manifest and every served file/);
 });
 
-test("E23A defers Sites removal and runtime implementation to reviewed slices", async () => {
-  const [contract, packageJson, agents] = await Promise.all([
+test("E23C removes Sites delivery and keeps robot-hosted instructions authoritative", async () => {
+  const [contract, packageJson, agents, app, viteConfig] = await Promise.all([
     read("../docs/ROBOT_HOSTED_DELIVERY_CONTRACT.md"),
     read("../package.json").then(JSON.parse),
     read("../AGENTS.md"),
+    read("../src/App.tsx"),
+    read("../vite.config.mjs"),
   ]);
   assert.equal(packageJson.version, "0.37.0");
-  assert.match(packageJson.scripts.build, /prepare-sites-build/);
-  assert.match(contract, /Removing those files is an implementation slice, not an E23A design mutation/);
-  assert.match(contract, /deleted Sites project is not recreated, saved, previewed, or deployed/);
+  assert.doesNotMatch(packageJson.scripts.build, /prepare-sites-build|sites/i);
+  assert.equal(packageJson.scripts["package:plugin"], "node scripts/package-plugin.mjs");
+  assert.equal(packageJson.scripts["test:plugin"], "node --test tests/plugin-package.test.mjs");
+  assert.match(contract, /Those files are removed by the E23C implementation/);
+  assert.match(contract, /deleted Sites project is not\s+recreated, saved, previewed, or deployed/);
   assert.match(agents, /Production delivery is robot-hosted and device-local/);
   assert.match(agents, /Do not create or deploy a public Sites project/);
+  assert.match(viteConfig, /base:\s*"\.\/"/);
+  assert.match(app, /import\.meta\.env\.BASE_URL.*assets\/rolo-mark\.png/);
+  assert.doesNotMatch(app, /src=["{]"?\/assets\//);
 });
 
 test("E23A preserves read-only failure and authority boundaries", async () => {
@@ -53,6 +60,5 @@ test("E23A preserves read-only failure and authority boundaries", async () => {
   assert.match(app, /The workbench will not substitute fixture data automatically/);
   assert.match(contract, /no demo fallback unless the user explicitly selects labeled demo data/i);
   assert.match(contract, /no teleoperation, shell command, arbitrary filesystem access/i);
-  assert.match(contract, /add no product source, manifest v2, package script, or server change/);
+  assert.match(contract, /no teleoperation, shell command, arbitrary filesystem access/i);
 });
-
