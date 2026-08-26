@@ -23,6 +23,7 @@ import { EpisodeCohortView } from "./EpisodeCohortView";
 import { EpisodeComparisonView } from "./EpisodeComparisonView";
 import { buildEpisodeDiagnosticFocus } from "./episodeDiagnosticFocus";
 import { EpisodeDiagnosticFocusView } from "./EpisodeDiagnosticFocusView";
+import { EpisodeObservationTray } from "./EpisodeObservationTray";
 import { roloClient } from "./roloClient";
 import {
   appendTimelineEvents,
@@ -276,7 +277,7 @@ function EpisodeTimeline({ detail, events, selectedEventId, visibleLanes, focuse
   );
 }
 
-export function EpisodeStudio({ robotId, initialTarget, revisionHistorySupported, cohortSupported, onOpenEvidence }: { robotId: string; initialTarget?: EpisodeDeepLinkTarget | null; revisionHistorySupported: boolean; cohortSupported: boolean; onOpenEvidence: (evidenceId: string) => void }) {
+export function EpisodeStudio({ robotId, initialTarget, revisionHistorySupported, cohortSupported, observationBundleSupported, onOpenEvidence }: { robotId: string; initialTarget?: EpisodeDeepLinkTarget | null; revisionHistorySupported: boolean; cohortSupported: boolean; observationBundleSupported: boolean; onOpenEvidence: (evidenceId: string) => void }) {
   const [collection, setCollection] = useState<EpisodeCollection | null>(null);
   const [episodes, setEpisodes] = useState<EpisodeSummary[]>([]);
   const [collectionLoading, setCollectionLoading] = useState(true);
@@ -321,6 +322,10 @@ export function EpisodeStudio({ robotId, initialTarget, revisionHistorySupported
   const [reviewLinkMessage, setReviewLinkMessage] = useState("");
   const [reviewHandoffIntent] = useState(() => readEpisodeReviewHandoff(window.location.href));
   const [reviewSessionState, setReviewSessionState] = useState<EpisodeReviewSessionState>("PENDING");
+  const rejectObservationEpisodeIdentity = useCallback((message: string) => {
+    setDetail(null);
+    setDetailMessage(message);
+  }, []);
 
   const loadCollection = useCallback(async () => {
     collectionRequest.current?.abort();
@@ -953,6 +958,8 @@ export function EpisodeStudio({ robotId, initialTarget, revisionHistorySupported
           <article><span>Observed</span><h3>Producer observation</h3><p>{detail.observed_behavior || "No observed behavior was published."}</p></article>
           <article className={`episode-verification-summary is-${detail.verification.toLowerCase().replaceAll("_", "-")}`}><span>Independent verification</span><h3>{detail.verification.replaceAll("_", " ")}</h3><p>{detail.verification === "VERIFIED" ? "A Verify-stage result is bound to this revision." : detail.verification === "UNVERIFIED" ? "Execution outcome is not an independent Verify-stage result." : "No verification read model is available for this revision."}</p></article>
         </section>
+
+        {observationBundleSupported && <EpisodeObservationTray detail={detail} events={events} onFocusAsset={(assetId) => { setSelectedEventId(""); setSelectedFindingId(""); setSelectedAssetId(assetId); window.requestAnimationFrame(() => document.getElementById(`episode-asset-${assetId}`)?.scrollIntoView({ behavior: "smooth", block: "center" })); }} onOpenEvidence={onOpenEvidence} onEpisodeUnavailable={rejectObservationEpisodeIdentity} />}
 
         <section className="episode-findings-section">
           <header><div><span>Diagnosis and verification</span><h3>Findings</h3></div><small>{detail.findings.length} published · authority never inferred from confidence</small></header>

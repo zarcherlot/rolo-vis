@@ -1,6 +1,6 @@
 # E22 Episode Observation Bundle consumer contract
 
-Status: E22A cross-repository review candidate
+Status: E22A-E22B approved; E22C consumer and Perspective Tray review candidate
 
 Target baseline: rolo-vis `v0.37.0`
 
@@ -15,9 +15,10 @@ tray explains which sanitized observation source classes and already-published E
 assets formed each immutable Observation Bundle. It must not read an internal bundle
 manifest or treat bundle completeness as outcome, cause, confirmation, or verification.
 
-E22A is design-only. rolo-vis continues to advertise version `0.36.0`, does not request
-the candidate endpoint, and does not show a placeholder live surface. Runtime work
-starts only after the matching rolo contract is reviewed and implemented.
+E22A and the matching E22B producer are approved. E22C now implements a strictly
+feature-negotiated client read and the smallest coherent Perspective Tray while
+rolo-vis continues to advertise version `0.36.0`. Promotion to `v0.37.0`, main, tag,
+live-data gate, and production deployment remain reserved for E22D review.
 
 ## 2. Negotiated contract
 
@@ -120,7 +121,7 @@ deployment, or robot write authority.
 
 - agree the public schemas, endpoint, enums, integrity rules, and UI semantics across
   rolo and rolo-vis;
-- retain `v0.36.0` runtime behavior and advertise no new feature.
+- at design approval, retain `v0.36.0` runtime behavior and advertise no new feature.
 
 ### E22B — upstream producer
 
@@ -128,10 +129,21 @@ deployment, or robot write authority.
 - cover complete, partial, unavailable, mixed-world, missing, stale, and rejected
   source cases plus unsafe-field rejection.
 
-### E22C — consumer and Perspective Tray
+### E22C — current consumer and Perspective Tray review candidate
 
 - add strict types, parser, client read, feature gate, and the smallest coherent tray;
 - reuse existing asset/Evidence views and keep content delivery absent.
+
+Implemented in this candidate:
+
+- strict recursive public-field rejection plus exact identity, revision, page, enum,
+  world-scope, asset, Evidence, parent-lineage, and non-verification validation;
+- bounded newest-first traversal of at most 100 records, with earlier validated pages
+  retained and labeled incomplete when a later page fails;
+- component-memory-only bundle selection, explicit time/spatial/world/availability
+  labels, and handoff only to existing Asset focus and sanitized Evidence views;
+- omission of the complete tray when the health feature is absent, with no demo,
+  media, capture, persistence, replay, export, recollection, or write fallback.
 
 ### E22D — baseline candidate
 
@@ -148,3 +160,15 @@ deployment, or robot write authority.
 - Existing Episode asset and Evidence projections remain the only safe drilldowns.
 - Unsafe fields and inconsistent cross-model references fail closed.
 - The design contains no hidden media, persistence, identity, or write expansion.
+
+## 10. E22C acceptance
+
+- The endpoint is called only when `workbench.episode-observation-bundle/v1` is
+  advertised and always uses the already accepted immutable Episode revision.
+- Unknown fields/enums, unsafe strings, stale Asset/Evidence IDs, inconsistent world
+  scope, verification influence, duplicate/order violations, and invalid complete
+  lineage fail closed.
+- `COMPLETE` is visibly described as input assembly only, while missing, stale,
+  rejected, and unavailable sources remain distinct non-color labels.
+- Selection remains React component memory only and adds no URL or browser storage.
+- E22C remains unpromoted until the E22D full and live-data gates are approved.

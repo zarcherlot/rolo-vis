@@ -1076,6 +1076,75 @@ export interface EpisodeTimelinePage {
   limitations: string[];
 }
 
+export type EpisodeObservationBundleTrigger = "INITIAL" | "SUPPLEMENTARY";
+export type EpisodeObservationBundleStatus = "COMPLETE" | "PARTIAL" | "UNAVAILABLE";
+export type EpisodeObservationSourceKind =
+  | "ONBOARD_SENSOR"
+  | "EXTERNAL_MEASUREMENT"
+  | "ROBOT_STATE"
+  | "SPATIAL_MODEL"
+  | "DETERMINISTIC_RENDER"
+  | "TRUSTED_GUI_CAPTURE"
+  | "SIMULATION";
+export type EpisodeObservationSourceAvailability = "AVAILABLE" | "MISSING" | "STALE" | "REJECTED" | "UNAVAILABLE";
+export type EpisodeObservationSpatialAlignment = "ALIGNED" | "DEGRADED" | "UNALIGNED" | "UNKNOWN";
+export type EpisodeObservationWorldScope = "NONE" | "PHYSICAL_ONLY" | "SIMULATED_ONLY" | "REPLAYED_ONLY" | "MIXED";
+
+export interface EpisodeObservationSourceCoverage {
+  schema_version: "rolo-episode-observation-source-coverage/v1";
+  robot_id: string;
+  episode_id: string;
+  episode_revision: number;
+  bundle_id: string;
+  source_id: string;
+  label: string;
+  source_kind: EpisodeObservationSourceKind;
+  modality: string;
+  world_kind: EpisodeWorldKind;
+  availability: EpisodeObservationSourceAvailability;
+  synchronization: EpisodeSynchronization;
+  spatial_alignment: EpisodeObservationSpatialAlignment;
+  asset_ids: string[];
+  limitations: string[];
+}
+
+export interface EpisodeObservationBundleSummary {
+  schema_version: "rolo-episode-observation-bundle-summary/v1";
+  robot_id: string;
+  episode_id: string;
+  episode_revision: number;
+  bundle_id: string;
+  sequence: number;
+  parent_bundle_id: string | null;
+  trigger_kind: EpisodeObservationBundleTrigger;
+  status: EpisodeObservationBundleStatus;
+  created_at: string;
+  window_start_offset_ms: number;
+  window_end_offset_ms: number;
+  synchronization: EpisodeSynchronization;
+  spatial_alignment: EpisodeObservationSpatialAlignment;
+  world_scope: EpisodeObservationWorldScope;
+  sources: EpisodeObservationSourceCoverage[];
+  asset_ids: string[];
+  evidence_ids: string[];
+  limitations: string[];
+  influences_verification: false;
+}
+
+export interface EpisodeObservationBundleCollection {
+  schema_version: "rolo-episode-observation-bundle-collection/v1";
+  robot_id: string;
+  episode_id: string;
+  episode_revision: number;
+  items: EpisodeObservationBundleSummary[];
+  limit: number;
+  cursor: string | null;
+  next_cursor: string | null;
+  as_of: string;
+  immutable: true;
+  limitations: string[];
+}
+
 export interface FleetRobotSummary {
   schema_version: "rolo-fleet-robot-summary/v1";
   robot_id: string;

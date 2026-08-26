@@ -39,6 +39,9 @@ export const EPISODE_SCHEMA_COMPATIBILITY = {
   cohort: ["rolo-episode-cohort/v1"],
   cohortMember: ["rolo-episode-cohort-member/v1"],
   cohortExclusions: ["rolo-episode-cohort-exclusions/v1"],
+  observationBundleCollection: ["rolo-episode-observation-bundle-collection/v1"],
+  observationBundleSummary: ["rolo-episode-observation-bundle-summary/v1"],
+  observationSourceCoverage: ["rolo-episode-observation-source-coverage/v1"],
 } as const;
 
 export const EPISODE_READONLY_BASELINE = {
@@ -354,7 +357,7 @@ export const EPISODE_OBSERVATION_BUNDLE_CONSUMER_CANDIDATE = {
   mode: "read-only",
   extends: EPISODE_REVIEW_SESSION_RELEASE_BASELINE.id,
   targetRelease: "0.37.0",
-  contractPhase: "DESIGN_ONLY",
+  contractPhase: "CONSUMER_REVIEW_CANDIDATE",
   requiredFeature: "workbench.episode-observation-bundle/v1",
   requiredSchemas: [
     "rolo-episode-observation-bundle-collection/v1",
@@ -363,7 +366,7 @@ export const EPISODE_OBSERVATION_BUNDLE_CONSUMER_CANDIDATE = {
   ],
   revisionPolicy: "EXACT_IMMUTABLE_EPISODE_REVISION",
   selectionPolicy: "CURRENT_COMPONENT_MEMORY_ONLY",
-  clientEndpointImplemented: false,
+  clientEndpointImplemented: true,
   mediaDelivery: false,
   persistsState: false,
   supportsCapture: false,

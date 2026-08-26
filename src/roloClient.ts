@@ -16,6 +16,7 @@ import type {
   EvidenceCollection,
   EvidenceRecord,
   EpisodeCohort,
+  EpisodeObservationBundleCollection,
   EpisodeState,
   FleetSliceStability,
   FleetBlockerCollection,
@@ -55,6 +56,7 @@ import type {
 import { parseCapabilityCollection, parseCapabilityDetail } from "./contracts/capability.ts";
 import { parseDiscoverySnapshotCollection } from "./contracts/discovery.ts";
 import { parseEpisodeCohort, parseEpisodeCollection, parseEpisodeDetail, parseEpisodeRevisionCollection, parseEpisodeTimelinePage } from "./contracts/episode.ts";
+import { parseEpisodeObservationBundleCollection, type EpisodeObservationValidationContext } from "./contracts/episodeObservation.ts";
 import {
   containsUnsafeReference,
   isConfidence,
@@ -82,6 +84,7 @@ export const ROLO_API_FEATURES = {
   episodeReadModel: "workbench.episode-read-model/v1",
   episodeRevisionHistory: "workbench.episode-revision-history/v1",
   episodeCohortReadModel: "workbench.episode-cohort-read-model/v1",
+  episodeObservationBundle: "workbench.episode-observation-bundle/v1",
 } as const;
 
 export function supportsApiFeature(health: HealthResponse, feature: string): boolean {
@@ -1139,6 +1142,26 @@ export class RoloClient {
       await this.request<unknown>(path, options),
       path,
       { robotId, episodeId, revision },
+      { limit, cursor: page.cursor },
+    );
+  }
+
+  async episodeObservationBundlePage(
+    robotId: string,
+    episodeId: string,
+    revision: number,
+    validation: Omit<EpisodeObservationValidationContext, "robotId" | "episodeId" | "revision">,
+    options?: RequestInit,
+    page: { limit?: number; cursor?: string } = {},
+  ): Promise<EpisodeObservationBundleCollection> {
+    const limit = page.limit ?? 20;
+    const query = new URLSearchParams({ revision: String(revision), limit: String(limit) });
+    if (page.cursor) query.set("cursor", page.cursor);
+    const path = `/v1/robots/${encodeURIComponent(robotId)}/episodes/${encodeURIComponent(episodeId)}/observation-bundles?${query.toString()}`;
+    return parseEpisodeObservationBundleCollection(
+      await this.request<unknown>(path, options),
+      path,
+      { robotId, episodeId, revision, ...validation },
       { limit, cursor: page.cursor },
     );
   }
