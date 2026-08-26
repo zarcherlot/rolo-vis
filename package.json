@@ -1,6 +1,6 @@
 {
   "name": "rolo-vis",
-  "version": "0.37.0",
+  "version": "0.38.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -29,6 +29,7 @@
     "check:episode-observation-live": "node scripts/check-episode-observation-bundles.mjs",
     "prepare:episode-investigation-live": "node scripts/prepare-episode-investigation-live-data.mjs",
     "prepare:episode-observation-live": "node scripts/prepare-episode-observation-live-data.mjs",
+    "check:robot-hosted-live": "node scripts/check-robot-hosted-delivery.mjs",
     "test:plugin": "node --test tests/plugin-package.test.mjs",
     "verify:baseline": "npm test && npm run typecheck && npm run build && npm run package:plugin && npm run test:plugin"
   },

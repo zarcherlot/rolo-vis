@@ -136,8 +136,8 @@ test("Episode Observation Bundle baseline freezes the feature-negotiated v0.37 c
   assert.equal(ROLO_API_FEATURES.episodeObservationBundle, "workbench.episode-observation-bundle/v1");
   assert.deepEqual(EPISODE_SCHEMA_COMPATIBILITY.observationBundleCollection, ["rolo-episode-observation-bundle-collection/v1"]);
   assert.match(contract, /EXACT_IMMUTABLE_EPISODE_REVISION|exact immutable revision/i);
-  assert.equal(JSON.parse(manifest).version, "0.37.0");
-  assert.equal(JSON.parse(packageJson).version, "0.37.0");
+  assert.equal(JSON.parse(manifest).version, "0.38.0");
+  assert.equal(JSON.parse(packageJson).version, "0.38.0");
   assert.ok(JSON.parse(manifest).api.required_endpoints.includes("/v1/robots/{robot_id}/episodes/{episode_id}/observation-bundles"));
 });
 
@@ -239,12 +239,10 @@ test("E22C exposes non-color source semantics without storage media or write aut
 });
 
 test("E22D baseline preserves source rolo-data and records approved v0.37.0 promotion", async () => {
-  const [baseline, prepare, gate, packageJson, manifest] = await Promise.all([
+  const [baseline, prepare, gate] = await Promise.all([
     read("../docs/EPISODE_OBSERVATION_BUNDLE_BASELINE.md"),
     read("../scripts/prepare-episode-observation-live-data.mjs"),
     read("../scripts/check-episode-observation-bundles.mjs"),
-    read("../package.json"),
-    read("../rolo.plugin.json"),
   ]);
   assert.match(baseline, /Status: established baseline/);
   assert.match(baseline, /Version: `0\.37\.0`/);
@@ -257,6 +255,4 @@ test("E22D baseline preserves source rolo-data and records approved v0.37.0 prom
   assert.match(gate, /missingRevisionStatus, 409/);
   assert.match(gate, /unsafe_internal_fields_exposed: false/);
   assert.match(gate, /influences_verification: false/);
-  assert.equal(JSON.parse(packageJson).version, "0.37.0");
-  assert.equal(JSON.parse(manifest).version, "0.37.0");
 });

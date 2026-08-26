@@ -1,6 +1,6 @@
 # E23 robot-hosted delivery consumer contract
 
-Status: E23A approved; E23B/C implementation review candidate
+Status: E23A-E23C approved; E23D validation candidate
 
 Target baseline: rolo-vis `v0.38.0`
 

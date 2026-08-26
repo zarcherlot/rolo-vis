@@ -37,7 +37,7 @@ test("E23C removes Sites delivery and keeps robot-hosted instructions authoritat
     read("../src/App.tsx"),
     read("../vite.config.mjs"),
   ]);
-  assert.equal(packageJson.version, "0.37.0");
+  assert.equal(packageJson.version, "0.38.0");
   assert.doesNotMatch(packageJson.scripts.build, /prepare-sites-build|sites/i);
   assert.equal(packageJson.scripts["package:plugin"], "node scripts/package-plugin.mjs");
   assert.equal(packageJson.scripts["test:plugin"], "node --test tests/plugin-package.test.mjs");
@@ -48,6 +48,27 @@ test("E23C removes Sites delivery and keeps robot-hosted instructions authoritat
   assert.match(viteConfig, /base:\s*"\.\/"/);
   assert.match(app, /import\.meta\.env\.BASE_URL.*assets\/rolo-mark\.png/);
   assert.doesNotMatch(app, /src=["{]"?\/assets\//);
+});
+
+test("E23D candidate pins the device gate without claiming an unrun robot promotion", async () => {
+  const [candidate, install, gate, packageJson, manifest] = await Promise.all([
+    read("../docs/ROBOT_HOSTED_DELIVERY_BASELINE_CANDIDATE.md"),
+    read("../docs/ROBOT_HOSTED_INSTALLATION.md"),
+    read("../scripts/check-robot-hosted-delivery.mjs"),
+    read("../package.json").then(JSON.parse),
+    read("../rolo.plugin.json").then(JSON.parse),
+  ]);
+  assert.equal(packageJson.version, "0.38.0");
+  assert.equal(manifest.version, "0.38.0");
+  assert.match(candidate, /Status: E23D validation candidate/);
+  assert.match(candidate, /Linux\/robot gate: pending/);
+  assert.match(candidate, /Source tree SHA-256:\s+`30503fa0/);
+  assert.match(candidate, /No `v0\.38\.0` tag may be created/i);
+  assert.match(install, /robotctl runtime serve --host 127\.0\.0\.1/);
+  assert.match(install, /Rollback/);
+  assert.match(gate, /trusted_proxy_headers_do_not_expand_authority/);
+  assert.match(gate, /workbench\.episode-observation-bundle\/v1/);
+  assert.doesNotMatch(`\${candidate}\n\${install}`, /public hosted deployment|Sites deployment/i);
 });
 
 test("E23A preserves read-only failure and authority boundaries", async () => {
