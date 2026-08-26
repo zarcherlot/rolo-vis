@@ -348,6 +348,31 @@ export const EPISODE_REVIEW_SESSION_RELEASE_BASELINE = {
   supportsWrite: false,
 } as const;
 
+export const EPISODE_OBSERVATION_BUNDLE_CONSUMER_CANDIDATE = {
+  id: "rolo-vis-episode-observation-bundle-consumer/candidate-2026-08",
+  status: "candidate",
+  mode: "read-only",
+  extends: EPISODE_REVIEW_SESSION_RELEASE_BASELINE.id,
+  targetRelease: "0.37.0",
+  contractPhase: "DESIGN_ONLY",
+  requiredFeature: "workbench.episode-observation-bundle/v1",
+  requiredSchemas: [
+    "rolo-episode-observation-bundle-collection/v1",
+    "rolo-episode-observation-bundle-summary/v1",
+    "rolo-episode-observation-source-coverage/v1",
+  ],
+  revisionPolicy: "EXACT_IMMUTABLE_EPISODE_REVISION",
+  selectionPolicy: "CURRENT_COMPONENT_MEMORY_ONLY",
+  clientEndpointImplemented: false,
+  mediaDelivery: false,
+  persistsState: false,
+  supportsCapture: false,
+  supportsRecollection: false,
+  supportsReplay: false,
+  supportsExport: false,
+  supportsWrite: false,
+} as const;
+
 export function supportsSchema(
   family: keyof typeof MVP_SCHEMA_COMPATIBILITY,
   model: "collection" | "summary" | "detail",
