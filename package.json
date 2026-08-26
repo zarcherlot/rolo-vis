@@ -25,7 +25,9 @@
     "check:episode-review-anchor-live": "node scripts/check-episode-review-anchor-continuity.mjs",
     "check:episode-review-marker-live": "node scripts/check-episode-review-marker-lifecycle.mjs",
     "check:episode-review-session-live": "node scripts/check-episode-review-session-release.mjs",
+    "check:episode-observation-live": "node scripts/check-episode-observation-bundles.mjs",
     "prepare:episode-investigation-live": "node scripts/prepare-episode-investigation-live-data.mjs",
+    "prepare:episode-observation-live": "node scripts/prepare-episode-observation-live-data.mjs",
     "test:sites": "node --test tests/sites-worker.test.mjs",
     "verify:baseline": "npm test && npm run typecheck && npm run build && npm run test:sites"
   },

@@ -1,6 +1,6 @@
 # E22 Episode Observation Bundle consumer contract
 
-Status: E22A-E22B approved; E22C consumer and Perspective Tray review candidate
+Status: E22A-E22C approved; E22D baseline and live-data review candidate
 
 Target baseline: rolo-vis `v0.37.0`
 
@@ -129,7 +129,7 @@ deployment, or robot write authority.
 - cover complete, partial, unavailable, mixed-world, missing, stale, and rejected
   source cases plus unsafe-field rejection.
 
-### E22C — current consumer and Perspective Tray review candidate
+### E22C — approved consumer and Perspective Tray
 
 - add strict types, parser, client read, feature gate, and the smallest coherent tray;
 - reuse existing asset/Evidence views and keep content delivery absent.
@@ -145,7 +145,7 @@ Implemented in this candidate:
 - omission of the complete tray when the health feature is absent, with no demo,
   media, capture, persistence, replay, export, recollection, or write fallback.
 
-### E22D — baseline candidate
+### E22D — current baseline candidate
 
 - run complete rolo and rolo-vis gates plus live `rolo-data` validation;
 - require explicit review before `v0.37.0`, tag, main promotion, or any production

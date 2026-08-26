@@ -357,7 +357,9 @@ export const EPISODE_OBSERVATION_BUNDLE_CONSUMER_CANDIDATE = {
   mode: "read-only",
   extends: EPISODE_REVIEW_SESSION_RELEASE_BASELINE.id,
   targetRelease: "0.37.0",
-  contractPhase: "CONSUMER_REVIEW_CANDIDATE",
+  contractPhase: "BASELINE_REVIEW_CANDIDATE",
+  frontendMinimum: "a76801b",
+  producerMinimum: "a75ea0b",
   requiredFeature: "workbench.episode-observation-bundle/v1",
   requiredSchemas: [
     "rolo-episode-observation-bundle-collection/v1",
@@ -367,6 +369,7 @@ export const EPISODE_OBSERVATION_BUNDLE_CONSUMER_CANDIDATE = {
   revisionPolicy: "EXACT_IMMUTABLE_EPISODE_REVISION",
   selectionPolicy: "CURRENT_COMPONENT_MEMORY_ONLY",
   clientEndpointImplemented: true,
+  liveGate: "scripts/check-episode-observation-bundles.mjs",
   mediaDelivery: false,
   persistsState: false,
   supportsCapture: false,
