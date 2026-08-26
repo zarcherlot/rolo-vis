@@ -532,10 +532,11 @@ The frozen contract and release evidence are recorded in
 `EPISODE_REVIEW_SESSION_RELEASE_CONTRACT.md` and
 `EPISODE_REVIEW_SESSION_RELEASE_BASELINE.md`.
 
-## E22 candidate: Episode Observation Bundle
+## E22 baseline: Episode Observation Bundle
 
-Status: E22A cross-repository contract design is ready for review. Producer, client,
-UI, baseline promotion, and deployment are not included.
+Status: E22A-E22D approved and promoted as the rolo-vis `v0.37.0` read-only
+baseline. Consumer/live-gate commit `5453aa5` and rolo producer `a75ea0b` were
+fast-forwarded to their respective main histories.
 
 - Extend the existing Episode v1 family with a feature-negotiated, exact-revision,
   bounded Observation Bundle summary instead of exposing internal manifests.
@@ -543,12 +544,14 @@ UI, baseline promotion, and deployment are not included.
   bytes, artifact locations, model inputs, renderer configuration, or raw payloads.
 - Keep source availability, time synchronization, spatial alignment, world kind, and
   bundle completeness as independent producer-owned facts.
-- Render future Perspective Tray sources in separate physical, simulated, replayed,
+- Render Perspective Tray sources in separate physical, simulated, replayed,
   missing, stale, rejected, and unavailable trust lanes.
 - Keep bundle selection in component memory until a separate deep-link contract is
   reviewed.
-- Add no current runtime endpoint, feature advertisement, media delivery, persistence,
-  capture, recollection, replay, export, release influence, or write authority.
+- Add no media delivery, persistence, capture, recollection, replay, export, release
+  influence, or write authority.
 
-The consumer design is `EPISODE_OBSERVATION_BUNDLE_CONSUMER_CONTRACT.md`. The matching
-rolo public contract is `EPISODE_OBSERVATION_BUNDLE_CONTRACT_DESIGN.md`.
+The frozen consumer contract and promotion evidence are recorded in
+`EPISODE_OBSERVATION_BUNDLE_CONSUMER_CONTRACT.md` and
+`EPISODE_OBSERVATION_BUNDLE_BASELINE.md`. The matching rolo public contract is
+`EPISODE_OBSERVATION_BUNDLE_CONTRACT_DESIGN.md`.

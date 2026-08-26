@@ -1,12 +1,12 @@
 # E22 Episode Observation Bundle consumer contract
 
-Status: E22A-E22C approved; E22D baseline and live-data review candidate
+Status: E22A-E22D approved and promoted as the rolo-vis `v0.37.0` read-only baseline
 
 Target baseline: rolo-vis `v0.37.0`
 
 Extends: rolo-vis `v0.36.0` / `rolo-vis-episode-review-session-release/2026-08`
 
-Required upstream candidate: `workbench.episode-observation-bundle/v1`
+Required upstream feature: `workbench.episode-observation-bundle/v1`
 
 ## 1. Decision
 
@@ -15,10 +15,10 @@ tray explains which sanitized observation source classes and already-published E
 assets formed each immutable Observation Bundle. It must not read an internal bundle
 manifest or treat bundle completeness as outcome, cause, confirmation, or verification.
 
-E22A and the matching E22B producer are approved. E22C now implements a strictly
-feature-negotiated client read and the smallest coherent Perspective Tray while
-rolo-vis continues to advertise version `0.36.0`. Promotion to `v0.37.0`, main, tag,
-live-data gate, and production deployment remain reserved for E22D review.
+E22A and the matching E22B producer are approved. E22C implements a strictly
+feature-negotiated client read and the smallest coherent Perspective Tray. E22D
+completed the full and isolated live-data gates and promoted the reviewed surface as
+the rolo-vis `v0.37.0` baseline in `EPISODE_OBSERVATION_BUNDLE_BASELINE.md`.
 
 ## 2. Negotiated contract
 
@@ -30,7 +30,7 @@ The consumer requires all of the following:
 - `rolo-episode-observation-source-coverage/v1`;
 - the existing `rolo-episode-asset-summary/v1` and sanitized Evidence contracts.
 
-The candidate read is:
+The baseline read is:
 
 ```text
 GET /v1/robots/{robot_id}/episodes/{episode_id}/observation-bundles
@@ -134,7 +134,7 @@ deployment, or robot write authority.
 - add strict types, parser, client read, feature gate, and the smallest coherent tray;
 - reuse existing asset/Evidence views and keep content delivery absent.
 
-Implemented in this candidate:
+Implemented in the promoted consumer:
 
 - strict recursive public-field rejection plus exact identity, revision, page, enum,
   world-scope, asset, Evidence, parent-lineage, and non-verification validation;
@@ -145,16 +145,17 @@ Implemented in this candidate:
 - omission of the complete tray when the health feature is absent, with no demo,
   media, capture, persistence, replay, export, recollection, or write fallback.
 
-### E22D — current baseline candidate
+### E22D — approved baseline
 
 - run complete rolo and rolo-vis gates plus live `rolo-data` validation;
-- require explicit review before `v0.37.0`, tag, main promotion, or any production
-  deployment.
+- freeze the approved contract, evidence, compatibility metadata, and `v0.37.0`
+  package/plugin version without adding feature authority.
 
 ## 9. E22A acceptance
 
 - Contract names and revision rules match the upstream design.
-- No current manifest or client advertises or calls the candidate feature.
+- At E22A design approval, no manifest or client advertised or called the proposed
+  feature; runtime activation followed only after E22B-E22D review.
 - Every source state and trust dimension has an explicit non-color label.
 - Partial and unavailable data remain useful without becoming authoritative.
 - Existing Episode asset and Evidence projections remain the only safe drilldowns.
@@ -171,4 +172,16 @@ Implemented in this candidate:
 - `COMPLETE` is visibly described as input assembly only, while missing, stale,
   rejected, and unavailable sources remain distinct non-color labels.
 - Selection remains React component memory only and adds no URL or browser storage.
-- E22C remains unpromoted until the E22D full and live-data gates are approved.
+- E22C is promoted only through the reviewed E22D full and live-data gates.
+
+## 11. E22D acceptance
+
+- rolo producer and rolo-vis consumer heads are independently recorded and available
+  from their respective main histories.
+- Complete rolo, rolo-vis, TypeScript, production/Sites, and isolated live-data gates
+  pass with explicit partial, unavailable, missing, rejected, cursor, revision, lineage,
+  and unsafe-field evidence.
+- Package, plugin, compatibility metadata, baseline document, and tag agree on
+  `v0.37.0`.
+- The promoted baseline still exposes no media, persistence, capture, recollection,
+  replay, export, verification influence, deployment control, or robot write action.

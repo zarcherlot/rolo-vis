@@ -8,7 +8,7 @@ import {
   validateCompleteObservationBundleHistory,
 } from "../src/contracts/episodeObservation.ts";
 import {
-  EPISODE_OBSERVATION_BUNDLE_CONSUMER_CANDIDATE,
+  EPISODE_OBSERVATION_BUNDLE_BASELINE,
   EPISODE_REVIEW_SESSION_RELEASE_BASELINE,
   EPISODE_SCHEMA_COMPATIBILITY,
 } from "../src/contracts/compatibility.ts";
@@ -119,24 +119,25 @@ function collection(overrides = {}) {
   };
 }
 
-test("E22C is the feature-negotiated consumer successor to the v0.36 baseline", async () => {
+test("Episode Observation Bundle baseline freezes the feature-negotiated v0.37 consumer", async () => {
   const [contract, manifest, packageJson] = await Promise.all([
     read("../docs/EPISODE_OBSERVATION_BUNDLE_CONSUMER_CONTRACT.md"),
     read("../rolo.plugin.json"),
     read("../package.json"),
   ]);
-  assert.equal(EPISODE_OBSERVATION_BUNDLE_CONSUMER_CANDIDATE.status, "candidate");
-  assert.equal(EPISODE_OBSERVATION_BUNDLE_CONSUMER_CANDIDATE.extends, EPISODE_REVIEW_SESSION_RELEASE_BASELINE.id);
-  assert.equal(EPISODE_OBSERVATION_BUNDLE_CONSUMER_CANDIDATE.targetRelease, "0.37.0");
-  assert.equal(EPISODE_OBSERVATION_BUNDLE_CONSUMER_CANDIDATE.contractPhase, "BASELINE_REVIEW_CANDIDATE");
-  assert.equal(EPISODE_OBSERVATION_BUNDLE_CONSUMER_CANDIDATE.frontendMinimum, "a76801b");
-  assert.equal(EPISODE_OBSERVATION_BUNDLE_CONSUMER_CANDIDATE.producerMinimum, "a75ea0b");
-  assert.equal(EPISODE_OBSERVATION_BUNDLE_CONSUMER_CANDIDATE.clientEndpointImplemented, true);
+  assert.equal(EPISODE_OBSERVATION_BUNDLE_BASELINE.status, "baseline");
+  assert.equal(EPISODE_OBSERVATION_BUNDLE_BASELINE.extends, EPISODE_REVIEW_SESSION_RELEASE_BASELINE.id);
+  assert.equal(EPISODE_OBSERVATION_BUNDLE_BASELINE.release, "0.37.0");
+  assert.equal(EPISODE_OBSERVATION_BUNDLE_BASELINE.frontendMinimum, "a76801b");
+  assert.equal(EPISODE_OBSERVATION_BUNDLE_BASELINE.frontendMainMerge, "5453aa5");
+  assert.equal(EPISODE_OBSERVATION_BUNDLE_BASELINE.producerMinimum, "a75ea0b");
+  assert.equal(EPISODE_OBSERVATION_BUNDLE_BASELINE.producerMainMerge, "a75ea0b");
+  assert.equal(EPISODE_OBSERVATION_BUNDLE_BASELINE.clientEndpointImplemented, true);
   assert.equal(ROLO_API_FEATURES.episodeObservationBundle, "workbench.episode-observation-bundle/v1");
   assert.deepEqual(EPISODE_SCHEMA_COMPATIBILITY.observationBundleCollection, ["rolo-episode-observation-bundle-collection/v1"]);
   assert.match(contract, /EXACT_IMMUTABLE_EPISODE_REVISION|exact immutable revision/i);
-  assert.equal(JSON.parse(manifest).version, "0.36.0");
-  assert.equal(JSON.parse(packageJson).version, "0.36.0");
+  assert.equal(JSON.parse(manifest).version, "0.37.0");
+  assert.equal(JSON.parse(packageJson).version, "0.37.0");
   assert.ok(JSON.parse(manifest).api.required_endpoints.includes("/v1/robots/{robot_id}/episodes/{episode_id}/observation-bundles"));
 });
 
@@ -228,25 +229,25 @@ test("E22C exposes non-color source semantics without storage media or write aut
   assert.match(tray, /Mixed input/);
   assert.match(tray, /not outcome, cause, confirmation, readiness, or verification/i);
   assert.doesNotMatch(`${client}\n${studio}\n${tray}`, /localStorage|sessionStorage|BroadcastChannel|signed_url|content_url|media player/i);
-  assert.equal(EPISODE_OBSERVATION_BUNDLE_CONSUMER_CANDIDATE.mediaDelivery, false);
-  assert.equal(EPISODE_OBSERVATION_BUNDLE_CONSUMER_CANDIDATE.supportsCapture, false);
-  assert.equal(EPISODE_OBSERVATION_BUNDLE_CONSUMER_CANDIDATE.supportsRecollection, false);
-  assert.equal(EPISODE_OBSERVATION_BUNDLE_CONSUMER_CANDIDATE.supportsReplay, false);
-  assert.equal(EPISODE_OBSERVATION_BUNDLE_CONSUMER_CANDIDATE.supportsExport, false);
-  assert.equal(EPISODE_OBSERVATION_BUNDLE_CONSUMER_CANDIDATE.supportsWrite, false);
+  assert.equal(EPISODE_OBSERVATION_BUNDLE_BASELINE.mediaDelivery, false);
+  assert.equal(EPISODE_OBSERVATION_BUNDLE_BASELINE.supportsCapture, false);
+  assert.equal(EPISODE_OBSERVATION_BUNDLE_BASELINE.supportsRecollection, false);
+  assert.equal(EPISODE_OBSERVATION_BUNDLE_BASELINE.supportsReplay, false);
+  assert.equal(EPISODE_OBSERVATION_BUNDLE_BASELINE.supportsExport, false);
+  assert.equal(EPISODE_OBSERVATION_BUNDLE_BASELINE.supportsWrite, false);
   assert.match(contract, /no filesystem dependency, raw TCP connection, hosted\s+secret, durable state, upload/s);
 });
 
-test("E22D candidate preserves source rolo-data and defers v0.37.0 promotion", async () => {
+test("E22D baseline preserves source rolo-data and records approved v0.37.0 promotion", async () => {
   const [baseline, prepare, gate, packageJson, manifest] = await Promise.all([
-    read("../docs/EPISODE_OBSERVATION_BUNDLE_BASELINE_CANDIDATE.md"),
+    read("../docs/EPISODE_OBSERVATION_BUNDLE_BASELINE.md"),
     read("../scripts/prepare-episode-observation-live-data.mjs"),
     read("../scripts/check-episode-observation-bundles.mjs"),
     read("../package.json"),
     read("../rolo.plugin.json"),
   ]);
-  assert.match(baseline, /Status: E22D review candidate; not promoted/);
-  assert.match(baseline, /Target version: `0\.37\.0`/);
+  assert.match(baseline, /Status: established baseline/);
+  assert.match(baseline, /Version: `0\.37\.0`/);
   assert.match(baseline, /Frontend minimum: `a76801b`/);
   assert.match(baseline, /Producer minimum: rolo `a75ea0b`/);
   assert.match(prepare, /source_preserved: true/);
@@ -256,6 +257,6 @@ test("E22D candidate preserves source rolo-data and defers v0.37.0 promotion", a
   assert.match(gate, /missingRevisionStatus, 409/);
   assert.match(gate, /unsafe_internal_fields_exposed: false/);
   assert.match(gate, /influences_verification: false/);
-  assert.equal(JSON.parse(packageJson).version, "0.36.0");
-  assert.equal(JSON.parse(manifest).version, "0.36.0");
+  assert.equal(JSON.parse(packageJson).version, "0.37.0");
+  assert.equal(JSON.parse(manifest).version, "0.37.0");
 });

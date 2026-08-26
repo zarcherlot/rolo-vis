@@ -351,15 +351,16 @@ export const EPISODE_REVIEW_SESSION_RELEASE_BASELINE = {
   supportsWrite: false,
 } as const;
 
-export const EPISODE_OBSERVATION_BUNDLE_CONSUMER_CANDIDATE = {
-  id: "rolo-vis-episode-observation-bundle-consumer/candidate-2026-08",
-  status: "candidate",
+export const EPISODE_OBSERVATION_BUNDLE_BASELINE = {
+  id: "rolo-vis-episode-observation-bundle/2026-08",
+  status: "baseline",
   mode: "read-only",
   extends: EPISODE_REVIEW_SESSION_RELEASE_BASELINE.id,
-  targetRelease: "0.37.0",
-  contractPhase: "BASELINE_REVIEW_CANDIDATE",
+  release: "0.37.0",
   frontendMinimum: "a76801b",
+  frontendMainMerge: "5453aa5",
   producerMinimum: "a75ea0b",
+  producerMainMerge: "a75ea0b",
   requiredFeature: "workbench.episode-observation-bundle/v1",
   requiredSchemas: [
     "rolo-episode-observation-bundle-collection/v1",

@@ -12,6 +12,7 @@ import {
   EPISODE_EVIDENCE_CONTEXT_BASELINE,
   EPISODE_OCCURRENCE_FOCUS_BASELINE,
   EPISODE_NAVIGATION_REHYDRATION_BASELINE,
+  EPISODE_OBSERVATION_BUNDLE_BASELINE,
   EPISODE_REVIEW_ANCHOR_CONTINUITY_BASELINE,
   EPISODE_REVIEW_HANDOFF_RECEIPT_BASELINE,
   EPISODE_REVIEW_LINK_HANDOFF_BASELINE,
@@ -174,8 +175,8 @@ test("Episode Comparison Evidence baseline freezes v0.25 without adding producer
   assert.match(baseline, /REFERENCE_PRESENCE_ONLY/);
   assert.match(baseline, /rejected the unresolved referenced record with HTTP\s+404/i);
   assert.match(contract, /approved and promoted as the `v0\.25\.0` read-only baseline/i);
-  assert.equal(JSON.parse(manifest).version, "0.36.0");
-  assert.equal(JSON.parse(packageJson).version, "0.36.0");
+  assert.equal(JSON.parse(manifest).version, "0.37.0");
+  assert.equal(JSON.parse(packageJson).version, "0.37.0");
   assert.doesNotMatch(manifest, /episode\.(media|replay|export|write)/);
 });
 
@@ -192,8 +193,8 @@ test("Episode Evidence reference context baseline freezes v0.26 without content 
   assert.match(baseline, /20 visible occurrences per side/i);
   assert.match(baseline, /unresolved Evidence record remained rejected with HTTP 404/i);
   assert.match(contract, /approved and promoted as the `v0\.26\.0` read-only baseline/i);
-  assert.equal(JSON.parse(manifest).version, "0.36.0");
-  assert.equal(JSON.parse(packageJson).version, "0.36.0");
+  assert.equal(JSON.parse(manifest).version, "0.37.0");
+  assert.equal(JSON.parse(packageJson).version, "0.37.0");
   assert.doesNotMatch(manifest, /episode\.(media|replay|export|write)/);
 });
 
@@ -210,8 +211,8 @@ test("Episode Evidence context navigation baseline freezes v0.27 without record 
   assert.match(baseline, /does not request, open, or infer an Evidence record/i);
   assert.match(baseline, /stale ID\s+was removed, malformed input was rejected/i);
   assert.match(contract, /approved and promoted as the `v0\.27\.0` read-only baseline/i);
-  assert.equal(JSON.parse(manifest).version, "0.36.0");
-  assert.equal(JSON.parse(packageJson).version, "0.36.0");
+  assert.equal(JSON.parse(manifest).version, "0.37.0");
+  assert.equal(JSON.parse(packageJson).version, "0.37.0");
   assert.doesNotMatch(manifest, /episode\.(media|replay|export|write)/);
 });
 
@@ -228,8 +229,8 @@ test("Episode occurrence focus baseline freezes v0.28 without right-side or writ
   assert.match(baseline, /right-side.*remain context only/i);
   assert.match(baseline, /live fixture exposes no Finding occurrence/i);
   assert.match(contract, /approved and promoted as the `v0\.28\.0` read-only baseline/i);
-  assert.equal(JSON.parse(manifest).version, "0.36.0");
-  assert.equal(JSON.parse(packageJson).version, "0.36.0");
+  assert.equal(JSON.parse(manifest).version, "0.37.0");
+  assert.equal(JSON.parse(packageJson).version, "0.37.0");
   assert.doesNotMatch(manifest, /episode\.(media|replay|export|write)/);
 });
 
@@ -251,8 +252,8 @@ test("Episode Asset occurrence focus baseline freezes v0.29 without content or w
   assert.match(check, /reads_asset_bytes: false/);
   assert.match(check, /supports_write: false/);
   assert.doesNotMatch(check, /client\.evidence\(/);
-  assert.equal(JSON.parse(manifest).version, "0.36.0");
-  assert.equal(JSON.parse(packageJson).version, "0.36.0");
+  assert.equal(JSON.parse(manifest).version, "0.37.0");
+  assert.equal(JSON.parse(packageJson).version, "0.37.0");
   assert.doesNotMatch(manifest, /episode\.(media|replay|export|write)/);
 });
 
@@ -275,8 +276,8 @@ test("Episode right Context handoff freezes v0.30 without ranking or write autho
   assert.match(check, /opens_evidence_record: false/);
   assert.match(check, /supports_write: false/);
   assert.doesNotMatch(check, /client\.evidence\(|client\.(invoke|cancel|replay|export|collect|recollect)/);
-  assert.equal(JSON.parse(manifest).version, "0.36.0");
-  assert.equal(JSON.parse(packageJson).version, "0.36.0");
+  assert.equal(JSON.parse(manifest).version, "0.37.0");
+  assert.equal(JSON.parse(packageJson).version, "0.37.0");
   assert.doesNotMatch(manifest, /episode\.(media|replay|export|write)/);
 });
 
@@ -298,8 +299,8 @@ test("Episode navigation rehydration freezes v0.31 without replay or write autho
   assert.match(check, /malformed_episode_normalized_to_stack/);
   assert.match(check, /supports_write: false/);
   assert.doesNotMatch(check, /client\.(invoke|cancel|replay|export|collect|recollect)/);
-  assert.equal(JSON.parse(manifest).version, "0.36.0");
-  assert.equal(JSON.parse(packageJson).version, "0.36.0");
+  assert.equal(JSON.parse(manifest).version, "0.37.0");
+  assert.equal(JSON.parse(packageJson).version, "0.37.0");
   assert.doesNotMatch(manifest, /episode\.(media|replay|export|write)/);
 });
 
@@ -321,8 +322,8 @@ test("Episode review link handoff freezes v0.32 without content export or write 
   assert.match(check, /supports_content_export: false/);
   assert.match(check, /supports_write: false/);
   assert.doesNotMatch(check, /client\.(invoke|cancel|replay|export|collect|recollect)/);
-  assert.equal(JSON.parse(manifest).version, "0.36.0");
-  assert.equal(JSON.parse(packageJson).version, "0.36.0");
+  assert.equal(JSON.parse(manifest).version, "0.37.0");
+  assert.equal(JSON.parse(packageJson).version, "0.37.0");
   assert.doesNotMatch(manifest, /episode\.(media|replay|export|write)/);
 });
 
@@ -350,8 +351,8 @@ test("Episode review handoff receipt freezes v0.33 without sender or write autho
   assert.match(check, /authenticates_sender: false/);
   assert.match(check, /supports_write: false/);
   assert.doesNotMatch(check, /client\.(invoke|cancel|replay|export|collect|recollect)/);
-  assert.equal(JSON.parse(manifest).version, "0.36.0");
-  assert.equal(JSON.parse(packageJson).version, "0.36.0");
+  assert.equal(JSON.parse(manifest).version, "0.37.0");
+  assert.equal(JSON.parse(packageJson).version, "0.37.0");
   assert.doesNotMatch(manifest, /episode\.(media|replay|export|write)/);
 });
 
@@ -380,8 +381,8 @@ test("Episode review anchor continuity freezes v0.34 without persistence or writ
   assert.match(check, /anchor_persisted: false/);
   assert.match(check, /supports_write: false/);
   assert.doesNotMatch(check, /client\.(invoke|cancel|replay|export|collect|recollect)/);
-  assert.equal(JSON.parse(manifest).version, "0.36.0");
-  assert.equal(JSON.parse(packageJson).version, "0.36.0");
+  assert.equal(JSON.parse(manifest).version, "0.37.0");
+  assert.equal(JSON.parse(packageJson).version, "0.37.0");
   assert.doesNotMatch(manifest, /episode\.(media|replay|export|write)/);
 });
 
@@ -410,8 +411,8 @@ test("Episode review marker lifecycle freezes v0.35 without persistence or write
   assert.match(check, /automatic_navigation: false/);
   assert.match(check, /supports_write: false/);
   assert.doesNotMatch(check, /client\.(invoke|cancel|replay|export|collect|recollect)/);
-  assert.equal(JSON.parse(manifest).version, "0.36.0");
-  assert.equal(JSON.parse(packageJson).version, "0.36.0");
+  assert.equal(JSON.parse(manifest).version, "0.37.0");
+  assert.equal(JSON.parse(packageJson).version, "0.37.0");
   assert.doesNotMatch(manifest, /episode\.(media|replay|export|write)/);
 });
 
@@ -441,8 +442,35 @@ test("Episode review session release freezes v0.36 without persistence or write 
   assert.match(check, /released_reload_is_ordinary_navigation: true/);
   assert.match(check, /supports_write: false/);
   assert.doesNotMatch(check, /client\.(invoke|cancel|replay|export|collect|recollect)/);
-  assert.equal(JSON.parse(manifest).version, "0.36.0");
-  assert.equal(JSON.parse(packageJson).version, "0.36.0");
+  assert.equal(JSON.parse(manifest).version, "0.37.0");
+  assert.equal(JSON.parse(packageJson).version, "0.37.0");
+  assert.doesNotMatch(manifest, /episode\.(media|replay|export|write)/);
+});
+
+test("Episode Observation Bundle baseline freezes v0.37 without verification or write authority", async () => {
+  const [baseline, contract, check, manifest, packageJson] = await Promise.all([
+    read("../docs/EPISODE_OBSERVATION_BUNDLE_BASELINE.md"),
+    read("../docs/EPISODE_OBSERVATION_BUNDLE_CONSUMER_CONTRACT.md"),
+    read("../scripts/check-episode-observation-bundles.mjs"),
+    read("../rolo.plugin.json"),
+    read("../package.json"),
+  ]);
+  assert.equal(EPISODE_OBSERVATION_BUNDLE_BASELINE.status, "baseline");
+  assert.equal(EPISODE_OBSERVATION_BUNDLE_BASELINE.extends, EPISODE_REVIEW_SESSION_RELEASE_BASELINE.id);
+  assert.equal(EPISODE_OBSERVATION_BUNDLE_BASELINE.release, "0.37.0");
+  assert.equal(EPISODE_OBSERVATION_BUNDLE_BASELINE.frontendMinimum, "a76801b");
+  assert.equal(EPISODE_OBSERVATION_BUNDLE_BASELINE.frontendMainMerge, "5453aa5");
+  assert.equal(EPISODE_OBSERVATION_BUNDLE_BASELINE.producerMainMerge, "a75ea0b");
+  assert.equal(EPISODE_OBSERVATION_BUNDLE_BASELINE.persistsState, false);
+  assert.equal(EPISODE_OBSERVATION_BUNDLE_BASELINE.supportsWrite, false);
+  assert.match(baseline, /Version: `0\.37\.0`/);
+  assert.match(baseline, /Observation influence on verification/);
+  assert.match(contract, /approved and promoted as the rolo-vis `v0\.37\.0` read-only baseline/i);
+  assert.match(check, /unsafe_internal_fields_exposed: false/);
+  assert.match(check, /influences_verification: false/);
+  assert.match(check, /supports_write: false/);
+  assert.equal(JSON.parse(manifest).version, "0.37.0");
+  assert.equal(JSON.parse(packageJson).version, "0.37.0");
   assert.doesNotMatch(manifest, /episode\.(media|replay|export|write)/);
 });
 
