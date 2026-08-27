@@ -574,3 +574,19 @@ The candidate contract is recorded in `JOB_READONLY_CONTRACT` and
 `JOB_SCHEMA_COMPATIBILITY`; detailed trust-boundary rules are in
 `JOB_READONLY_CONTRACT.md`. E24B will add the read-only Job Inbox and Timeline only
 after this contract is reviewed.
+
+## E24B: Job Inbox / Live Timeline
+
+Status: candidate on `codex/e24b-job-inbox`.
+
+- Add a `Jobs` navigation surface that appears only when rolo advertises
+  `workbench.job-read-model/v1`.
+- Load bounded Job pages, recovery state, and Event pages through the E24A client;
+  refresh and pagination remain read-only.
+- Render status, operation, target, revision, event sequence, checkpoint metadata,
+  and producer limitations without interpreting opaque payload/state objects.
+- Keep `bootstrap-execute`, resume, retry, cancel, and all other mutation paths out of
+  the browser and plugin manifest.
+
+The candidate UI is implemented in `JobInboxView`; it remains unavailable against
+older rolo versions that do not advertise the feature.

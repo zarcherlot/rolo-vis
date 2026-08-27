@@ -9,7 +9,7 @@ const REVIEW_HANDOFF_KEY = "review_handoff";
 const REVIEW_HANDOFF_VALUE = "1";
 const NAV_KEYS = ["view", "robot", "episode", "revision", "event", "finding", "asset", "compare", "compare_revision", "compare_evidence", "cohort_days", REVIEW_HANDOFF_KEY] as const;
 
-export const WORKBENCH_VIEW_IDS = ["fleet", "overview", "stack", "capabilities", "lifecycle", "episode", "wiki", "evidence"] as const;
+export const WORKBENCH_VIEW_IDS = ["fleet", "overview", "stack", "capabilities", "lifecycle", "episode", "jobs", "wiki", "evidence"] as const;
 export type WorkbenchViewId = (typeof WORKBENCH_VIEW_IDS)[number];
 export type WorkbenchNavigationIntent =
   | { kind: "EPISODE"; view: "episode"; target: EpisodeDeepLinkTarget }

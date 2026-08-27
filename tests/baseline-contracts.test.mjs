@@ -51,3 +51,16 @@ test("baseline trust prompts remain accessible and read-only", async () => {
   assert.match(app, /outside this read-only workbench/);
   assert.doesNotMatch(app, /roloClient\.(collect|recollect|targetEvidence)/);
 });
+
+test("E24B Job Inbox remains feature-gated and read-only", async () => {
+  const app = await read("../src/App.tsx");
+  const navigation = await read("../src/episodeNavigation.ts");
+  assert.match(navigation, /"jobs"/);
+  assert.match(app, /function JobInboxView/);
+  assert.match(app, /ROLO_API_FEATURES\.jobReadModel/);
+  assert.match(app, /roloClient\.jobs/);
+  assert.match(app, /roloClient\.job\(/);
+  assert.match(app, /roloClient\.jobEvents/);
+  assert.match(app, /Read-only view/);
+  assert.doesNotMatch(app, /roloClient\.(bootstrapExecute|resumeJob|retryJob|cancelJob)/);
+});

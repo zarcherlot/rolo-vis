@@ -76,6 +76,9 @@ import type {
   LifecycleRunCollection,
   LifecycleRunDetail,
   OperationDisposition,
+  JobEventPage,
+  JobPage,
+  JobRecovery,
   RobotCapability,
   RobotOverview,
   RobotTopology,
@@ -152,6 +155,7 @@ const NAV_ITEMS: Array<{ id: NavId; label: string; icon: typeof House; feature?:
   { id: "capabilities", label: "Capabilities", icon: Stack },
   { id: "lifecycle", label: "Lifecycle", icon: Clock },
   { id: "episode", label: "Episode Studio", icon: Pulse, feature: ROLO_API_FEATURES.episodeReadModel },
+  { id: "jobs", label: "Jobs", icon: Pulse, feature: ROLO_API_FEATURES.jobReadModel },
   { id: "wiki", label: "Robot Wiki", icon: BookOpenText },
   { id: "evidence", label: "Evidence", icon: FileText },
 ];
@@ -2290,6 +2294,69 @@ function EvidenceDrawer({ evidence, onClose }: { evidence: EvidenceItem | null; 
   );
 }
 
+function formatJobTime(value: string) {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "Unknown time" : date.toLocaleString();
+}
+
+function JobInboxView({
+  jobs,
+  selectedJob,
+  events,
+  loading,
+  detailLoading,
+  error,
+  onSelectJob,
+  onLoadMore,
+}: {
+  jobs: JobPage | null;
+  selectedJob: JobRecovery | null;
+  events: JobEventPage | null;
+  loading: boolean;
+  detailLoading: boolean;
+  error: string;
+  onSelectJob: (jobId: string) => void;
+  onLoadMore: () => void;
+}) {
+  return (
+    <section className="content-view">
+      <PageTitle title="Jobs" description="Read-only Adapt job history from the robot control plane." />
+      <div className="job-trust-banner"><Info size={18} /><span><strong>Read-only view</strong><small>Job state, events, and checkpoints are displayed as opaque summaries. This workbench never starts or resumes a target operation.</small></span></div>
+      {error && <div className="panel read-model-unavailable" role="alert"><WarningCircle size={23} /><div><strong>Job read model unavailable</strong><p>{error}</p></div></div>}
+      <div className="job-layout">
+        <div className="panel job-inbox-panel">
+          <div className="job-panel-heading"><div><span>Job Inbox</span><h3>{jobs ? `${jobs.total} recorded jobs` : "Loading jobs…"}</h3></div><span className="read-only-chip">READ ONLY</span></div>
+          {loading && !jobs && <div className="job-empty"><Pulse size={23} /><span>Reading versioned Job summaries…</span></div>}
+          {!loading && jobs && !jobs.items.length && <div className="job-empty"><FileText size={23} /><span>No jobs have been published by rolo.</span></div>}
+          <div className="job-list" role="list" aria-label="Job summaries">
+            {jobs?.items.map((job) => (
+              <button key={job.job_id} className={`job-row ${selectedJob?.job.job_id === job.job_id ? "is-selected" : ""}`} onClick={() => onSelectJob(job.job_id)} role="listitem">
+                <span className="job-row-main"><strong>{job.operation}</strong><code>{job.job_id}</code></span>
+                <span className={`job-status job-status-${job.status.toLowerCase()}`}>{job.status}</span>
+                <span className="job-row-target">{job.target}</span>
+                <time dateTime={job.updated_at}>{formatJobTime(job.updated_at)}</time>
+                <ArrowRight size={15} />
+              </button>
+            ))}
+          </div>
+          {jobs && jobs.next_offset !== null && <div className="job-paging"><span>Loaded {jobs.items.length} of {jobs.total}</span><button className="secondary-button" disabled={loading} onClick={onLoadMore}>{loading ? "Loading…" : "Load more"}</button></div>}
+        </div>
+        <div className="panel job-detail-panel" aria-live="polite">
+          {detailLoading && <div className="job-empty"><Pulse size={23} /><span>Reading Job recovery state…</span></div>}
+          {!detailLoading && !selectedJob && <div className="job-empty"><GitBranch size={23} /><strong>Select a Job</strong><span>Its latest event, checkpoint, and recovery limitations will appear here.</span></div>}
+          {!detailLoading && selectedJob && <>
+            <div className="job-panel-heading"><div><span>Job detail</span><h3>{selectedJob.job.operation}</h3><code>{selectedJob.job.job_id}</code></div><span className={`job-status job-status-${selectedJob.job.status.toLowerCase()}`}>{selectedJob.job.status}</span></div>
+            <dl className="job-facts"><div><dt>Target</dt><dd>{selectedJob.job.target}</dd></div><div><dt>Revision</dt><dd>{selectedJob.job.revision}</dd></div><div><dt>Updated</dt><dd>{formatJobTime(selectedJob.job.updated_at)}</dd></div><div><dt>Recovery</dt><dd>{selectedJob.resumable ? "Resumable state published" : "No resumable state"}</dd></div></dl>
+            <div className="job-detail-section"><h4>Live timeline</h4>{events?.items.length ? <div className="job-timeline">{events.items.map((event) => <div className="job-event" key={event.event_id}><span className="job-event-sequence">{event.sequence}</span><span><strong>{event.event_type}</strong><small>{event.status} · {formatJobTime(event.occurred_at)}</small></span></div>)}</div> : <p className="job-muted">No events have been published for this Job.</p>}</div>
+            <div className="job-detail-section"><h4>Latest checkpoint</h4>{selectedJob.latest_checkpoint ? <div className="job-checkpoint"><CheckCircle size={17} /><span>Checkpoint {selectedJob.latest_checkpoint.sequence} recorded {formatJobTime(selectedJob.latest_checkpoint.created_at)}.<small>State is opaque and is not interpreted by the browser.</small></span></div> : <p className="job-muted">No checkpoint is available.</p>}</div>
+            {!!selectedJob.limitations.length && <div className="job-limitations"><Warning size={17} /><span><strong>Producer limitations</strong>{selectedJob.limitations.map((limitation) => <small key={limitation}>{limitation}</small>)}</span></div>}
+          </>}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function AppContent() {
   const [initialNavigationIntent] = useState(() => readWorkbenchNavigationIntent(window.location.href));
   const [episodeTarget, setEpisodeTarget] = useState<EpisodeDeepLinkTarget | null>(() => (
@@ -2317,6 +2384,13 @@ function AppContent() {
   const [capabilityLimitations, setCapabilityLimitations] = useState<string[]>([]);
   const [apiFeatures, setApiFeatures] = useState<string[]>([]);
   const [lifecycleRuns, setLifecycleRuns] = useState<LifecycleRunCollection | null>(null);
+  const [jobs, setJobs] = useState<JobPage | null>(null);
+  const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
+  const [selectedJob, setSelectedJob] = useState<JobRecovery | null>(null);
+  const [jobEvents, setJobEvents] = useState<JobEventPage | null>(null);
+  const [jobLoading, setJobLoading] = useState(false);
+  const [jobDetailLoading, setJobDetailLoading] = useState(false);
+  const [jobMessage, setJobMessage] = useState("");
   const [wiki, setWiki] = useState<RobotWikiSnapshot | null>(null);
   const [discoveryHistory, setDiscoveryHistory] = useState<DiscoverySnapshotCollection | null>(null);
   const [wikiRequestRobotId, setWikiRequestRobotId] = useState("");
@@ -2348,6 +2422,13 @@ function AppContent() {
     setFleetLoading(false);
     setFleetMessage("");
     setApiFeatures([]);
+    setJobs(null);
+    setSelectedJobId(null);
+    setSelectedJob(null);
+    setJobEvents(null);
+    setJobLoading(false);
+    setJobDetailLoading(false);
+    setJobMessage("");
     const controller = new AbortController();
     const timeout = window.setTimeout(() => controller.abort(), 5000);
     try {
@@ -2391,6 +2472,13 @@ function AppContent() {
       setCapabilityLimitations([]);
       setApiFeatures([]);
       setLifecycleRuns(null);
+      setJobs(null);
+      setSelectedJobId(null);
+      setSelectedJob(null);
+      setJobEvents(null);
+      setJobLoading(false);
+      setJobDetailLoading(false);
+      setJobMessage("");
       setWiki(null);
       setDiscoveryHistory(null);
       setConnectionMessage(error instanceof RoloApiError ? `${error.message}${error.path ? ` (${error.path})` : ""}` : "The rolo control plane could not be read.");
@@ -2414,6 +2502,13 @@ function AppContent() {
     setCapabilityLimitations([]);
     setApiFeatures([]);
     setLifecycleRuns(null);
+    setJobs(null);
+    setSelectedJobId(null);
+    setSelectedJob(null);
+    setJobEvents(null);
+    setJobLoading(false);
+    setJobDetailLoading(false);
+    setJobMessage("");
     setWiki(null);
     setDiscoveryHistory(null);
     setWikiRequestRobotId("");
@@ -2497,6 +2592,44 @@ function AppContent() {
     };
   }, [active, mode, robot, wiki, discoveryHistory]);
   useEffect(() => {
+    if (active !== "jobs" || !apiFeatures.includes(ROLO_API_FEATURES.jobReadModel) || !["live", "partial"].includes(mode)) return;
+    let current = true;
+    const controller = new AbortController();
+    setJobLoading(true);
+    setJobMessage("");
+    void roloClient.jobs({ signal: controller.signal }).then((page) => {
+      if (current) setJobs(page);
+    }).catch((error: unknown) => {
+      if (current) setJobMessage(error instanceof Error ? error.message : "The Job read model could not be read.");
+    }).finally(() => { if (current) setJobLoading(false); });
+    return () => {
+      current = false;
+      controller.abort();
+      setJobLoading(false);
+    };
+  }, [active, apiFeatures, mode]);
+  useEffect(() => {
+    if (active !== "jobs" || !selectedJobId || !apiFeatures.includes(ROLO_API_FEATURES.jobReadModel) || !["live", "partial"].includes(mode)) return;
+    let current = true;
+    const controller = new AbortController();
+    setJobDetailLoading(true);
+    void Promise.all([
+      roloClient.job(selectedJobId, { signal: controller.signal }),
+      roloClient.jobEvents(selectedJobId, { signal: controller.signal }),
+    ]).then(([recovery, events]) => {
+      if (!current) return;
+      setSelectedJob(recovery);
+      setJobEvents(events);
+    }).catch((error: unknown) => {
+      if (current) setJobMessage(error instanceof Error ? error.message : "The selected Job could not be read.");
+    }).finally(() => { if (current) setJobDetailLoading(false); });
+    return () => {
+      current = false;
+      controller.abort();
+      setJobDetailLoading(false);
+    };
+  }, [active, apiFeatures, mode, selectedJobId]);
+  useEffect(() => {
     if (active !== "fleet" || fleetRequested || (fleet && fleetBlockers) || !["live", "partial"].includes(mode)) return;
     let current = true;
     const controller = new AbortController();
@@ -2566,6 +2699,21 @@ function AppContent() {
     setActive(view);
     window.history.replaceState(null, "", buildWorkbenchViewLink(window.location.href, view));
   }, []);
+  const selectJob = useCallback((jobId: string) => {
+    setSelectedJobId(jobId);
+    setSelectedJob(null);
+    setJobEvents(null);
+    setJobMessage("");
+  }, []);
+  const loadMoreJobs = useCallback(() => {
+    if (!jobs?.next_offset || jobLoading) return;
+    setJobLoading(true);
+    void roloClient.jobs(undefined, { limit: jobs.limit, offset: jobs.next_offset }).then((page) => {
+      setJobs((current) => current ? { ...page, items: [...current.items, ...page.items] } : page);
+    }).catch((error: unknown) => {
+      setJobMessage(error instanceof Error ? error.message : "The next Job page could not be read.");
+    }).finally(() => setJobLoading(false));
+  }, [jobLoading, jobs]);
   const openStackLayer = useCallback((layer: ContextWikiLayer) => {
     setWikiContextFocus(null);
     setStackContextFocus((current) => ({
@@ -2593,6 +2741,7 @@ function AppContent() {
   const episodeRevisionHistorySupported = apiFeatures.includes(ROLO_API_FEATURES.episodeRevisionHistory);
   const episodeCohortSupported = apiFeatures.includes(ROLO_API_FEATURES.episodeCohortReadModel);
   const episodeObservationBundleSupported = apiFeatures.includes(ROLO_API_FEATURES.episodeObservationBundle);
+  const jobReadModelSupported = apiFeatures.includes(ROLO_API_FEATURES.jobReadModel);
   return (
     <div className="app-shell">
       <Sidebar active={active} apiFeatures={apiFeatures} onChange={navigate} />
@@ -2605,6 +2754,7 @@ function AppContent() {
           {active === "capabilities" && (capabilitySource === "demo" ? <DemoCapabilityView onOpenEvidence={setEvidence} /> : capabilitySource === "live" && capabilityList ? <LiveCapabilityView robotId={robot.robot_id} items={capabilityList} limitations={capabilityLimitations} apiFeatures={apiFeatures} onOpenEvidence={openEvidence} /> : <ReadModelUnavailableView title="Capabilities" description="Live capability coverage needs a versioned rolo capability read model." />)}
           {active === "lifecycle" && (lifecycleSource === "demo" ? <DemoLifecycleView pipeline={pipeline} onOpenEvidence={setEvidence} /> : lifecycleSource === "live" && lifecycleRuns ? <LiveLifecycleView pipeline={pipeline} runs={lifecycleRuns} robotId={robot.robot_id} onOpenEvidence={openEvidence} /> : <ReadModelUnavailableView title="Lifecycle" description="Live lifecycle requires trusted stage and run read models." />)}
           {active === "episode" && (episodeSupported ? <EpisodeStudio key={`episode-navigation-${episodeNavigationRevision}`} robotId={robot.robot_id} initialTarget={episodeTarget} revisionHistorySupported={episodeRevisionHistorySupported} cohortSupported={episodeCohortSupported} observationBundleSupported={episodeObservationBundleSupported} onOpenEvidence={openEvidence} /> : <ReadModelUnavailableView title="Episode Studio" description="rolo has not advertised the versioned Episode read model for this robot connection." />)}
+          {active === "jobs" && (jobReadModelSupported ? <JobInboxView jobs={jobs} selectedJob={selectedJob} events={jobEvents} loading={jobLoading} detailLoading={jobDetailLoading} error={jobMessage} onSelectJob={selectJob} onLoadMore={loadMoreJobs} /> : <ReadModelUnavailableView title="Jobs" description="rolo has not advertised the versioned Job read model for this robot connection." />)}
           {active === "wiki" && (mode === "demo" ? <ReadModelUnavailableView title="Robot Wiki" description="The labeled demo fixture does not include discovery Wiki evidence." /> : wiki && discoveryHistory ? <WikiView wiki={wiki} history={discoveryHistory} focusLayer={wikiContextFocus} onOpenStackLayer={openStackLayer} onClearFocus={() => setWikiContextFocus(null)} onOpenEvidence={openEvidence} /> : wikiLoading ? <section className="content-view"><PageTitle title="Robot Wiki" description="Reading manifest-verified discovery snapshots…" /><div className="panel read-model-unavailable" role="status"><Pulse size={26} /><div><strong>Loading Robot Wiki</strong><p>Current knowledge and verified history are being resolved independently.</p></div></div></section> : <ReadModelUnavailableView title="Robot Wiki" description={wikiMessage || "Open this surface to read a verified discovery Wiki."} />)}
           {active === "evidence" && (evidenceSource === "demo" ? <EvidenceView onOpenEvidence={openEvidence} /> : evidenceSource === "live" ? <EvidenceView live collection={evidenceList} robotId={robot.robot_id} onOpenEvidence={openEvidence} /> : <ReadModelUnavailableView title="Evidence" description="Live evidence resolution needs a versioned rolo evidence read model." />)}
         </>}
