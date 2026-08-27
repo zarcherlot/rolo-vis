@@ -76,3 +76,15 @@ test("E24C Target Readiness stays blocked until a sanitized producer contract ex
   assert.match(contract, /private keys/i);
   assert.match(contract, /browser contract/i);
 });
+
+test("E25 Approval/Gate/Recovery keeps governance and execution authority separate", async () => {
+  const compatibility = await read("../src/contracts/compatibility.ts");
+  const contract = await read("../docs/APPROVAL_GATE_RECOVERY_CONTRACT.md");
+  assert.match(compatibility, /workbench\.approval-gate-read-model\/v1/);
+  assert.match(compatibility, /status: "blocked-upstream"/);
+  assert.match(contract, /rolo-approval-gate-summary\/v1/);
+  assert.match(contract, /Approval must remain separate from Gate outcome/);
+  assert.match(contract, /bootstrap-execute/);
+  assert.match(contract, /may not/);
+  assert.match(contract, /resume\/retry\/cancel/);
+});

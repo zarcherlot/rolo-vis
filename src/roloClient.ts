@@ -91,6 +91,7 @@ export const ROLO_API_FEATURES = {
   blockerDetail: "workbench.blocker-detail/v1",
   jobReadModel: "workbench.job-read-model/v1",
   targetReadiness: "workbench.target-readiness/v1",
+  approvalGateReadModel: "workbench.approval-gate-read-model/v1",
   episodeReadModel: "workbench.episode-read-model/v1",
   episodeRevisionHistory: "workbench.episode-revision-history/v1",
   episodeCohortReadModel: "workbench.episode-cohort-read-model/v1",

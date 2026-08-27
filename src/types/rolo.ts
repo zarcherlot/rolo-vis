@@ -103,6 +103,36 @@ export interface TargetReadinessSummary {
   contains_secret_payloads: false;
 }
 
+export type ApprovalStatus = "PENDING" | "APPROVED" | "REJECTED" | "EXPIRED";
+export type GateStatus = "PENDING" | "PASSED" | "FAILED" | "BLOCKED";
+export type BootstrapPlanStatus = "READY" | "APPROVAL_REQUIRED" | "BLOCKED";
+export type BootstrapRisk = "READ_ONLY" | "HOST_MUTATION";
+export type BootstrapAction = "VERIFY_PLATFORM" | "VERIFY_WORKSPACE" | "INSTALL_COMPANION" | "HEALTH_CHECK";
+
+export interface BootstrapStepSummary {
+  action: BootstrapAction;
+  risk: BootstrapRisk;
+  approval_required: boolean;
+  description: string;
+}
+
+/** Proposed safe projection for approval/gate UX; it never carries credentials or paths. */
+export interface ApprovalGateSummary {
+  schema_version: "rolo-approval-gate-summary/v1";
+  job_id: string;
+  target_id: string;
+  plan_status: BootstrapPlanStatus;
+  steps: BootstrapStepSummary[];
+  required_approvals: string[];
+  approval_status: ApprovalStatus | null;
+  gate_status: GateStatus;
+  gate_checks: string[];
+  recovery_state: "NOT_REQUIRED" | "AVAILABLE" | "BLOCKED" | "UNKNOWN";
+  blockers: string[];
+  limitations: string[];
+  contains_secret_payloads: false;
+}
+
 export type AdaptSemanticLayer = "product_control" | "hardware" | "os" | "middleware" | "application";
 export type AdaptExecutionClass = "AGENT_NATIVE" | "PRODUCT_BUILTIN" | "TARGET_ADAPTER" | "PLATFORM_SPECIFIC";
 export type AdaptMigrationStatus = "PLANNED" | "RETAINED" | "DEFERRED";

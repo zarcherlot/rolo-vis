@@ -606,3 +606,19 @@ blocked until rolo publishes a sanitized read-only target summary.
   `POST /v1/targets/bootstrap-execute` until a separate public contract exists.
 
 The detailed boundary is recorded in `TARGET_READINESS_CONTRACT.md`.
+
+## E25: Approval / Gate / Recovery contract
+
+Status: contract candidate on `codex/e25-governance-contract`; blocked until rolo
+publishes a safe, versioned projection and Gate B staging evidence.
+
+- Pin `rolo-approval-gate-summary/v1` and the
+  `workbench.approval-gate-read-model/v1` feature gate.
+- Keep plan, approval, Gate, and recovery as separate producer-owned dimensions.
+- Bind summaries to opaque Job/Target IDs while excluding credentials, raw paths,
+  package bytes, command arguments, and unredacted transport output.
+- Keep approval, execution, resume/retry/cancel, rollback, and release authority out
+  of the browser until separate write-side contracts are reviewed.
+
+The boundary is recorded in `APPROVAL_GATE_RECOVERY_CONTRACT.md`; no UI or endpoint
+is activated in this slice.

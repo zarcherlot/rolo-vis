@@ -51,6 +51,20 @@ export const TARGET_READINESS_CONTRACT = {
   allowsBrowserMutation: false,
 } as const;
 
+export const APPROVAL_GATE_SCHEMA_COMPATIBILITY = {
+  summary: ["rolo-approval-gate-summary/v1"],
+} as const;
+
+export const APPROVAL_GATE_CONTRACT = {
+  id: "rolo-vis-approval-gate-recovery/2026-08",
+  status: "blocked-upstream",
+  mode: "read-only",
+  requiredFeature: "workbench.approval-gate-read-model/v1",
+  endpoint: "not-published",
+  containsSecretPayloads: false,
+  allowsBrowserMutation: false,
+} as const;
+
 export const MVP_BASELINE = {
   id: "rolo-vis-mvp-readonly/2026-08",
   status: "baseline",
