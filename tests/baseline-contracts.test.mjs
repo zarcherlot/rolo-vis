@@ -64,3 +64,15 @@ test("E24B Job Inbox remains feature-gated and read-only", async () => {
   assert.match(app, /Read-only view/);
   assert.doesNotMatch(app, /roloClient\.(bootstrapExecute|resumeJob|retryJob|cancelJob)/);
 });
+
+test("E24C Target Readiness stays blocked until a sanitized producer contract exists", async () => {
+  const compatibility = await read("../src/contracts/compatibility.ts");
+  const contract = await read("../docs/TARGET_READINESS_CONTRACT.md");
+  assert.match(compatibility, /workbench\.target-readiness\/v1/);
+  assert.match(compatibility, /status: "blocked-upstream"/);
+  assert.match(contract, /rolo-target-readiness-summary\/v1/);
+  assert.match(contract, /does not provide a safe GET endpoint/);
+  assert.match(contract, /bootstrap-execute/);
+  assert.match(contract, /private keys/i);
+  assert.match(contract, /browser contract/i);
+});

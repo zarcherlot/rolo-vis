@@ -590,3 +590,19 @@ Status: candidate on `codex/e24b-job-inbox`.
 
 The candidate UI is implemented in `JobInboxView`; it remains unavailable against
 older rolo versions that do not advertise the feature.
+
+## E24C: Target Readiness / Connection Assessment
+
+Status: contract candidate on `codex/e24c-target-readiness`;
+blocked until rolo publishes a sanitized read-only target summary.
+
+- Pin the proposed `rolo-target-readiness-summary/v1` shape and
+  `workbench.target-readiness/v1` feature gate.
+- Keep target identity, connection state, architecture, workspace accessibility,
+  companion state, blockers, and diagnostics producer-owned.
+- Reject raw SSH URIs, usernames, private keys, workspace paths, known-hosts data,
+  bootstrap payloads, and any browser mutation authority.
+- Do not infer readiness from Overview/Pipeline or call
+  `POST /v1/targets/bootstrap-execute` until a separate public contract exists.
+
+The detailed boundary is recorded in `TARGET_READINESS_CONTRACT.md`.

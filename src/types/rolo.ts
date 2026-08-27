@@ -82,6 +82,27 @@ export interface JobEventPage {
   next_offset: number | null;
 }
 
+export type TargetConnectionState = "READY" | "HOST_KEY_REQUIRED" | "UNREACHABLE" | "WORKSPACE_MISSING" | "UNSUPPORTED";
+export type TargetCompanionStatus = "NOT_REQUIRED" | "AVAILABLE" | "MISSING" | "UNKNOWN";
+
+/** Sanitized target readiness summary; raw SSH/workspace references stay producer-side. */
+export interface TargetReadinessSummary {
+  schema_version: "rolo-target-readiness-summary/v1";
+  target_id: string;
+  target_kind: "local" | "ssh";
+  state: TargetConnectionState;
+  reachable: boolean;
+  host_key_pinned: boolean | null;
+  platform: string | null;
+  architecture: string | null;
+  workspace_accessible: boolean;
+  companion: TargetCompanionStatus;
+  blockers: string[];
+  diagnostics: string[];
+  limitations: string[];
+  contains_secret_payloads: false;
+}
+
 export type AdaptSemanticLayer = "product_control" | "hardware" | "os" | "middleware" | "application";
 export type AdaptExecutionClass = "AGENT_NATIVE" | "PRODUCT_BUILTIN" | "TARGET_ADAPTER" | "PLATFORM_SPECIFIC";
 export type AdaptMigrationStatus = "PLANNED" | "RETAINED" | "DEFERRED";

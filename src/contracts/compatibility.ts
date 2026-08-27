@@ -37,6 +37,20 @@ export const JOB_READONLY_CONTRACT = {
   containsSecretPayloads: false,
 } as const;
 
+export const TARGET_READINESS_SCHEMA_COMPATIBILITY = {
+  summary: ["rolo-target-readiness-summary/v1"],
+} as const;
+
+export const TARGET_READINESS_CONTRACT = {
+  id: "rolo-vis-target-readiness/2026-08",
+  status: "blocked-upstream",
+  mode: "read-only",
+  requiredFeature: "workbench.target-readiness/v1",
+  endpoint: "not-published",
+  containsSecretPayloads: false,
+  allowsBrowserMutation: false,
+} as const;
+
 export const MVP_BASELINE = {
   id: "rolo-vis-mvp-readonly/2026-08",
   status: "baseline",
