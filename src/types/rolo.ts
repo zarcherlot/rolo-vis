@@ -11,6 +11,77 @@ export interface HealthResponse {
   timestamp: string;
 }
 
+export type JobStatus = "CREATED" | "RUNNING" | "SUCCEEDED" | "FAILED" | "BLOCKED";
+
+export interface JobEvent {
+  schema_version: "rolo-job-event/v1";
+  event_id: string;
+  job_id: string;
+  sequence: number;
+  event_type: string;
+  status: JobStatus;
+  occurred_at: string;
+  payload: Record<string, unknown>;
+}
+
+export interface JobCheckpoint {
+  schema_version: "rolo-job-checkpoint/v1";
+  checkpoint_id: string;
+  job_id: string;
+  sequence: number;
+  state: Record<string, unknown>;
+  created_at: string;
+}
+
+export interface Job {
+  schema_version: "rolo-job/v1";
+  job_id: string;
+  operation: string;
+  target: string;
+  status: JobStatus;
+  revision: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface JobSummary {
+  schema_version: "rolo-job-summary/v1";
+  job_id: string;
+  operation: string;
+  target: string;
+  status: JobStatus;
+  revision: number;
+  updated_at: string;
+}
+
+export interface JobRecovery {
+  schema_version: "rolo-job-recovery/v1";
+  job: Job;
+  latest_event: JobEvent | null;
+  latest_checkpoint: JobCheckpoint | null;
+  resumable: boolean;
+  limitations: string[];
+}
+
+export interface JobPage {
+  schema_version: "rolo-job-page/v1";
+  items: JobSummary[];
+  total: number;
+  limit: number;
+  offset: number;
+  next_offset: number | null;
+}
+
+export interface JobEventPage {
+  schema_version: "rolo-job-event-page/v1";
+  job_id: string;
+  items: JobEvent[];
+  total: number;
+  limit: number;
+  offset: number;
+  next_offset: number | null;
+}
+
 export type AdaptSemanticLayer = "product_control" | "hardware" | "os" | "middleware" | "application";
 export type AdaptExecutionClass = "AGENT_NATIVE" | "PRODUCT_BUILTIN" | "TARGET_ADAPTER" | "PLATFORM_SPECIFIC";
 export type AdaptMigrationStatus = "PLANNED" | "RETAINED" | "DEFERRED";

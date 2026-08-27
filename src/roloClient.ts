@@ -30,6 +30,14 @@ import type {
   LifecycleRunCollection,
   LifecycleRunDetail,
   LifecycleRunSummary,
+  Job,
+  JobCheckpoint,
+  JobEvent,
+  JobEventPage,
+  JobPage,
+  JobRecovery,
+  JobStatus,
+  JobSummary,
   OperationGovernanceCollection,
   OperationDisposition,
   PipelineAssessment,
@@ -81,6 +89,7 @@ export const ROLO_API_FEATURES = {
   sliceStability: "adapt.slice-stability/v1",
   targetOperationSlice: "adapt.target-operation-slice/v1",
   blockerDetail: "workbench.blocker-detail/v1",
+  jobReadModel: "workbench.job-read-model/v1",
   episodeReadModel: "workbench.episode-read-model/v1",
   episodeRevisionHistory: "workbench.episode-revision-history/v1",
   episodeCohortReadModel: "workbench.episode-cohort-read-model/v1",
@@ -169,6 +178,90 @@ function parseHealthResponse(value: unknown, path: string): HealthResponse {
   requireContract(value.api_features === undefined || isStringArray(value.api_features), "invalid API feature catalog", path);
   requireContract(isTimestamp(value.timestamp), "invalid health observation time", path);
   return { ...value, api_features: value.api_features || [] } as unknown as HealthResponse;
+}
+
+const JOB_STATUSES: JobStatus[] = ["CREATED", "RUNNING", "SUCCEEDED", "FAILED", "BLOCKED"];
+
+function parseJobEvent(value: unknown, path: string, expectedJobId?: string): JobEvent {
+  requireContract(isRecord(value), "job event must be an object", path);
+  requireContract(value.schema_version === "rolo-job-event/v1", "unsupported job event schema", path);
+  requireContract(typeof value.event_id === "string" && value.event_id.length > 0, "missing job event identity", path);
+  requireContract(typeof value.job_id === "string" && (!expectedJobId || value.job_id === expectedJobId), "job event identity does not match request", path);
+  requireContract(Number.isInteger(value.sequence) && Number(value.sequence) >= 0, "invalid job event sequence", path);
+  requireContract(typeof value.event_type === "string" && value.event_type.length > 0, "invalid job event type", path);
+  requireContract(JOB_STATUSES.includes(value.status as JobStatus), "invalid job event status", path);
+  requireContract(isTimestamp(value.occurred_at) && isRecord(value.payload), "invalid job event observation", path);
+  return value as unknown as JobEvent;
+}
+
+function parseJobCheckpoint(value: unknown, path: string, expectedJobId?: string): JobCheckpoint {
+  requireContract(isRecord(value), "job checkpoint must be an object", path);
+  requireContract(value.schema_version === "rolo-job-checkpoint/v1", "unsupported job checkpoint schema", path);
+  requireContract(typeof value.checkpoint_id === "string" && value.checkpoint_id.length > 0, "missing job checkpoint identity", path);
+  requireContract(typeof value.job_id === "string" && (!expectedJobId || value.job_id === expectedJobId), "job checkpoint identity does not match request", path);
+  requireContract(Number.isInteger(value.sequence) && Number(value.sequence) >= 0, "invalid job checkpoint sequence", path);
+  requireContract(isRecord(value.state) && isTimestamp(value.created_at), "invalid job checkpoint state", path);
+  return value as unknown as JobCheckpoint;
+}
+
+function parseJob(value: unknown, path: string, expectedJobId?: string): Job {
+  requireContract(isRecord(value), "job must be an object", path);
+  requireContract(value.schema_version === "rolo-job/v1", "unsupported job schema", path);
+  requireContract(typeof value.job_id === "string" && (!expectedJobId || value.job_id === expectedJobId), "job identity does not match request", path);
+  requireContract(typeof value.operation === "string" && value.operation.length > 0, "invalid job operation", path);
+  requireContract(typeof value.target === "string" && value.target.length > 0, "invalid job target", path);
+  requireContract(JOB_STATUSES.includes(value.status as JobStatus), "invalid job status", path);
+  requireContract(Number.isInteger(value.revision) && Number(value.revision) >= 0, "invalid job revision", path);
+  requireContract(isTimestamp(value.created_at) && isTimestamp(value.updated_at), "invalid job timestamps", path);
+  return value as unknown as Job;
+}
+
+function parseJobSummary(value: unknown, path: string): JobSummary {
+  requireContract(isRecord(value), "job summary must be an object", path);
+  requireContract(value.schema_version === "rolo-job-summary/v1", "unsupported job summary schema", path);
+  requireContract(typeof value.job_id === "string" && value.job_id.length > 0, "missing job summary identity", path);
+  requireContract(typeof value.operation === "string" && value.operation.length > 0, "invalid job summary operation", path);
+  requireContract(typeof value.target === "string" && value.target.length > 0, "invalid job summary target", path);
+  requireContract(JOB_STATUSES.includes(value.status as JobStatus), "invalid job summary status", path);
+  requireContract(Number.isInteger(value.revision) && Number(value.revision) >= 0, "invalid job summary revision", path);
+  requireContract(isTimestamp(value.updated_at), "invalid job summary timestamp", path);
+  return value as unknown as JobSummary;
+}
+
+function parseJobPage(value: unknown, path: string): JobPage {
+  requireContract(isRecord(value), "job page must be an object", path);
+  requireContract(value.schema_version === "rolo-job-page/v1", "unsupported job page schema", path);
+  requireContract(Array.isArray(value.items), "invalid job page items", path);
+  const items = value.items.map((item, index) => parseJobSummary(item, `${path}/items/${index}`));
+  requireContract(new Set(items.map((item) => item.job_id)).size === items.length, "job page contains duplicate identities", path);
+  requireContract(Number.isInteger(value.total) && Number(value.total) >= items.length, "invalid job page total", path);
+  requireContract(Number.isInteger(value.limit) && Number(value.limit) >= 1 && Number(value.limit) <= 100 && items.length <= Number(value.limit), "invalid job page limit", path);
+  requireContract(Number.isInteger(value.offset) && Number(value.offset) >= 0, "invalid job page offset", path);
+  requireContract(value.next_offset === null || (Number.isInteger(value.next_offset) && Number(value.next_offset) > Number(value.offset) && Number(value.next_offset) <= Number(value.total)), "invalid job page next offset", path);
+  return { ...value, items } as unknown as JobPage;
+}
+
+function parseJobRecovery(value: unknown, path: string, expectedJobId: string): JobRecovery {
+  requireContract(isRecord(value), "job recovery must be an object", path);
+  requireContract(value.schema_version === "rolo-job-recovery/v1", "unsupported job recovery schema", path);
+  const job = parseJob(value.job, `${path}/job`, expectedJobId);
+  const latestEvent = value.latest_event === null ? null : parseJobEvent(value.latest_event, `${path}/latest_event`, expectedJobId);
+  const latestCheckpoint = value.latest_checkpoint === null ? null : parseJobCheckpoint(value.latest_checkpoint, `${path}/latest_checkpoint`, expectedJobId);
+  requireContract(typeof value.resumable === "boolean" && isStringArray(value.limitations), "invalid job recovery metadata", path);
+  return { ...value, job, latest_event: latestEvent, latest_checkpoint: latestCheckpoint } as unknown as JobRecovery;
+}
+
+function parseJobEventPage(value: unknown, path: string, expectedJobId: string): JobEventPage {
+  requireContract(isRecord(value), "job event page must be an object", path);
+  requireContract(value.schema_version === "rolo-job-event-page/v1" && value.job_id === expectedJobId, "invalid job event page identity", path);
+  requireContract(Array.isArray(value.items), "invalid job event page items", path);
+  const items = value.items.map((item, index) => parseJobEvent(item, `${path}/items/${index}`, expectedJobId));
+  requireContract(new Set(items.map((item) => item.event_id)).size === items.length, "job event page contains duplicate identities", path);
+  requireContract(Number.isInteger(value.total) && Number(value.total) >= items.length, "invalid job event page total", path);
+  requireContract(Number.isInteger(value.limit) && Number(value.limit) >= 1 && Number(value.limit) <= 100 && items.length <= Number(value.limit), "invalid job event page limit", path);
+  requireContract(Number.isInteger(value.offset) && Number(value.offset) >= 0, "invalid job event page offset", path);
+  requireContract(value.next_offset === null || (Number.isInteger(value.next_offset) && Number(value.next_offset) > Number(value.offset) && Number(value.next_offset) <= Number(value.total)), "invalid job event page next offset", path);
+  return { ...value, items } as unknown as JobEventPage;
 }
 
 function parseOperationDisposition(value: unknown, path: string): OperationDisposition {
@@ -947,6 +1040,34 @@ export class RoloClient {
   async health(options?: RequestInit) {
     const path = "/health";
     return parseHealthResponse(await this.request<unknown>(path, options), path);
+  }
+
+  async jobs(
+    options?: RequestInit,
+    page: { limit?: number; offset?: number } = {},
+  ): Promise<JobPage> {
+    const limit = page.limit ?? 100;
+    const offset = page.offset ?? 0;
+    const query = new URLSearchParams({ limit: String(limit), offset: String(offset) });
+    const path = `/v1/jobs?${query.toString()}`;
+    return parseJobPage(await this.request<unknown>(path, options), path);
+  }
+
+  async job(jobId: string, options?: RequestInit): Promise<JobRecovery> {
+    const path = `/v1/jobs/${encodeURIComponent(jobId)}`;
+    return parseJobRecovery(await this.request<unknown>(path, options), path, jobId);
+  }
+
+  async jobEvents(
+    jobId: string,
+    options?: RequestInit,
+    page: { limit?: number; offset?: number } = {},
+  ): Promise<JobEventPage> {
+    const limit = page.limit ?? 100;
+    const offset = page.offset ?? 0;
+    const query = new URLSearchParams({ limit: String(limit), offset: String(offset) });
+    const path = `/v1/jobs/${encodeURIComponent(jobId)}/events?${query.toString()}`;
+    return parseJobEventPage(await this.request<unknown>(path, options), path, jobId);
   }
 
   async robots(options?: RequestInit) {

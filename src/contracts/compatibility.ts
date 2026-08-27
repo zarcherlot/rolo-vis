@@ -18,6 +18,25 @@ export const MVP_SCHEMA_COMPATIBILITY = {
   },
 } as const;
 
+export const JOB_SCHEMA_COMPATIBILITY = {
+  page: ["rolo-job-page/v1"],
+  summary: ["rolo-job-summary/v1"],
+  recovery: ["rolo-job-recovery/v1"],
+  detail: ["rolo-job/v1"],
+  eventPage: ["rolo-job-event-page/v1"],
+  event: ["rolo-job-event/v1"],
+  checkpoint: ["rolo-job-checkpoint/v1"],
+} as const;
+
+export const JOB_READONLY_CONTRACT = {
+  id: "rolo-vis-job-readonly/2026-08",
+  status: "candidate",
+  mode: "read-only",
+  requiredFeature: "workbench.job-read-model/v1",
+  writeRoutes: [],
+  containsSecretPayloads: false,
+} as const;
+
 export const MVP_BASELINE = {
   id: "rolo-vis-mvp-readonly/2026-08",
   status: "baseline",

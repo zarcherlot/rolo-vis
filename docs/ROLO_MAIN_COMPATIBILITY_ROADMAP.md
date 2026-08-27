@@ -555,3 +555,22 @@ The frozen consumer contract and promotion evidence are recorded in
 `EPISODE_OBSERVATION_BUNDLE_CONSUMER_CONTRACT.md` and
 `EPISODE_OBSERVATION_BUNDLE_BASELINE.md`. The matching rolo public contract is
 `EPISODE_OBSERVATION_BUNDLE_CONTRACT_DESIGN.md`.
+
+## E24A: unified Adapt Job read contract
+
+Status: candidate on `codex/e24a-unified-job-read-model`.
+
+- Add a versioned, fail-closed consumer boundary for `rolo-job-page/v1`,
+  `rolo-job-recovery/v1`, and `rolo-job-event-page/v1` plus their nested Job,
+  Event, and Checkpoint models.
+- Add the feature-negotiation key `workbench.job-read-model/v1` without activating
+  a UI surface until rolo advertises it from `/health`.
+- Keep Job target strings and event/checkpoint payloads opaque; no browser command
+  construction, raw artifact interpretation, or target mutation is permitted.
+- Keep `POST /v1/targets/bootstrap-execute` out of the browser client and plugin
+  endpoint manifest.
+
+The candidate contract is recorded in `JOB_READONLY_CONTRACT` and
+`JOB_SCHEMA_COMPATIBILITY`; detailed trust-boundary rules are in
+`JOB_READONLY_CONTRACT.md`. E24B will add the read-only Job Inbox and Timeline only
+after this contract is reviewed.

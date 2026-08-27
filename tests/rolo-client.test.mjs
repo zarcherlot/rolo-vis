@@ -22,6 +22,73 @@ const HEALTH = {
   timestamp: "2026-08-20T00:00:00Z",
 };
 
+const JOB_EVENT = {
+  schema_version: "rolo-job-event/v1",
+  event_id: "evt_001",
+  job_id: "job_001",
+  sequence: 1,
+  event_type: "bootstrap.started",
+  status: "RUNNING",
+  occurred_at: "2026-08-20T00:00:01Z",
+  payload: { plan_sha256: "a".repeat(64) },
+};
+
+const JOB_CHECKPOINT = {
+  schema_version: "rolo-job-checkpoint/v1",
+  checkpoint_id: "chk_001",
+  job_id: "job_001",
+  sequence: 1,
+  state: { phase: "prepare" },
+  created_at: "2026-08-20T00:00:01Z",
+};
+
+const JOB = {
+  schema_version: "rolo-job/v1",
+  job_id: "job_001",
+  operation: "target.bootstrap.execute",
+  target: "robot://demo-01",
+  status: "RUNNING",
+  revision: 1,
+  created_at: "2026-08-20T00:00:00Z",
+  updated_at: "2026-08-20T00:00:01Z",
+};
+
+const JOB_PAGE = {
+  schema_version: "rolo-job-page/v1",
+  items: [{
+    schema_version: "rolo-job-summary/v1",
+    job_id: "job_001",
+    operation: "target.bootstrap.execute",
+    target: "robot://demo-01",
+    status: "RUNNING",
+    revision: 1,
+    updated_at: "2026-08-20T00:00:01Z",
+  }],
+  total: 1,
+  limit: 100,
+  offset: 0,
+  next_offset: null,
+};
+
+const JOB_RECOVERY = {
+  schema_version: "rolo-job-recovery/v1",
+  job: JOB,
+  latest_event: JOB_EVENT,
+  latest_checkpoint: JOB_CHECKPOINT,
+  resumable: true,
+  limitations: ["Recovery returns state only."],
+};
+
+const JOB_EVENT_PAGE = {
+  schema_version: "rolo-job-event-page/v1",
+  job_id: "job_001",
+  items: [JOB_EVENT],
+  total: 1,
+  limit: 100,
+  offset: 0,
+  next_offset: null,
+};
+
 const TARGET_OPERATION_SLICE = {
   schema_version: "robot-target-operation-slice/v1",
   robot_id: "AMR-07",
@@ -2054,4 +2121,45 @@ test("plugin manifest declares every trusted read-model endpoint", async () => {
       "/v1/evidence/{evidence_id}",
     ]),
   );
+});
+
+test("RoloClient reads the versioned Job page, recovery state, and event page", async () => {
+  const originalFetch = globalThis.fetch;
+  const urls = [];
+  globalThis.fetch = async (url) => {
+    urls.push(String(url));
+    const value = String(url).includes("/events") ? JOB_EVENT_PAGE
+      : String(url).endsWith("/job_001") ? JOB_RECOVERY : JOB_PAGE;
+    return { ok: true, json: async () => value };
+  };
+  try {
+    const client = new RoloClient("http://rolo.test");
+    assert.equal(ROLO_API_FEATURES.jobReadModel, "workbench.job-read-model/v1");
+    const page = await client.jobs(undefined, { limit: 25, offset: 0 });
+    const recovery = await client.job("job_001");
+    const events = await client.jobEvents("job_001", undefined, { limit: 10, offset: 0 });
+    assert.equal(page.items[0].status, "RUNNING");
+    assert.equal(recovery.latest_checkpoint.state.phase, "prepare");
+    assert.equal(events.items[0].event_type, "bootstrap.started");
+    assert.deepEqual(urls, [
+      "http://rolo.test/v1/jobs?limit=25&offset=0",
+      "http://rolo.test/v1/jobs/job_001",
+      "http://rolo.test/v1/jobs/job_001/events?limit=10&offset=0",
+    ]);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("RoloClient rejects a Job page with an unsafe contract version", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => ({ ok: true, json: async () => ({ ...JOB_PAGE, schema_version: "rolo-job-page/v2" }) });
+  try {
+    await assert.rejects(
+      () => new RoloClient("http://rolo.test").jobs(),
+      (error) => error instanceof RoloContractError && error.path.includes("/v1/jobs"),
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
