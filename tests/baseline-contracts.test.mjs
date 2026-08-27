@@ -88,3 +88,13 @@ test("E25 Approval/Gate/Recovery keeps governance and execution authority separa
   assert.match(contract, /may not/);
   assert.match(contract, /resume\/retry\/cancel/);
 });
+
+test("E26 device hardening keeps external evidence pending and browser read-only", async () => {
+  const matrix = JSON.parse(await readFile(new URL("./fixtures/device-hardening-matrix.json", import.meta.url), "utf8"));
+  const plan = await read("../docs/DEVICE_HARDENING_VERIFICATION_PLAN.md");
+  assert.equal(matrix.schema_version, "rolo-vis-device-hardening-matrix/v1");
+  assert.equal(matrix.scenarios.find(({ id }) => id === "windows-development").status, "AUTOMATED_CHECKED");
+  assert.ok(matrix.scenarios.filter(({ class: scenarioClass }) => scenarioClass === "external").every(({ status }) => status === "PENDING_EXTERNAL"));
+  assert.match(plan, /No evidence includes private keys/);
+  assert.match(plan, /does not add a hosted site/);
+});

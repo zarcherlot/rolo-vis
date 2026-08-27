@@ -622,3 +622,21 @@ publishes a safe, versioned projection and Gate B staging evidence.
 
 The boundary is recorded in `APPROVAL_GATE_RECOVERY_CONTRACT.md`; no UI or endpoint
 is activated in this slice.
+
+## E26: device-side hardening verification
+
+Status: candidate on `codex/e26-device-hardening`; external staging required.
+
+- Freeze a machine-readable matrix for Windows development, Linux ARM64/x86_64,
+  offline install, non-root/sudo, SSH jump host, host-key rotation, network
+  interruption, restart/resume, upgrade/rollback, and enrollment rotation.
+- Keep local automated checks separate from external target evidence; unvalidated
+  scenarios remain `PENDING_EXTERNAL` and cannot become release-ready in the UI.
+- Require signed package digest, Job ID, Gate result, and sanitized diagnostics for
+  each external run while excluding credentials, raw paths, artifact bytes, and
+  transport output.
+- Preserve rolo as the robot-owned host and keep browser-side SSH/bootstrap/rollback
+  authority disabled.
+
+The matrix and gates are recorded in `DEVICE_HARDENING_VERIFICATION_PLAN.md` and
+`tests/fixtures/device-hardening-matrix.json`.

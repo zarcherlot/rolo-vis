@@ -1,0 +1,17 @@
+{
+  "schema_version": "rolo-vis-device-hardening-matrix/v1",
+  "release_line": "v0.37.x",
+  "scenarios": [
+    { "id": "windows-development", "class": "local", "status": "AUTOMATED_CHECKED" },
+    { "id": "linux-arm64", "class": "external", "status": "PENDING_EXTERNAL" },
+    { "id": "linux-x86_64", "class": "external", "status": "PENDING_EXTERNAL" },
+    { "id": "offline-install", "class": "external", "status": "PENDING_EXTERNAL" },
+    { "id": "non-root-sudo", "class": "external", "status": "PENDING_EXTERNAL" },
+    { "id": "ssh-jump-host", "class": "external", "status": "PENDING_EXTERNAL" },
+    { "id": "host-key-rotation", "class": "external", "status": "PENDING_EXTERNAL" },
+    { "id": "network-interruption", "class": "external", "status": "PENDING_EXTERNAL" },
+    { "id": "restart-resume", "class": "external", "status": "PENDING_EXTERNAL" },
+    { "id": "upgrade-rollback", "class": "external", "status": "PENDING_EXTERNAL" },
+    { "id": "enrollment-rotation", "class": "external", "status": "PENDING_EXTERNAL" }
+  ]
+}

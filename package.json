@@ -29,6 +29,7 @@
     "prepare:episode-investigation-live": "node scripts/prepare-episode-investigation-live-data.mjs",
     "prepare:episode-observation-live": "node scripts/prepare-episode-observation-live-data.mjs",
     "test:sites": "node --test tests/sites-worker.test.mjs",
+    "check:device-hardening": "node scripts/check-device-hardening.mjs",
     "verify:baseline": "npm test && npm run typecheck && npm run build && npm run test:sites"
   },
   "dependencies": {
