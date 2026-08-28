@@ -352,7 +352,7 @@ function Topbar({ robot, robots, activeLabel, mode, snapshot, onRetry, onRobotCh
   return (
     <header className="topbar">
       <label className="robot-selector">
-        <StatusDot status={robot?.status === "online" ? "observed" : mode === "demo" ? "partial" : "failed"} />
+        <StatusDot status={mode === "demo" ? "partial" : robot?.status === "online" ? "observed" : "failed"} />
         <select
           value={robot?.robot_id || ""}
           onChange={(event) => onRobotChange(event.target.value)}
