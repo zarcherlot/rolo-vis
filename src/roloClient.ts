@@ -1464,9 +1464,19 @@ export class RoloClient {
       overview = await this.overview(robot.robot_id, options);
       pipeline = overview.pipeline;
     } catch (error) {
-      if (!(error instanceof RoloApiError) || error.status !== 404) throw error;
-      pipeline = await this.pipeline(robot.robot_id, options);
-      issues.push("The overview read model is unavailable; showing the compatible pipeline view.");
+      if (!(error instanceof RoloApiError) || ![404, 409, 422].includes(error.status || 0)) throw error;
+      try {
+        pipeline = await this.pipeline(robot.robot_id, options);
+        issues.push(
+          error.status === 404
+            ? "The overview read model is unavailable; showing the compatible pipeline view."
+            : "The overview read model failed evidence validation; showing the safe pipeline assessment.",
+        );
+      } catch (pipelineError) {
+        if (!(pipelineError instanceof RoloApiError)) throw pipelineError;
+        pipeline = null;
+        issues.push("The overview and pipeline read models are unavailable; live evidence is incomplete.");
+      }
     }
 
     const [topologyResult, snapshotResult, evidenceResult, capabilitiesResult, runsResult] = await Promise.allSettled([
