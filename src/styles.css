@@ -647,6 +647,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 @media (max-width: 640px) { .analysis-hero { grid-template-columns: 1fr; gap: 13px; }.analysis-hero-status { border-top: 1px solid rgba(148,163,184,.16); border-left: 0; padding: 12px 0 0; }.analysis-kpi-grid { grid-template-columns: 1fr 1fr; }.analysis-kpi strong { font-size: 18px; }.analysis-timeline { grid-template-columns: 1fr 1fr; gap: 18px 0; }.analysis-stage-line { display: none; }.analysis-operations { grid-template-columns: 1fr; }.analysis-graph-row { grid-template-columns: 23px minmax(100px,1fr) minmax(90px,1fr); }.analysis-graph-row > svg { display: none; }.analysis-artifact-footer small { width: 100%; margin-left: 0; } }
 
 .analysis-hero-status.is-danger strong { color: #f18b92; }
+.analysis-hero-status.is-amber strong { color: #f4c867; }
 .analysis-stage-marker.stage-failed { border-color: #a84c58; color: #f18b92; }
 .finding-red .finding-icon { color: #f18b92; background: rgba(243,91,99,.1); }
 /* Target validation status accents */

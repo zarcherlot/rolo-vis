@@ -133,7 +133,7 @@ import { summarizeLifecycleAssessment } from "./lifecycleAssessment";
 import { filterSliceObservations } from "./sliceStability";
 import { getOverviewPresentation, getSurfaceSource } from "./workbenchPolicy";
 import type { WorkbenchMode } from "./workbenchPolicy";
-import { TARGET_VALIDATION_ANALYSIS } from "./lerobotAnalysisData";
+import { REAL_DEVICE_ARTIFACT_ANALYSIS, TARGET_VALIDATION_ANALYSIS } from "./lerobotAnalysisData";
 import { EpisodeStudio } from "./EpisodeStudio";
 import {
   buildWorkbenchViewLink,
@@ -2360,7 +2360,7 @@ function JobInboxView({
 }
 
 function RunAnalysisView() {
-  const analysis = TARGET_VALIDATION_ANALYSIS;
+  const analysis = REAL_DEVICE_ARTIFACT_ANALYSIS;
   const maxContext = Math.max(...analysis.contextBars.map((item) => item.value));
   return (
     <section className="content-view run-analysis-view">
@@ -2377,15 +2377,15 @@ function RunAnalysisView() {
           <h3>{analysis.title}</h3>
           <p>{analysis.description}</p>
         </div>
-        <div className="analysis-hero-status is-danger"><span>Gate · {analysis.gateLabel}</span><strong>{analysis.gateStatus}</strong><small>read-only validation</small></div>
-        <div className="analysis-hero-status is-danger"><span>Release</span><strong>{analysis.releaseStatus}</strong><small>{analysis.releaseLabel}</small></div>
+        <div className={`analysis-hero-status is-${analysis.gateTone}`}><span>Gate · {analysis.gateLabel}</span><strong>{analysis.gateStatus}</strong><small>read-only validation</small></div>
+        <div className={`analysis-hero-status is-${analysis.releaseTone}`}><span>Slice activation</span><strong>{analysis.releaseStatus}</strong><small>{analysis.releaseLabel}</small></div>
       </div>
 
       <div className="analysis-kpi-grid">
-        <div className="panel analysis-kpi"><span>Adapt run</span><strong>{analysis.runDuration}</strong><small>no run after blocked dry-run</small></div>
-        <div className="panel analysis-kpi"><span>Bounded samples</span><strong>{analysis.eventCount}</strong><small>ROS graph samples compared</small></div>
-        <div className="panel analysis-kpi"><span>Eligible operations</span><strong>{analysis.eligibleOperationCount}</strong><small>all candidates fail closed</small></div>
-        <div className="panel analysis-kpi is-warn"><span>Deferred candidates</span><strong>{analysis.routeReviewFlags}</strong><small>semantic or route evidence gaps</small></div>
+        <div className="panel analysis-kpi"><span>Adapt run</span><strong>{analysis.runDuration}</strong><small>artifact run completed</small></div>
+        <div className="panel analysis-kpi"><span>Agent events</span><strong>{analysis.eventCount}</strong><small>artifact events recorded</small></div>
+        <div className="panel analysis-kpi"><span>Release-eligible ops</span><strong>{analysis.eligibleOperationCount}</strong><small>slice not selected for release</small></div>
+        <div className="panel analysis-kpi is-warn"><span>Review flags</span><strong>{analysis.routeReviewFlags}</strong><small>candidate routes remain unverified</small></div>
       </div>
 
       <div className="analysis-main-grid">
@@ -2401,7 +2401,7 @@ function RunAnalysisView() {
         </section>
 
         <section className="panel analysis-panel">
-          <header className="analysis-panel-heading"><div><span>Target evidence</span><h3>Bounded ROS observation</h3></div><small>robot-target-evidence/v2</small></header>
+          <header className="analysis-panel-heading"><div><span>Target evidence</span><h3>Observed ROS graph</h3></div><small>robot-discovery/v1</small></header>
           <div className="analysis-bars">
             {analysis.contextBars.map((item) => <div className="analysis-bar-row" key={item.label}><div><span>{item.label}</span><strong>{item.display}</strong></div><div className="analysis-bar-track"><i className={`bar-${item.tone}`} style={{ width: `${Math.max(8, (item.value / maxContext) * 100)}%` }} /></div></div>)}
           </div>
@@ -2411,7 +2411,7 @@ function RunAnalysisView() {
 
       <div className="analysis-main-grid analysis-second-grid">
         <section className="panel analysis-panel">
-          <header className="analysis-panel-heading"><div><span>Route review</span><h3>Candidate operation evidence</h3></div><small>DEFERRED · fail closed</small></header>
+          <header className="analysis-panel-heading"><div><span>Route review</span><h3>Candidate operation evidence</h3></div><small>OBSERVED · unverified</small></header>
           <div className="analysis-operations">
             {analysis.operations.map((operation) => <article className="analysis-operation" key={operation.name}>
               <div className="analysis-operation-top"><code>{operation.name}</code><span className={`analysis-route-status is-${operation.routeStatus}`}>{operation.routeStatus}</span></div>
@@ -2424,14 +2424,14 @@ function RunAnalysisView() {
 
         <section className="panel analysis-panel">
           <header className="analysis-panel-heading"><div><span>Target scope</span><h3>What was observed</h3></div><small>read-only runtime evidence</small></header>
-          <div className="dependency-legend analysis-scope-facts">{analysis.contextBars.slice(1).map((item) => <div key={item.label}><span className={`legend-dot dot-${item.tone === "amber" ? "amber" : item.tone === "violet" ? "violet" : "blue"}`} /><strong>{item.value}</strong><small>{item.label}</small></div>)}</div>
+          <div className="dependency-legend analysis-scope-facts">{analysis.contextBars.slice(1).map((item) => <div key={item.label}><span className={`legend-dot dot-${item.tone === "violet" ? "violet" : "blue"}`} /><strong>{item.value}</strong><small>{item.label}</small></div>)}</div>
           <div className="dependency-callout"><WarningCircle size={15} /><span><strong>Stability limitation</strong> {analysis.evidenceNote}</span></div>
         </section>
       </div>
 
       <div className="analysis-main-grid analysis-third-grid">
         <section className="panel analysis-panel">
-          <header className="analysis-panel-heading"><div><span>State graph</span><h3>Release topology</h3></div><small>{analysis.graphNodes.length} nodes · no release</small></header>
+          <header className="analysis-panel-heading"><div><span>State graph</span><h3>Artifact topology</h3></div><small>{analysis.graphNodes.length} nodes · shadow slice</small></header>
           <div className="analysis-graph-list">{analysis.graphNodes.map((node, index) => <div className="analysis-graph-row" key={node.label}><span className={`graph-index graph-${node.tone}`}>{index + 1}</span><code>{node.label}</code><span>{node.state}</span>{index < analysis.graphNodes.length - 1 && <ArrowRight size={13} />}</div>)}</div>
         </section>
         <section className="panel analysis-panel analysis-findings-panel">
@@ -2579,7 +2579,7 @@ function AppContent() {
   const useDemo = useCallback(() => {
     setStackContextFocus(null);
     setWikiContextFocus(null);
-    const nav2Robot = { ...DEMO_ROBOT, robot_id: TARGET_VALIDATION_ANALYSIS.robotId, model: "Nav2 · ROS 2 Humble", adapter: "discovery-only · no promoted adapter", environment: "WSL2 Ubuntu 22.04 · ROS 2 Humble", observed_at: "2026-08-29T02:31:36.190654Z", discovery_id: TARGET_VALIDATION_ANALYSIS.discoveryId };
+    const nav2Robot = { ...DEMO_ROBOT, robot_id: REAL_DEVICE_ARTIFACT_ANALYSIS.robotId, model: "Nav2 · ROS 2 Humble", adapter: "stage1 · shadow-only promoted", environment: "WSL2 Ubuntu 22.04 · ROS 2 Humble", observed_at: "2026-08-29T11:07:10.480405Z", discovery_id: REAL_DEVICE_ARTIFACT_ANALYSIS.discoveryId };
     setRobot(nav2Robot);
     setRobots([nav2Robot]);
     setPipeline(DEMO_PIPELINE);
