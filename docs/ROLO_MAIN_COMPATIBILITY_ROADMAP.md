@@ -593,8 +593,8 @@ older rolo versions that do not advertise the feature.
 
 ## E24C: Target Readiness / Connection Assessment
 
-Status: contract candidate on `codex/e24c-target-readiness`;
-blocked until rolo publishes a sanitized read-only target summary.
+Status: consumer parser/test boundary implemented in the workbench; activation
+remains blocked until rolo publishes a sanitized read-only target summary.
 
 - Pin the proposed `rolo-target-readiness-summary/v1` shape and
   `workbench.target-readiness/v1` feature gate.
@@ -606,11 +606,14 @@ blocked until rolo publishes a sanitized read-only target summary.
   `POST /v1/targets/bootstrap-execute` until a separate public contract exists.
 
 The detailed boundary is recorded in `TARGET_READINESS_CONTRACT.md`.
+The fail-closed consumer parsers are implemented in `src/contracts/targetReadiness.ts`
+and remain intentionally unused by the UI until the feature is advertised.
 
 ## E25: Approval / Gate / Recovery contract
 
-Status: contract candidate on `codex/e25-governance-contract`; blocked until rolo
-publishes a safe, versioned projection and Gate B staging evidence.
+Status: consumer parser/test boundary implemented in the workbench; activation
+remains blocked until rolo publishes a safe, versioned projection and Gate B
+staging evidence.
 
 - Pin `rolo-approval-gate-summary/v1` and the
   `workbench.approval-gate-read-model/v1` feature gate.
@@ -621,7 +624,8 @@ publishes a safe, versioned projection and Gate B staging evidence.
   of the browser until separate write-side contracts are reviewed.
 
 The boundary is recorded in `APPROVAL_GATE_RECOVERY_CONTRACT.md`; no UI or endpoint
-is activated in this slice.
+is activated in this slice. The parser boundary is shared with E24C and rejects
+unsafe references and secret-bearing payloads before any future UI integration.
 
 ## E26: device-side hardening verification
 

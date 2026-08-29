@@ -1,6 +1,6 @@
 # Target Readiness / Connection Assessment
 
-Status: E24C candidate, blocked on upstream publication
+Status: E24C consumer boundary implemented; activation blocked on upstream publication
 
 rolo-vis will consume a sanitized target readiness summary only after rolo publishes
 the read model and advertises `workbench.target-readiness/v1` from `/health`.
@@ -25,6 +25,9 @@ bootstrap payloads are not part of the browser contract.
 - No Target Readiness UI activates until the feature is advertised.
 - The current rolo API does not provide a safe GET endpoint; this slice deliberately
   does not invent one or derive readiness from Overview/Pipeline data.
+- The workbench validates the proposed projection with a fail-closed parser in
+  `src/contracts/targetReadiness.ts`; no endpoint or UI is activated until the
+  feature is advertised.
 - `POST /v1/targets/bootstrap-execute` remains server/CLI-only and is never called by
   rolo-vis.
 - A future UI may display an opaque Bootstrap Plan, but must not approve, execute,

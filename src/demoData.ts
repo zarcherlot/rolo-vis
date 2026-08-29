@@ -71,19 +71,19 @@ export interface EvidenceItem {
 }
 
 export const DEMO_ROBOT: DemoRobot = {
-  robot_id: "AMR-07",
-  model: "T7 Autonomous Mobile Robot",
-  adapter: "ros2-nav2-adapter",
-  environment: "Warehouse Lab · Shanghai",
+  robot_id: "nav2-wsl2-hardening",
+  model: "Nav2 · ROS 2 Humble",
+  adapter: "discovery-only · no promoted adapter",
+  environment: "WSL2 Ubuntu 22.04 · ROS 2 Humble",
   status: "online",
-  observed_at: "2026-08-20T10:24:31+08:00",
-  discovery_id: "discovery-2026-08-20-100000",
+  observed_at: "2026-08-29T02:31:36.190654Z",
+  discovery_id: "disc-20260829T023206-4a9523a1",
 };
 
 export const DEMO_PIPELINE: PipelineRow[] = [
-  { stage: "adapt", status: "BLOCKED", summary: "Dependency mismatch", artifacts: 12, blockers: 1 },
-  { stage: "diagnose", status: "READY", summary: "Waiting for Adapt handoff", artifacts: 0, blockers: 0 },
-  { stage: "verify", status: "NOT_STARTED", summary: "Optional formal acceptance", artifacts: 0, blockers: 0 },
+  { stage: "adapt", status: "BLOCKED", summary: "Dry-run blocked; the unstable ROS graph leaves zero eligible operations.", artifacts: 0, blockers: 9, blockerMessages: ["ROS graph samples are unstable.", "Six candidates are semantically ambiguous and three target routes were not observed."], observedAt: "2026-08-29T02:39:03.575115Z" },
+  { stage: "diagnose", status: "NOT_STARTED", summary: "Waiting for a verified Adapt handoff.", artifacts: 0, blockers: 0, prerequisites: ["Validated Adapt handoff"] },
+  { stage: "verify", status: "NOT_STARTED", summary: "Acceptance is withheld until route identity, schema, and runtime revision are verified.", artifacts: 0, blockers: 0, optional: true, prerequisites: ["Validated Diagnosis handoff"] },
 ];
 
 export const TOPOLOGY_NODES: Node<TopologyNodeData>[] = [
@@ -134,9 +134,9 @@ export const CAPABILITIES: CapabilityItem[] = [
 ];
 
 export const EVIDENCE: EvidenceItem[] = [
-  { id: "EV-2048", title: "Localization endpoint observed", source: "runtime introspection", kind: "Observed fact", integrity: "verified", time: "10:12:07", ref: "artifact://discovery/AMR-07/runs/discovery-2026-08-20/report.json" },
-  { id: "EV-2047", title: "Wheel odometry publication rate below baseline", source: "ros.topic.rate", kind: "Warning", integrity: "verified", time: "10:11:52", ref: "artifact://discovery/AMR-07/runs/discovery-2026-08-20/active.json" },
-  { id: "EV-2039", title: "nav2_controller binding passed adapter gate", source: "adapt gate", kind: "Gate result", integrity: "verified", time: "09:48:14", ref: "artifact://adapt/AMR-07/runs/adapt-2026-08-20/gate.json" },
-  { id: "EV-2031", title: "Adapter release promoted", source: "adapt handoff", kind: "Handoff", integrity: "verified", time: "09:44:33", ref: "artifact://adapt/AMR-07/runs/adapt-2026-08-20/handoff.json" },
-  { id: "EV-2014", title: "Camera declared but not observed", source: "URDF profile", kind: "Declared fact", integrity: "unresolved", time: "09:21:06", ref: "artifact://discovery/AMR-07/runs/discovery-2026-08-20/robot_wiki.md" },
+  { id: "EV-NAV2-GATE", title: "Adapt dry-run blocked all candidates", source: "adapt dry-run", kind: "Gate result", integrity: "verified", time: "10:39:03", ref: "artifact://discovery/nav2-wsl2-hardening/runs/disc-20260829T023206-4a9523a1/target-operation-slice.json", summary: "Six candidates are semantically ambiguous and three target routes were not observed.", limitations: ["A blocked dry-run does not establish a physical navigation outcome."] },
+  { id: "EV-NAV2-ROS", title: "ROS graph samples disagree", source: "discovery runtime probe", kind: "Observed fact", integrity: "verified", time: "10:31:36", ref: "artifact://target-evidence/nav2-wsl2-hardening/target-evidence-current.json", summary: "ROS 2 Humble exposed 17 nodes, 30 topics, and 12 actions; bounded samples are marked stable=false.", limitations: ["The graph included a parallel verification fixture and must not be used as a stable baseline."] },
+  { id: "EV-NAV2-ACCEPTANCE", title: "Acceptance pack remains incomplete", source: "acceptance pack", kind: "Limitation", integrity: "validated", time: "10:39:03", ref: "artifact://nav2/rolo-adapt-acceptance.json", summary: "No verified canonical CLI and State Graph handoff is available for promotion." },
+  { id: "EV-NAV2-READONLY", title: "No operation was invoked", source: "target validation summary", kind: "Read-only boundary", integrity: "verified", time: "10:39:03", ref: "artifact://target-evidence/nav2-wsl2-hardening/target-evidence-current.json", summary: "The validation performed only bounded read-only evidence collection and did not send motion or executor commands." },
+  { id: "EV-NAV2-SEMANTICS", title: "Route semantics remain unresolved", source: "heuristic analysis", kind: "Advisory", integrity: "unresolved", time: "10:39:03", ref: "artifact://discovery/nav2-wsl2-hardening/runs/disc-20260829T023206-4a9523a1/heuristic/summary.json", summary: "Candidate operation mappings remain advisory until provider, schema, revision, and ownership evidence are published." },
 ];

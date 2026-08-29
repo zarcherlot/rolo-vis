@@ -133,6 +133,7 @@ import { summarizeLifecycleAssessment } from "./lifecycleAssessment";
 import { filterSliceObservations } from "./sliceStability";
 import { getOverviewPresentation, getSurfaceSource } from "./workbenchPolicy";
 import type { WorkbenchMode } from "./workbenchPolicy";
+import { TARGET_VALIDATION_ANALYSIS } from "./lerobotAnalysisData";
 import { EpisodeStudio } from "./EpisodeStudio";
 import {
   buildWorkbenchViewLink,
@@ -142,7 +143,7 @@ import {
 } from "./episodeNavigation";
 import type { EpisodeDeepLinkTarget, WorkbenchViewId } from "./episodeNavigation";
 
-type NavId = WorkbenchViewId;
+type NavId = WorkbenchViewId | "analysis";
 type ViewRobot = DemoRobot | (RobotCapability & { status: "online" });
 type RobotOption = DemoRobot | RobotCapability;
 type OpenEvidence = (item: EvidenceItem | string) => void;
@@ -154,6 +155,7 @@ const NAV_ITEMS: Array<{ id: NavId; label: string; icon: typeof House; feature?:
   { id: "stack", label: "Stack Map", icon: GitBranch },
   { id: "capabilities", label: "Capabilities", icon: Stack },
   { id: "lifecycle", label: "Lifecycle", icon: Clock },
+  { id: "analysis", label: "Run Analysis", icon: Pulse },
   { id: "episode", label: "Episode Studio", icon: Pulse, feature: ROLO_API_FEATURES.episodeReadModel },
   { id: "jobs", label: "Jobs", icon: Pulse, feature: ROLO_API_FEATURES.jobReadModel },
   { id: "wiki", label: "Robot Wiki", icon: BookOpenText },
@@ -409,9 +411,9 @@ function ReadModelUnavailableView({ title, description }: { title: string; descr
       <div className="panel read-model-unavailable" role="status">
         <Info size={26} weight="fill" />
         <div>
-          <strong>No compatible live read model is available.</strong>
-          <p>rolo-vis will not substitute demo fixtures while the workbench is connected to live data.</p>
-          <small>This surface remains unavailable until rolo publishes a compatible trusted read model.</small>
+          <strong>{title} is unavailable in live mode.</strong>
+          <p>No compatible trusted read model was returned for this surface.</p>
+          <small>Demo data is opt-in; no fixture has been substituted automatically.</small>
         </div>
       </div>
     </section>
@@ -2357,6 +2359,92 @@ function JobInboxView({
   );
 }
 
+function RunAnalysisView() {
+  const analysis = TARGET_VALIDATION_ANALYSIS;
+  const maxContext = Math.max(...analysis.contextBars.map((item) => item.value));
+  return (
+    <section className="content-view run-analysis-view">
+      <PageTitle
+        eyebrow="Local artifact review · read only"
+        title={analysis.kind}
+        description={`${analysis.description} No target operation is executed in this view.`}
+        action={<span className="analysis-source-chip"><HardDrive size={15} /> {analysis.sourceLabel}</span>}
+      />
+
+      <div className="analysis-hero panel">
+        <div className="analysis-hero-main">
+          <div className="analysis-kicker"><span className="status-dot status-observed" /> {analysis.runStatus} <code>{analysis.runId || analysis.discoveryId}</code></div>
+          <h3>{analysis.title}</h3>
+          <p>{analysis.description}</p>
+        </div>
+        <div className="analysis-hero-status is-danger"><span>Gate · {analysis.gateLabel}</span><strong>{analysis.gateStatus}</strong><small>read-only validation</small></div>
+        <div className="analysis-hero-status is-danger"><span>Release</span><strong>{analysis.releaseStatus}</strong><small>{analysis.releaseLabel}</small></div>
+      </div>
+
+      <div className="analysis-kpi-grid">
+        <div className="panel analysis-kpi"><span>Adapt run</span><strong>{analysis.runDuration}</strong><small>no run after blocked dry-run</small></div>
+        <div className="panel analysis-kpi"><span>Bounded samples</span><strong>{analysis.eventCount}</strong><small>ROS graph samples compared</small></div>
+        <div className="panel analysis-kpi"><span>Eligible operations</span><strong>{analysis.eligibleOperationCount}</strong><small>all candidates fail closed</small></div>
+        <div className="panel analysis-kpi is-warn"><span>Deferred candidates</span><strong>{analysis.routeReviewFlags}</strong><small>semantic or route evidence gaps</small></div>
+      </div>
+
+      <div className="analysis-main-grid">
+        <section className="panel analysis-panel analysis-timeline-panel">
+          <header className="analysis-panel-heading"><div><span>Validation progression</span><h3>Evidence chain</h3></div><small>{analysis.discoveryId}</small></header>
+          <div className="analysis-timeline">
+            {analysis.stages.map((stage, index) => <div className="analysis-stage" key={stage.label}>
+              <div className={`analysis-stage-marker stage-${stage.status}`}><span>{index + 1}</span></div>
+              {index < analysis.stages.length - 1 && <div className="analysis-stage-line" />}
+              <div className="analysis-stage-copy"><strong>{stage.label}</strong><small>{stage.timestamp}</small><p>{stage.detail}</p></div>
+            </div>)}
+          </div>
+        </section>
+
+        <section className="panel analysis-panel">
+          <header className="analysis-panel-heading"><div><span>Target evidence</span><h3>Bounded ROS observation</h3></div><small>robot-target-evidence/v2</small></header>
+          <div className="analysis-bars">
+            {analysis.contextBars.map((item) => <div className="analysis-bar-row" key={item.label}><div><span>{item.label}</span><strong>{item.display}</strong></div><div className="analysis-bar-track"><i className={`bar-${item.tone}`} style={{ width: `${Math.max(8, (item.value / maxContext) * 100)}%` }} /></div></div>)}
+          </div>
+          <div className="analysis-metric-note"><Info size={15} /><span>{analysis.evidenceNote}</span></div>
+        </section>
+      </div>
+
+      <div className="analysis-main-grid analysis-second-grid">
+        <section className="panel analysis-panel">
+          <header className="analysis-panel-heading"><div><span>Route review</span><h3>Candidate operation evidence</h3></div><small>DEFERRED · fail closed</small></header>
+          <div className="analysis-operations">
+            {analysis.operations.map((operation) => <article className="analysis-operation" key={operation.name}>
+              <div className="analysis-operation-top"><code>{operation.name}</code><span className={`analysis-route-status is-${operation.routeStatus}`}>{operation.routeStatus}</span></div>
+              <div className="analysis-route"><ArrowRight size={14} /><span>{operation.route}</span></div>
+              <div className="analysis-checks">{operation.checks.map((check) => <span key={check}><WarningCircle size={13} />{check}</span>)}</div>
+              <small className="analysis-contract">deferred reason <code>{operation.contract}</code></small>
+            </article>)}
+          </div>
+        </section>
+
+        <section className="panel analysis-panel">
+          <header className="analysis-panel-heading"><div><span>Target scope</span><h3>What was observed</h3></div><small>read-only runtime evidence</small></header>
+          <div className="dependency-legend analysis-scope-facts">{analysis.contextBars.slice(1).map((item) => <div key={item.label}><span className={`legend-dot dot-${item.tone === "amber" ? "amber" : item.tone === "violet" ? "violet" : "blue"}`} /><strong>{item.value}</strong><small>{item.label}</small></div>)}</div>
+          <div className="dependency-callout"><WarningCircle size={15} /><span><strong>Stability limitation</strong> {analysis.evidenceNote}</span></div>
+        </section>
+      </div>
+
+      <div className="analysis-main-grid analysis-third-grid">
+        <section className="panel analysis-panel">
+          <header className="analysis-panel-heading"><div><span>State graph</span><h3>Release topology</h3></div><small>{analysis.graphNodes.length} nodes · no release</small></header>
+          <div className="analysis-graph-list">{analysis.graphNodes.map((node, index) => <div className="analysis-graph-row" key={node.label}><span className={`graph-index graph-${node.tone}`}>{index + 1}</span><code>{node.label}</code><span>{node.state}</span>{index < analysis.graphNodes.length - 1 && <ArrowRight size={13} />}</div>)}</div>
+        </section>
+        <section className="panel analysis-panel analysis-findings-panel">
+          <header className="analysis-panel-heading"><div><span>Analyst readout</span><h3>What this run says</h3></div><ShieldCheck size={17} /></header>
+          <div className="analysis-findings">{analysis.findings.map((finding) => <div className={`analysis-finding finding-${finding.tone}`} key={finding.title}><span className="finding-icon">{finding.tone === "green" ? <CheckCircle size={15} /> : finding.tone === "amber" ? <WarningCircle size={15} /> : <Info size={15} />}</span><p><strong>{finding.title}</strong><span>{finding.body}</span></p></div>)}</div>
+        </section>
+      </div>
+
+      <footer className="analysis-artifact-footer"><span><FileText size={14} /> sanitized evidence refs</span>{analysis.hashes.map(([label, hash]) => <code key={label}>{label}: {hash}</code>)}<small>source · {analysis.sourceLabel}</small></footer>
+    </section>
+  );
+}
+
 function AppContent() {
   const [initialNavigationIntent] = useState(() => readWorkbenchNavigationIntent(window.location.href));
   const [episodeTarget, setEpisodeTarget] = useState<EpisodeDeepLinkTarget | null>(() => (
@@ -2491,8 +2579,9 @@ function AppContent() {
   const useDemo = useCallback(() => {
     setStackContextFocus(null);
     setWikiContextFocus(null);
-    setRobot(DEMO_ROBOT);
-    setRobots([DEMO_ROBOT]);
+    const nav2Robot = { ...DEMO_ROBOT, robot_id: TARGET_VALIDATION_ANALYSIS.robotId, model: "Nav2 · ROS 2 Humble", adapter: "discovery-only · no promoted adapter", environment: "WSL2 Ubuntu 22.04 · ROS 2 Humble", observed_at: "2026-08-29T02:31:36.190654Z", discovery_id: TARGET_VALIDATION_ANALYSIS.discoveryId };
+    setRobot(nav2Robot);
+    setRobots([nav2Robot]);
     setPipeline(DEMO_PIPELINE);
     setOverview(null);
     setTopology(null);
@@ -2520,7 +2609,11 @@ function AppContent() {
     setFleetRequested(false);
     setFleetLoading(false);
     setFleetMessage("");
-    setConnectionMessage("Explicit fixture mode; no values on this screen are live robot observations.");
+    setConnectionMessage("Imported target-validation mode; values are sanitized read-only projections and are not live robot observations.");
+    setActive("analysis");
+    const url = new URL(window.location.href);
+    url.searchParams.set("view", "analysis");
+    window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
     setMode("demo");
   }, []);
 
@@ -2551,7 +2644,7 @@ function AppContent() {
     return () => window.removeEventListener("popstate", handlePopState);
   }, [connect, robot?.robot_id]);
   useEffect(() => {
-    if (shouldRejectEpisodeNavigation(
+    if (active !== "analysis" && shouldRejectEpisodeNavigation(
       active,
       apiFeatures.includes(ROLO_API_FEATURES.episodeReadModel),
       ["live", "partial", "demo"].includes(mode),
@@ -2697,7 +2790,13 @@ function AppContent() {
     setEpisodeTarget(null);
     if (view === "episode") setEpisodeNavigationRevision((revision) => revision + 1);
     setActive(view);
-    window.history.replaceState(null, "", buildWorkbenchViewLink(window.location.href, view));
+    if (view === "analysis") {
+      const url = new URL(window.location.href);
+      url.searchParams.set("view", "analysis");
+      window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
+    } else {
+      window.history.replaceState(null, "", buildWorkbenchViewLink(window.location.href, view));
+    }
   }, []);
   const selectJob = useCallback((jobId: string) => {
     setSelectedJobId(jobId);
@@ -2742,22 +2841,24 @@ function AppContent() {
   const episodeCohortSupported = apiFeatures.includes(ROLO_API_FEATURES.episodeCohortReadModel);
   const episodeObservationBundleSupported = apiFeatures.includes(ROLO_API_FEATURES.episodeObservationBundle);
   const jobReadModelSupported = apiFeatures.includes(ROLO_API_FEATURES.jobReadModel);
+  const connectionUnavailable = ["connecting", "unavailable"].includes(mode) || !robot;
   return (
     <div className="app-shell">
       <Sidebar active={active} apiFeatures={apiFeatures} onChange={navigate} />
-      <Topbar robot={robot} robots={robots} activeLabel={activeLabel} mode={mode} snapshot={overview?.observed_at} onRetry={() => connect(robot?.robot_id)} onRobotChange={connect} />
+      <Topbar robot={robot} robots={robots} activeLabel={activeLabel} mode={mode} snapshot={overview?.observed_at || (mode === "demo" ? "2026-08-29T02:31:36.190654Z" : undefined)} onRetry={() => connect(robot?.robot_id)} onRobotChange={connect} />
       <main className="app-main">
-        {(["connecting", "unavailable"].includes(mode) || !robot) ? <ConnectionStateView mode={mode} message={connectionMessage} onRetry={() => connect(episodeTarget?.robotId)} onUseDemo={useDemo} /> : <>
-          {active === "stack" && (stackSource === "demo" ? <StackMapView focusLayer={stackContextFocus} onOpenWikiLayer={openWikiLayer} onOpenEvidence={openEvidence} /> : stackSource === "live" ? <StackMapView topology={topology} topologySnapshots={topologySnapshots} robotId={robot.robot_id} focusLayer={stackContextFocus} onOpenWikiLayer={openWikiLayer} onOpenEvidence={openEvidence} /> : <ReadModelUnavailableView title="Stack Map" description="Live topology needs a versioned rolo topology read model." />)}
+        <>
+          {active === "analysis" && <RunAnalysisView />}
+          {active === "stack" && (stackSource === "demo" ? <StackMapView focusLayer={stackContextFocus} onOpenWikiLayer={openWikiLayer} onOpenEvidence={openEvidence} /> : stackSource === "live" ? <StackMapView topology={topology} topologySnapshots={topologySnapshots} robotId={robot!.robot_id} focusLayer={stackContextFocus} onOpenWikiLayer={openWikiLayer} onOpenEvidence={openEvidence} /> : <ReadModelUnavailableView title="Stack Map" description="Live topology needs a versioned rolo topology read model." />)}
           {active === "fleet" && (mode === "demo" ? <ReadModelUnavailableView title="Fleet" description="The labeled demo fixture represents one robot and does not include a fleet aggregate." /> : fleet && fleetBlockers ? <FleetView fleet={fleet} blockers={fleetBlockers} sliceFleet={fleetSlice} blockerDetailSupported={apiFeatures.includes(ROLO_API_FEATURES.blockerDetail)} onSelectRobot={selectFleetRobot} onOpenEvidence={openEvidence} /> : fleetLoading ? <section className="content-view"><PageTitle title="Fleet" description="Aggregating validated robot overviews and pipeline blockers…" /><div className="panel read-model-unavailable" role="status"><Pulse size={26} /><div><strong>Loading Fleet</strong><p>No runtime telemetry is inferred while this read model is loading.</p></div></div></section> : <ReadModelUnavailableView title="Fleet" description={fleetMessage || "Open this surface to read the validated Fleet aggregate."} />)}
-          {active === "overview" && <OverviewView robot={robot} pipeline={pipeline} overview={overview} mode={mode} evidenceItems={evidenceItems} onOpenEvidence={openEvidence} onNavigate={navigate} />}
-          {active === "capabilities" && (capabilitySource === "demo" ? <DemoCapabilityView onOpenEvidence={setEvidence} /> : capabilitySource === "live" && capabilityList ? <LiveCapabilityView robotId={robot.robot_id} items={capabilityList} limitations={capabilityLimitations} apiFeatures={apiFeatures} onOpenEvidence={openEvidence} /> : <ReadModelUnavailableView title="Capabilities" description="Live capability coverage needs a versioned rolo capability read model." />)}
-          {active === "lifecycle" && (lifecycleSource === "demo" ? <DemoLifecycleView pipeline={pipeline} onOpenEvidence={setEvidence} /> : lifecycleSource === "live" && lifecycleRuns ? <LiveLifecycleView pipeline={pipeline} runs={lifecycleRuns} robotId={robot.robot_id} onOpenEvidence={openEvidence} /> : <ReadModelUnavailableView title="Lifecycle" description="Live lifecycle requires trusted stage and run read models." />)}
-          {active === "episode" && (episodeSupported ? <EpisodeStudio key={`episode-navigation-${episodeNavigationRevision}`} robotId={robot.robot_id} initialTarget={episodeTarget} revisionHistorySupported={episodeRevisionHistorySupported} cohortSupported={episodeCohortSupported} observationBundleSupported={episodeObservationBundleSupported} onOpenEvidence={openEvidence} /> : <ReadModelUnavailableView title="Episode Studio" description="rolo has not advertised the versioned Episode read model for this robot connection." />)}
+          {active === "overview" && (connectionUnavailable ? <ConnectionStateView mode={mode} message={connectionMessage} onRetry={() => connect(episodeTarget?.robotId)} onUseDemo={useDemo} /> : <OverviewView robot={robot} pipeline={pipeline} overview={overview} mode={mode} evidenceItems={evidenceItems} onOpenEvidence={openEvidence} onNavigate={navigate} />)}
+          {active === "capabilities" && (capabilitySource === "demo" ? <DemoCapabilityView onOpenEvidence={setEvidence} /> : capabilitySource === "live" && capabilityList ? <LiveCapabilityView robotId={robot!.robot_id} items={capabilityList} limitations={capabilityLimitations} apiFeatures={apiFeatures} onOpenEvidence={openEvidence} /> : <ReadModelUnavailableView title="Capabilities" description="Live capability coverage needs a versioned rolo capability read model." />)}
+          {active === "lifecycle" && (lifecycleSource === "demo" ? <DemoLifecycleView pipeline={pipeline} onOpenEvidence={setEvidence} /> : lifecycleSource === "live" && lifecycleRuns ? <LiveLifecycleView pipeline={pipeline} runs={lifecycleRuns} robotId={robot!.robot_id} onOpenEvidence={openEvidence} /> : <ReadModelUnavailableView title="Lifecycle" description="Live lifecycle requires trusted stage and run read models." />)}
+          {active === "episode" && (episodeSupported ? <EpisodeStudio key={`episode-navigation-${episodeNavigationRevision}`} robotId={robot!.robot_id} initialTarget={episodeTarget} revisionHistorySupported={episodeRevisionHistorySupported} cohortSupported={episodeCohortSupported} observationBundleSupported={episodeObservationBundleSupported} onOpenEvidence={openEvidence} /> : <ReadModelUnavailableView title="Episode Studio" description="rolo has not advertised the versioned Episode read model for this robot connection." />)}
           {active === "jobs" && (jobReadModelSupported ? <JobInboxView jobs={jobs} selectedJob={selectedJob} events={jobEvents} loading={jobLoading} detailLoading={jobDetailLoading} error={jobMessage} onSelectJob={selectJob} onLoadMore={loadMoreJobs} /> : <ReadModelUnavailableView title="Jobs" description="rolo has not advertised the versioned Job read model for this robot connection." />)}
           {active === "wiki" && (mode === "demo" ? <ReadModelUnavailableView title="Robot Wiki" description="The labeled demo fixture does not include discovery Wiki evidence." /> : wiki && discoveryHistory ? <WikiView wiki={wiki} history={discoveryHistory} focusLayer={wikiContextFocus} onOpenStackLayer={openStackLayer} onClearFocus={() => setWikiContextFocus(null)} onOpenEvidence={openEvidence} /> : wikiLoading ? <section className="content-view"><PageTitle title="Robot Wiki" description="Reading manifest-verified discovery snapshots…" /><div className="panel read-model-unavailable" role="status"><Pulse size={26} /><div><strong>Loading Robot Wiki</strong><p>Current knowledge and verified history are being resolved independently.</p></div></div></section> : <ReadModelUnavailableView title="Robot Wiki" description={wikiMessage || "Open this surface to read a verified discovery Wiki."} />)}
-          {active === "evidence" && (evidenceSource === "demo" ? <EvidenceView onOpenEvidence={openEvidence} /> : evidenceSource === "live" ? <EvidenceView live collection={evidenceList} robotId={robot.robot_id} onOpenEvidence={openEvidence} /> : <ReadModelUnavailableView title="Evidence" description="Live evidence resolution needs a versioned rolo evidence read model." />)}
-        </>}
+          {active === "evidence" && (evidenceSource === "demo" ? <EvidenceView onOpenEvidence={openEvidence} /> : evidenceSource === "live" ? <EvidenceView live collection={evidenceList} robotId={robot!.robot_id} onOpenEvidence={openEvidence} /> : <ReadModelUnavailableView title="Evidence" description="Live evidence resolution needs a versioned rolo evidence read model." />)}
+        </>
       </main>
       <EvidenceDrawer evidence={evidence} onClose={() => setEvidence(null)} />
     </div>

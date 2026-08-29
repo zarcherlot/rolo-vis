@@ -65,6 +65,7 @@ import { parseCapabilityCollection, parseCapabilityDetail } from "./contracts/ca
 import { parseDiscoverySnapshotCollection } from "./contracts/discovery.ts";
 import { parseEpisodeCohort, parseEpisodeCollection, parseEpisodeDetail, parseEpisodeRevisionCollection, parseEpisodeTimelinePage } from "./contracts/episode.ts";
 import { parseEpisodeObservationBundleCollection, type EpisodeObservationValidationContext } from "./contracts/episodeObservation.ts";
+export { parseApprovalGateSummary, parseTargetReadinessSummary } from "./contracts/targetReadiness.ts";
 import {
   containsUnsafeReference,
   isConfidence,

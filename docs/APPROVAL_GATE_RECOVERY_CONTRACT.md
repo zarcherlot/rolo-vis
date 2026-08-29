@@ -1,6 +1,6 @@
 # Approval / Gate / Recovery read contract
 
-Status: E25 candidate, blocked on upstream publication
+Status: E25 consumer boundary implemented; activation blocked on upstream publication
 
 E25 defines the future read-only projection required by an approval and recovery
 workbench. It does not add browser approval or execution authority.
@@ -33,3 +33,7 @@ package bytes, command arguments, artifact bodies, or unredacted transport outpu
 
 The current rolo API exposes only the write-side bootstrap endpoint, so E25 remains
 contract-only until the read model and governance boundary are published.
+
+The workbench validates the proposed projection with the fail-closed parser in
+`src/contracts/targetReadiness.ts`; this does not add a read endpoint or any browser
+approval, execution, recovery, or rollback authority.
