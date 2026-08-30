@@ -6,8 +6,8 @@
 
 - `main` 基线仍为 `d3c570d`（`feat: surface real device artifact analysis`）；E24 消费者已整理到 `codex/e24-job-read-model-consumer`，commit `8dd1251`，并已推送远端。
 - 本次环境无法写入 `.git/FETCH_HEAD`，所以 `git fetch` 被权限拒绝；现有远端跟踪引用已与本地一致，未发现可合并提交。
-- 同级 rolo 仓库当前 checkout 仍在 `codex/p1-dev10-harness-template`，未跟踪临时目录保持不变；其未检出的本地 `main` 已同步到 `origin/main` `dd4ae7d`，现在 `main...origin/main` 为 `0/0`。
-- rolo `origin/main` 已提供并宣布 `workbench.job-read-model/v1`，且包含 `/v1/jobs`、`/v1/jobs/{job_id}`、`/v1/jobs/{job_id}/events`、只读 `bootstrap-plan`、Verify readiness 和 stage authorization 读接口。远端日志确认 E24 已由 PR #38 合入、E23 Workbench 已由 PR #39 合入、文档刷新由 PR #40 合入；旧 E23/E24 远端分支引用已自动清理。Readiness/Gate 仍没有与 E24C/E25 提案完全同名的公共 feature contract。
+- 同级 rolo 仓库当前 checkout 仍在 `codex/p1-dev10-harness-template`，未跟踪临时目录保持不变；其未检出的本地 `main` 已同步到最新 `origin/main` `780d7a5`，现在 `main...origin/main` 为 `0/0`。
+- rolo `origin/main` 已提供并宣布 `workbench.job-read-model/v1`，且包含 `/v1/jobs`、`/v1/jobs/{job_id}`、`/v1/jobs/{job_id}/events`、只读 `bootstrap-plan`、Verify readiness 和 stage authorization 读接口。远端日志确认 E24 已由 PR #38 合入、E23 Workbench 已由 PR #39 合入、文档刷新由 PR #40/#43 合入，Adapt evidence slice hardening 由 PR #42 合入；旧 E23/E24 远端分支引用已自动清理。Readiness/Gate 仍没有与 E24C/E25 提案完全同名的公共 feature contract。
 - `npm run verify:baseline` 已通过：225 个应用测试、TypeScript、生产构建、Sites 打包测试全部通过。
 - 当前版本为 `0.37.0`，已冻结 Episode Observation Bundle（E22）只读基线。
 
@@ -15,7 +15,7 @@
 
 - 补齐 `rolo.plugin.json` 的 `job.history.read` 能力声明和三个 `/v1/jobs*` 只读 endpoint。
 - Job Inbox 增加事件分页、独立加载状态和跨页 event/job ID 去重；feature 缺失时仍完全隐藏且不发请求。
-- 已同步 rolo 本地未检出的 `main` 到 `origin/main` `dd4ae7d`，未切换当前 checkout，也未触碰临时目录。
+- 已同步 rolo 本地未检出的 `main` 到 `origin/main` `780d7a5`，未切换当前 checkout，也未触碰临时目录。
 - `codex/e24-job-read-model-consumer` 已提交并推送，作为 rolo-vis 侧待合入分支；GitHub CLI OAuth 仍不稳定，PR 尚未自动创建，但可直接使用 compare 链接。
 - rolo-vis 消费者分支 compare：[codex/e24-job-read-model-consumer](https://github.com/zarcherlot/rolo-vis/pull/new/codex/e24-job-read-model-consumer)。
 - 本机 `127.0.0.1:8080` 未启动 rolo 控制面，因此 E24 live gate 暂不能执行；本轮只完成安全边界和消费者实现，未把 candidate 提升为 baseline。
@@ -32,7 +32,7 @@
 
 ### P0：完成 E24 Job 只读基线
 
-前置：以 rolo `origin/main` `dd4ae7d` 为 paired producer baseline，将 rolo-vis 消费者分支合入并把 `/v1/jobs` 三个接口的响应与 E24 schema 逐字段对齐。
+前置：以 rolo `origin/main` `780d7a5` 为 paired producer baseline，将 rolo-vis 消费者分支合入并把 `/v1/jobs` 三个接口的响应与 E24 schema 逐字段对齐。
 
 - 用真实 rolo 数据跑 Job Inbox、Job detail、Event timeline、Checkpoint/recovery 的 live gate。
 - 验证分页单调推进、重复/重叠页、Job/事件身份绑定、序列和时间戳异常均 fail closed。
