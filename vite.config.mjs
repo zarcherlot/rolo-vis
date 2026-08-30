@@ -6,9 +6,12 @@ export default defineConfig({
     outDir: "dist/client",
     rollupOptions: {
       output: {
-        manualChunks: {
-          "flow-vendor": ["@xyflow/react"],
-          "icons-vendor": ["@phosphor-icons/react"],
+        manualChunks(id) {
+          if (id.includes("node_modules/@xyflow/react")) return "flow-vendor";
+          if (id.includes("node_modules/@phosphor-icons/react")) return "icons-vendor";
+          if (id.includes("node_modules/react") || id.includes("node_modules/react-dom")) return "react-vendor";
+          if (id.includes("/src/lerobotAnalysisData")) return "analysis-data";
+          return undefined;
         },
       },
     },
