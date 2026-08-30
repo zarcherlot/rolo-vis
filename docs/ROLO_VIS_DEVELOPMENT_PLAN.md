@@ -4,10 +4,10 @@
 
 ## 当前基线
 
-- `main` 基线 `HEAD` 与 `origin/main` 同为 `d3c570d`（`feat: surface real device artifact analysis`）；本轮 E24 消费者改动仍保留在当前工作区，待后续整理提交。
+- `main` 基线仍为 `d3c570d`（`feat: surface real device artifact analysis`）；E24 消费者已整理到 `codex/e24-job-read-model-consumer`，commit `8dd1251`，并已推送远端。
 - 本次环境无法写入 `.git/FETCH_HEAD`，所以 `git fetch` 被权限拒绝；现有远端跟踪引用已与本地一致，未发现可合并提交。
-- 同级 rolo 仓库当前 checkout 仍在 `codex/p1-dev10-harness-template`，未跟踪临时目录保持不变；其本地 `main` 已在不切换 checkout 的情况下安全快进到最新已见的 `origin/main` `574cad5`，现在 `main...origin/main` 为 `0/0`。
-- rolo `origin/main` 已提供 `/v1/jobs`、`/v1/jobs/{job_id}`、`/v1/jobs/{job_id}/events`、只读 `bootstrap-plan`、Verify readiness 和 stage authorization 读接口；但当前 `/health.api_features` 仍只拼接 Adapt/Episode feature 集合，尚未宣布 Job/Readiness/Gate feature，因此 rolo-vis 会按设计隐藏这些 surface。也尚未看到与 E24C/E25 提案完全同名的 target-readiness/approval-gate contract，需要先做字段映射和安全评审。
+- 同级 rolo 仓库当前 checkout 仍在 `codex/p1-dev10-harness-template`，未跟踪临时目录保持不变；其未检出的本地 `main` 已同步到 `origin/main` `dd4ae7d`，现在 `main...origin/main` 为 `0/0`。
+- rolo `origin/main` 已提供并宣布 `workbench.job-read-model/v1`，且包含 `/v1/jobs`、`/v1/jobs/{job_id}`、`/v1/jobs/{job_id}/events`、只读 `bootstrap-plan`、Verify readiness 和 stage authorization 读接口。远端日志确认 E24 已由 PR #38 合入、E23 Workbench 已由 PR #39 合入、文档刷新由 PR #40 合入；旧 E23/E24 远端分支引用已自动清理。Readiness/Gate 仍没有与 E24C/E25 提案完全同名的公共 feature contract。
 - `npm run verify:baseline` 已通过：225 个应用测试、TypeScript、生产构建、Sites 打包测试全部通过。
 - 当前版本为 `0.37.0`，已冻结 Episode Observation Bundle（E22）只读基线。
 
@@ -15,10 +15,9 @@
 
 - 补齐 `rolo.plugin.json` 的 `job.history.read` 能力声明和三个 `/v1/jobs*` 只读 endpoint。
 - Job Inbox 增加事件分页、独立加载状态和跨页 event/job ID 去重；feature 缺失时仍完全隐藏且不发请求。
-- 已同步 rolo 本地 `main` 到最新已见的 `origin/main` `574cad5`，但 rolo `origin/main` 当前尚未在 `/health.api_features` 宣布 Job feature。
-- 已在 rolo 创建并推送 `codex/e24-job-read-model-feature`（`410461e`），在 `/health.api_features` 宣布 `workbench.job-read-model/v1`；这是 E24 消费者可执行 live gate 的 producer 前置。GitHub CLI 当前 token 无效，尚未能自动创建 PR。
-- 已将 canonical E23 三个提交移植到最新 `origin/main`，形成并推送 `codex/e23-workbench-plugin-host-main`（`0e22e10`、`6fe2b48`、`2cded10`）。原 `codex/e23-workbench-plugin-host` 与 `codex/e23d-main-compat` 暂不删除：前者作为追溯源，后者是重复集成分支，待 canonical PR 合入后关闭。
-- 已按收尾顺序检查 GitHub PR/分支操作；设备授权曾返回成功，但标准凭据文件写入被权限拦截，随后使用工作区配置重试时 GitHub device-code/token exchange 的 `github.com:443` 连接间歇失败。DNS/TCP 和普通 GitHub API 可用；WinHTTP/环境代理均为直连，Windows 根证书中未发现明显企业 HTTPS 检查 CA。Inkscape/Python 默认 CA 链不完整，但使用 certifi 可验证 GitHub，故当前更像 OAuth endpoint 的网络策略/连接不稳定而非 rolo 配置问题。因此 E23 尚未合入、两个旧分支未关闭，E24 PR 也未创建。两个候选分支均保持远端可用，待认证恢复后继续执行。
+- 已同步 rolo 本地未检出的 `main` 到 `origin/main` `dd4ae7d`，未切换当前 checkout，也未触碰临时目录。
+- `codex/e24-job-read-model-consumer` 已提交并推送，作为 rolo-vis 侧待合入分支；GitHub CLI OAuth 仍不稳定，PR 尚未自动创建，但可直接使用 compare 链接。
+- rolo-vis 消费者分支 compare：[codex/e24-job-read-model-consumer](https://github.com/zarcherlot/rolo-vis/pull/new/codex/e24-job-read-model-consumer)。
 - 本机 `127.0.0.1:8080` 未启动 rolo 控制面，因此 E24 live gate 暂不能执行；本轮只完成安全边界和消费者实现，未把 candidate 提升为 baseline。
 
 ## 已交付能力
@@ -33,7 +32,7 @@
 
 ### P0：完成 E24 Job 只读基线
 
-前置：将 rolo checkout 安全快进到 `origin/main`（保留现有工作分支和临时目录），在 rolo `/health.api_features` 注册 `workbench.job-read-model/v1`，并把 `/v1/jobs` 三个接口的响应与 E24 schema 逐字段对齐。
+前置：以 rolo `origin/main` `dd4ae7d` 为 paired producer baseline，将 rolo-vis 消费者分支合入并把 `/v1/jobs` 三个接口的响应与 E24 schema 逐字段对齐。
 
 - 用真实 rolo 数据跑 Job Inbox、Job detail、Event timeline、Checkpoint/recovery 的 live gate。
 - 验证分页单调推进、重复/重叠页、Job/事件身份绑定、序列和时间戳异常均 fail closed。
