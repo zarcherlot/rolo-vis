@@ -61,6 +61,8 @@ test("E24B Job Inbox remains feature-gated and read-only", async () => {
   assert.match(app, /roloClient\.jobs/);
   assert.match(app, /roloClient\.job\(/);
   assert.match(app, /roloClient\.jobEvents/);
+  assert.match(app, /onLoadMoreEvents/);
+  assert.match(app, /events\.next_offset/);
   assert.match(app, /Read-only view/);
   assert.doesNotMatch(app, /roloClient\.(bootstrapExecute|resumeJob|retryJob|cancelJob)/);
 });

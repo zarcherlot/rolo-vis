@@ -656,3 +656,4 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 .analysis-stage-marker.stage-pending { border-color: #46566b; color: #8290a2; }
 .analysis-checks svg { color: #e0b44e; }
 .analysis-contract code { color: #d6b65f; }
+.job-event-paging { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(83,111,145,.1); color: #70869e; font-size: 8px; }
