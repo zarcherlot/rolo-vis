@@ -26,6 +26,9 @@ pagination contradictions.
   a filesystem path or execute it.
 - Event `payload` and checkpoint `state` remain opaque summaries. They are never used
   to construct commands or mutate a target.
+- The consumer rejects Job, event, and checkpoint projections containing artifact/raw
+  path references and rejects opaque payloads larger than 16 KiB; rejected responses
+  remain unavailable instead of being partially rendered.
 - The browser has no Job write method. `POST /v1/targets/bootstrap-execute` remains
   outside this contract and outside the plugin endpoint manifest.
 - The `workbench.job-read-model/v1` feature is required before a future UI surface
