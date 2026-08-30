@@ -184,6 +184,19 @@ function parseHealthResponse(value: unknown, path: string): HealthResponse {
 }
 
 const JOB_STATUSES: JobStatus[] = ["CREATED", "RUNNING", "SUCCEEDED", "FAILED", "BLOCKED"];
+const JOB_OPAQUE_MAX_BYTES = 16_384;
+
+function validateJobOpaqueRecord(value: unknown, path: string, label: string): asserts value is Record<string, unknown> {
+  requireContract(isRecord(value), `invalid ${label}`, path);
+  let serialized = "";
+  try {
+    serialized = JSON.stringify(value);
+  } catch {
+    requireContract(false, `invalid ${label}`, path);
+  }
+  requireContract(new TextEncoder().encode(serialized).length <= JOB_OPAQUE_MAX_BYTES, `${label} exceeds the bounded payload size`, path);
+  requireContract(!containsUnsafeReference(value), `${label} contains an unsafe reference`, path);
+}
 
 function parseJobEvent(value: unknown, path: string, expectedJobId?: string): JobEvent {
   requireContract(isRecord(value), "job event must be an object", path);
@@ -193,7 +206,9 @@ function parseJobEvent(value: unknown, path: string, expectedJobId?: string): Jo
   requireContract(Number.isInteger(value.sequence) && Number(value.sequence) >= 0, "invalid job event sequence", path);
   requireContract(typeof value.event_type === "string" && value.event_type.length > 0, "invalid job event type", path);
   requireContract(JOB_STATUSES.includes(value.status as JobStatus), "invalid job event status", path);
-  requireContract(isTimestamp(value.occurred_at) && isRecord(value.payload), "invalid job event observation", path);
+  requireContract(isTimestamp(value.occurred_at), "invalid job event observation", path);
+  validateJobOpaqueRecord(value.payload, `${path}/payload`, "job event payload");
+  requireContract(!containsUnsafeReference(value), "job event contains an unsafe reference", path);
   return value as unknown as JobEvent;
 }
 
@@ -203,7 +218,9 @@ function parseJobCheckpoint(value: unknown, path: string, expectedJobId?: string
   requireContract(typeof value.checkpoint_id === "string" && value.checkpoint_id.length > 0, "missing job checkpoint identity", path);
   requireContract(typeof value.job_id === "string" && (!expectedJobId || value.job_id === expectedJobId), "job checkpoint identity does not match request", path);
   requireContract(Number.isInteger(value.sequence) && Number(value.sequence) >= 0, "invalid job checkpoint sequence", path);
-  requireContract(isRecord(value.state) && isTimestamp(value.created_at), "invalid job checkpoint state", path);
+  validateJobOpaqueRecord(value.state, `${path}/state`, "job checkpoint state");
+  requireContract(isTimestamp(value.created_at), "invalid job checkpoint timestamp", path);
+  requireContract(!containsUnsafeReference(value), "job checkpoint contains an unsafe reference", path);
   return value as unknown as JobCheckpoint;
 }
 
@@ -216,6 +233,7 @@ function parseJob(value: unknown, path: string, expectedJobId?: string): Job {
   requireContract(JOB_STATUSES.includes(value.status as JobStatus), "invalid job status", path);
   requireContract(Number.isInteger(value.revision) && Number(value.revision) >= 0, "invalid job revision", path);
   requireContract(isTimestamp(value.created_at) && isTimestamp(value.updated_at), "invalid job timestamps", path);
+  requireContract(!containsUnsafeReference(value), "job contains an unsafe reference", path);
   return value as unknown as Job;
 }
 
@@ -228,6 +246,7 @@ function parseJobSummary(value: unknown, path: string): JobSummary {
   requireContract(JOB_STATUSES.includes(value.status as JobStatus), "invalid job summary status", path);
   requireContract(Number.isInteger(value.revision) && Number(value.revision) >= 0, "invalid job summary revision", path);
   requireContract(isTimestamp(value.updated_at), "invalid job summary timestamp", path);
+  requireContract(!containsUnsafeReference(value), "job summary contains an unsafe reference", path);
   return value as unknown as JobSummary;
 }
 
@@ -241,6 +260,7 @@ function parseJobPage(value: unknown, path: string): JobPage {
   requireContract(Number.isInteger(value.limit) && Number(value.limit) >= 1 && Number(value.limit) <= 100 && items.length <= Number(value.limit), "invalid job page limit", path);
   requireContract(Number.isInteger(value.offset) && Number(value.offset) >= 0, "invalid job page offset", path);
   requireContract(value.next_offset === null || (Number.isInteger(value.next_offset) && Number(value.next_offset) > Number(value.offset) && Number(value.next_offset) <= Number(value.total)), "invalid job page next offset", path);
+  requireContract(!containsUnsafeReference(value), "job page contains an unsafe reference", path);
   return { ...value, items } as unknown as JobPage;
 }
 
@@ -250,7 +270,10 @@ function parseJobRecovery(value: unknown, path: string, expectedJobId: string): 
   const job = parseJob(value.job, `${path}/job`, expectedJobId);
   const latestEvent = value.latest_event === null ? null : parseJobEvent(value.latest_event, `${path}/latest_event`, expectedJobId);
   const latestCheckpoint = value.latest_checkpoint === null ? null : parseJobCheckpoint(value.latest_checkpoint, `${path}/latest_checkpoint`, expectedJobId);
-  requireContract(typeof value.resumable === "boolean" && isStringArray(value.limitations), "invalid job recovery metadata", path);
+  requireContract(latestEvent === null || latestEvent.sequence <= job.revision, "job recovery event revision exceeds the Job revision", path);
+  requireContract(latestCheckpoint === null || latestCheckpoint.sequence <= job.revision, "job recovery checkpoint revision exceeds the Job revision", path);
+  requireContract(typeof value.resumable === "boolean" && isStringArray(value.limitations) && value.limitations.length <= 24 && value.limitations.every((item) => item.length <= 400), "invalid job recovery metadata", path);
+  requireContract(!containsUnsafeReference(value), "job recovery contains an unsafe reference", path);
   return { ...value, job, latest_event: latestEvent, latest_checkpoint: latestCheckpoint } as unknown as JobRecovery;
 }
 
@@ -260,10 +283,12 @@ function parseJobEventPage(value: unknown, path: string, expectedJobId: string):
   requireContract(Array.isArray(value.items), "invalid job event page items", path);
   const items = value.items.map((item, index) => parseJobEvent(item, `${path}/items/${index}`, expectedJobId));
   requireContract(new Set(items.map((item) => item.event_id)).size === items.length, "job event page contains duplicate identities", path);
+  requireContract(items.every((item, index) => index === 0 || item.sequence >= items[index - 1].sequence), "job event page sequence regressed", path);
   requireContract(Number.isInteger(value.total) && Number(value.total) >= items.length, "invalid job event page total", path);
   requireContract(Number.isInteger(value.limit) && Number(value.limit) >= 1 && Number(value.limit) <= 100 && items.length <= Number(value.limit), "invalid job event page limit", path);
   requireContract(Number.isInteger(value.offset) && Number(value.offset) >= 0, "invalid job event page offset", path);
   requireContract(value.next_offset === null || (Number.isInteger(value.next_offset) && Number(value.next_offset) > Number(value.offset) && Number(value.next_offset) <= Number(value.total)), "invalid job event page next offset", path);
+  requireContract(!containsUnsafeReference(value), "job event page contains an unsafe reference", path);
   return { ...value, items } as unknown as JobEventPage;
 }
 

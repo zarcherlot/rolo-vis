@@ -2166,3 +2166,81 @@ test("RoloClient rejects a Job page with an unsafe contract version", async () =
     globalThis.fetch = originalFetch;
   }
 });
+
+test("RoloClient rejects unsafe references across Job read-model payloads", async () => {
+  const originalFetch = globalThis.fetch;
+  const cases = [
+    {
+      read: (client) => client.jobs(),
+      payload: { ...JOB_PAGE, items: [{ ...JOB_PAGE.items[0], target: String.raw`C:\private\jobs` }] },
+    },
+    {
+      read: (client) => client.job("job_001"),
+      payload: { ...JOB_RECOVERY, latest_checkpoint: { ...JOB_CHECKPOINT, state: { path: "/home/runner/.ssh" } } },
+    },
+    {
+      read: (client) => client.jobEvents("job_001"),
+      payload: { ...JOB_EVENT_PAGE, items: [{ ...JOB_EVENT, payload: { artifact_ref: "artifact://private/event.json" } }] },
+    },
+  ];
+  try {
+    for (const { read, payload } of cases) {
+      globalThis.fetch = async () => ({ ok: true, json: async () => payload });
+      await assert.rejects(
+        () => read(new RoloClient("http://rolo.test")),
+        (error) => error instanceof RoloContractError && /unsafe reference/.test(error.message),
+      );
+    }
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("RoloClient rejects overlarge opaque Job payloads", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => ({
+    ok: true,
+    json: async () => ({
+      ...JOB_EVENT_PAGE,
+      items: [{ ...JOB_EVENT, payload: { summary: "x".repeat(17_000) } }],
+    }),
+  });
+  try {
+    await assert.rejects(
+      () => new RoloClient("http://rolo.test").jobEvents("job_001"),
+      (error) => error instanceof RoloContractError && /bounded payload size/.test(error.message),
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("RoloClient rejects Job recovery revision drift and regressed event sequences", async () => {
+  const originalFetch = globalThis.fetch;
+  const cases = [
+    {
+      read: (client) => client.job("job_001"),
+      payload: { ...JOB_RECOVERY, latest_event: { ...JOB_EVENT, sequence: 2 } },
+    },
+    {
+      read: (client) => client.jobEvents("job_001"),
+      payload: {
+        ...JOB_EVENT_PAGE,
+        items: [JOB_EVENT, { ...JOB_EVENT, event_id: "evt_002", sequence: 0 }],
+        total: 2,
+        limit: 2,
+      },
+    },
+  ];
+  try {
+    for (const { read, payload } of cases) {
+      globalThis.fetch = async () => ({ ok: true, json: async () => payload });
+      await assert.rejects(
+        () => read(new RoloClient("http://rolo.test")),
+        (error) => error instanceof RoloContractError && /revision|sequence regressed/.test(error.message),
+      );
+    }
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
