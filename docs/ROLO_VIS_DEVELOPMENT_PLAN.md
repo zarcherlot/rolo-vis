@@ -18,6 +18,8 @@
 - 已同步 rolo 本地未检出的 `main` 到 `origin/main` `780d7a5`，未切换当前 checkout，也未触碰临时目录。
 - `codex/e24-job-read-model-consumer` 已提交并推送，作为 rolo-vis 侧待合入分支；GitHub CLI OAuth 仍不稳定，PR 尚未自动创建，但可直接使用 compare 链接。
 - rolo-vis 消费者分支 compare：[codex/e24-job-read-model-consumer](https://github.com/zarcherlot/rolo-vis/pull/new/codex/e24-job-read-model-consumer)。
+- 已补充 `scripts/check-job-read-model.mjs` 与 `npm run check:job-live`：只读检查 feature 协商、Job/事件分页、身份绑定、recovery 一致性及敏感字段；当前因本机 `127.0.0.1:8080` 未启动 rolo，live gate 按 `NETWORK /health` fail-closed。
+- 已完成 P3 分包优化：React、Flow、图标和 artifact 数据独立成 chunk，主 JS 约 381 kB；完整 `npm run verify:baseline` 通过（225 tests、typecheck、build、Sites 4 tests）。
 - 本机 `127.0.0.1:8080` 未启动 rolo 控制面，因此 E24 live gate 暂不能执行；本轮只完成安全边界和消费者实现，未把 candidate 提升为 baseline。
 
 ## 已交付能力
@@ -32,7 +34,7 @@
 
 ### P0：完成 E24 Job 只读基线
 
-前置：以 rolo `origin/main` `780d7a5` 为 paired producer baseline，将 rolo-vis 消费者分支合入并把 `/v1/jobs` 三个接口的响应与 E24 schema 逐字段对齐。
+前置：以 rolo `origin/main` `780d7a5` 为 paired producer baseline，将 rolo-vis 消费者分支合入并把 `/v1/jobs` 三个接口的响应与 E24 schema 逐字段对齐；`npm run check:job-live` 通过后再提升 baseline。
 
 - 用真实 rolo 数据跑 Job Inbox、Job detail、Event timeline、Checkpoint/recovery 的 live gate。
 - 验证分页单调推进、重复/重叠页、Job/事件身份绑定、序列和时间戳异常均 fail closed。
@@ -40,6 +42,8 @@
 - 将 `JOB_READONLY_CONTRACT` 从 candidate 提升为 baseline，并补齐发布证据和配套版本号。
 
 完成标准：真实控制面可读、feature 缺失时完全隐藏、所有 E24A/E24B 测试和 Sites 验证通过。
+
+当前状态：消费者与门禁已完成，等待 rolo-vis PR 合入和真实控制面 live gate；不可用时保持 candidate。
 
 ### P1：激活 E24C Target Readiness
 
