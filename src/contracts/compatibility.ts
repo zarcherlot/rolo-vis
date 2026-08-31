@@ -65,6 +65,21 @@ export const APPROVAL_GATE_CONTRACT = {
   allowsBrowserMutation: false,
 } as const;
 
+export const ARTIFACT_ANALYSIS_SCHEMA_COMPATIBILITY = {
+  summary: ["rolo-artifact-analysis-summary/v1"],
+} as const;
+
+export const ARTIFACT_ANALYSIS_CONTRACT = {
+  id: "rolo-vis-artifact-analysis/2026-08",
+  status: "candidate-demo-only",
+  mode: "read-only",
+  requiredFeature: "workbench.artifact-analysis-read-model/v1",
+  endpoint: "not-published",
+  containsSecretPayloads: false,
+  allowsBrowserMutation: false,
+  readsArtifactBytes: false,
+} as const;
+
 export const MVP_BASELINE = {
   id: "rolo-vis-mvp-readonly/2026-08",
   status: "baseline",

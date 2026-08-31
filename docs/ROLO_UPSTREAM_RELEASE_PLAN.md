@@ -1,6 +1,6 @@
 # rolo 上游发布开发计划
 
-更新时间：2026-08-30  
+更新时间：2026-08-31  
 目标仓库：`rolo`  
 配套消费者：`rolo-vis`
 
@@ -16,7 +16,7 @@
 - Adapt evidence slice hardening 已由 PR #42 合入。
 - 文档刷新已由 PR #40/#43 合入。
 - rolo 已提供并宣布 `workbench.job-read-model/v1`，包括 `/v1/jobs`、`/v1/jobs/{job_id}`、`/v1/jobs/{job_id}/events`。
-- rolo-vis consumer 已实现并推送到 `codex/e24-job-read-model-consumer`，等待消费者 PR 合入和真实控制面 live gate。
+- rolo-vis consumer PR #19 和 Job hardening PR #20 已合入；真实控制面 live gate 仍待执行。
 - rolo 当前尚未发布 `workbench.target-readiness/v1` 或 `workbench.approval-gate-read-model/v1`。
 
 ## 2. 不可突破的发布原则
@@ -32,7 +32,7 @@
 
 ### R0：E24 Job read-model 发布收口
 
-状态：producer 已合入；等待 rolo-vis consumer 合入和真实 live gate。
+状态：producer 与 rolo-vis consumer/hardening 均已合入；等待真实 live gate 和 baseline promotion。
 
 rolo 需要确认并固化：
 
@@ -151,7 +151,7 @@ rolo 需要提供：
 
 ### R4：真实设备 artifact analysis read-model
 
-状态：rolo-vis 当前仍使用明确标注的静态投影。
+状态：rolo-vis 已完成明确标注 demo fixture 的 versioned/sanitized parser；rolo producer endpoint 尚未发布。
 
 rolo 需要提供：
 
@@ -193,7 +193,8 @@ rolo 需要提供：
 
 ### rolo-vis 团队
 
-- [ ] 合入 `codex/e24-job-read-model-consumer`。
+- [x] 合入 `codex/e24-job-read-model-consumer`（PR #19）并完成 Job contract hardening（PR #20）。
 - [ ] 连接真实 rolo 控制面，运行 `npm run check:job-live`。
 - [ ] 在 R1/R2 feature 发布前保持 parser、negative tests 和 UI surface blocked。
+- [x] 为 R4 建立 artifact analysis parser、demo-only contract 和负向安全测试；等待 rolo producer contract。
 - [ ] 每个 upstream contract 发布后建立 paired live gate，并更新 baseline/roadmap。

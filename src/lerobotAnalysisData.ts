@@ -1,3 +1,5 @@
+import { parseArtifactAnalysisSummary } from "./contracts/artifactAnalysis.ts";
+
 export type AnalysisStageStatus = "passed" | "partial" | "blocked" | "pending";
 export type AnalysisRouteStatus = "observed" | "unresolved" | "deferred";
 
@@ -62,7 +64,13 @@ export const TARGET_VALIDATION_ANALYSIS = {
 } as const;
 
 /** Sanitized read-only projection of the attached production artifact bundle. */
-export const REAL_DEVICE_ARTIFACT_ANALYSIS = {
+const REAL_DEVICE_ARTIFACT_ANALYSIS_RAW = {
+  schema_version: "rolo-artifact-analysis-summary/v1",
+  analysis_id: "analysis-20260829T112346Z-f2950d73",
+  source_kind: "demo_fixture",
+  observed_at: "2026-08-29T11:29:59Z",
+  freshness: "unknown",
+  contains_secret_payloads: false,
   kind: "Real-device artifact analysis" as const,
   robotId: "wsl2-post-r5-nav2-sim",
   runId: "20260829T112346Z-f2950d73",
@@ -128,3 +136,52 @@ export const REAL_DEVICE_ARTIFACT_ANALYSIS = {
     ["verification pack", "0f9f8ce8…bba61d92"],
   ],
 } as const;
+
+/** Parsed locally so the demo fixture exercises the same fail-closed boundary as a future rolo API response. */
+const REAL_DEVICE_ARTIFACT_ANALYSIS_PARSED = parseArtifactAnalysisSummary({
+  ...REAL_DEVICE_ARTIFACT_ANALYSIS_RAW,
+  robot_id: REAL_DEVICE_ARTIFACT_ANALYSIS_RAW.robotId,
+  run_id: REAL_DEVICE_ARTIFACT_ANALYSIS_RAW.runId,
+  discovery_id: REAL_DEVICE_ARTIFACT_ANALYSIS_RAW.discoveryId,
+  source_label: "Demo fixture · imported production bundle · 2026-08-29",
+  run_status: REAL_DEVICE_ARTIFACT_ANALYSIS_RAW.runStatus,
+  gate_status: REAL_DEVICE_ARTIFACT_ANALYSIS_RAW.gateStatus,
+  gate_label: REAL_DEVICE_ARTIFACT_ANALYSIS_RAW.gateLabel,
+  gate_tone: REAL_DEVICE_ARTIFACT_ANALYSIS_RAW.gateTone,
+  release_status: REAL_DEVICE_ARTIFACT_ANALYSIS_RAW.releaseStatus,
+  release_label: REAL_DEVICE_ARTIFACT_ANALYSIS_RAW.releaseLabel,
+  release_tone: REAL_DEVICE_ARTIFACT_ANALYSIS_RAW.releaseTone,
+  run_duration: REAL_DEVICE_ARTIFACT_ANALYSIS_RAW.runDuration,
+  event_count: REAL_DEVICE_ARTIFACT_ANALYSIS_RAW.eventCount,
+  eligible_operation_count: REAL_DEVICE_ARTIFACT_ANALYSIS_RAW.eligibleOperationCount,
+  route_review_flags: REAL_DEVICE_ARTIFACT_ANALYSIS_RAW.routeReviewFlags,
+  context_bars: REAL_DEVICE_ARTIFACT_ANALYSIS_RAW.contextBars,
+  evidence_note: REAL_DEVICE_ARTIFACT_ANALYSIS_RAW.evidenceNote,
+  operations: REAL_DEVICE_ARTIFACT_ANALYSIS_RAW.operations.map((operation) => ({
+    name: operation.name,
+    route: operation.route,
+    route_status: operation.routeStatus,
+    checks: operation.checks,
+    contract: operation.contract,
+  })),
+  graph_nodes: REAL_DEVICE_ARTIFACT_ANALYSIS_RAW.graphNodes,
+  stages: REAL_DEVICE_ARTIFACT_ANALYSIS_RAW.stages,
+  findings: REAL_DEVICE_ARTIFACT_ANALYSIS_RAW.findings,
+  limitations: [
+    "Demo fixture only; no rolo artifact-analysis endpoint is activated.",
+    "Analysis remains advisory and does not establish operation, physical, or release readiness.",
+  ],
+});
+
+/** UI projection retains the established camelCase view model while carrying validated read-model metadata. */
+export const REAL_DEVICE_ARTIFACT_ANALYSIS = {
+  ...REAL_DEVICE_ARTIFACT_ANALYSIS_RAW,
+  sourceLabel: REAL_DEVICE_ARTIFACT_ANALYSIS_PARSED.source_label,
+  schemaVersion: REAL_DEVICE_ARTIFACT_ANALYSIS_PARSED.schema_version,
+  analysisId: REAL_DEVICE_ARTIFACT_ANALYSIS_PARSED.analysis_id,
+  sourceKind: REAL_DEVICE_ARTIFACT_ANALYSIS_PARSED.source_kind,
+  observedAt: REAL_DEVICE_ARTIFACT_ANALYSIS_PARSED.observed_at,
+  freshness: REAL_DEVICE_ARTIFACT_ANALYSIS_PARSED.freshness,
+  containsSecretPayloads: REAL_DEVICE_ARTIFACT_ANALYSIS_PARSED.contains_secret_payloads,
+  limitations: REAL_DEVICE_ARTIFACT_ANALYSIS_PARSED.limitations,
+};

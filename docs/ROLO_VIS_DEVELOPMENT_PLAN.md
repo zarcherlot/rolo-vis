@@ -1,17 +1,17 @@
 # rolo-vis 后续开发计划
 
-更新时间：2026-08-30
+更新时间：2026-08-31
 
 ## 当前基线
 
-- `main` 基线仍为 `d3c570d`（`feat: surface real device artifact analysis`）；E24 消费者已整理到 `codex/e24-job-read-model-consumer`，commit `8dd1251`，并已推送远端。
+- `origin/main` 已推进到 `d4e4d35`（PR #20，Job read-model hardening）；E24 消费者 PR #19 与 hardening PR #20 均已合入。
 - 本次环境无法写入 `.git/FETCH_HEAD`，所以 `git fetch` 被权限拒绝；现有远端跟踪引用已与本地一致，未发现可合并提交。
 - 同级 rolo 仓库当前 checkout 仍在 `codex/p1-dev10-harness-template`，未跟踪临时目录保持不变；其未检出的本地 `main` 已同步到最新 `origin/main` `780d7a5`，现在 `main...origin/main` 为 `0/0`。
 - rolo `origin/main` 已提供并宣布 `workbench.job-read-model/v1`，且包含 `/v1/jobs`、`/v1/jobs/{job_id}`、`/v1/jobs/{job_id}/events`、只读 `bootstrap-plan`、Verify readiness 和 stage authorization 读接口。远端日志确认 E24 已由 PR #38 合入、E23 Workbench 已由 PR #39 合入、文档刷新由 PR #40/#43 合入，Adapt evidence slice hardening 由 PR #42 合入；旧 E23/E24 远端分支引用已自动清理。Readiness/Gate 仍没有与 E24C/E25 提案完全同名的公共 feature contract。
-- `npm run verify:baseline` 已通过：225 个应用测试、TypeScript、生产构建、Sites 打包测试全部通过。
+- `npm run verify:baseline` 已通过：232 个应用测试、TypeScript、生产构建、Sites 打包测试全部通过。
 - 当前版本为 `0.37.0`，已冻结 Episode Observation Bundle（E22）只读基线。
 
-## 本轮推进（2026-08-30）
+## 本轮推进（2026-08-31）
 
 - 补齐 `rolo.plugin.json` 的 `job.history.read` 能力声明和三个 `/v1/jobs*` 只读 endpoint。
 - Job Inbox 增加事件分页、独立加载状态和跨页 event/job ID 去重；feature 缺失时仍完全隐藏且不发请求。
@@ -21,13 +21,15 @@
 - 已补充 `scripts/check-job-read-model.mjs` 与 `npm run check:job-live`：只读检查 feature 协商、Job/事件分页、身份绑定、recovery 一致性及敏感字段；在 rolo `main@780d7a5` 配合脱敏 fixture 已通过 paired integration gate，生产/真机 live gate 仍待执行。
 - 已完成 P3 分包优化：React、Flow、图标和 artifact 数据独立成 chunk，主 JS 约 381 kB；完整 `npm run verify:baseline` 通过（225 tests、typecheck、build、Sites 4 tests）。
 - paired rolo 服务已停止并清理临时 fixture；生产/真机控制面未提供，因此 E24 仍未从 candidate 提升为 baseline。
+- 新增 `rolo-artifact-analysis-summary/v1` 的 fail-closed parser、兼容性声明和 [ARTIFACT_ANALYSIS_CONTRACT.md](./ARTIFACT_ANALYSIS_CONTRACT.md)；现有真实设备投影先作为 `demo_fixture` 通过同一解析边界，未激活 API 请求。
+- 新增超长文本、unsafe reference、secret flag、非法 run identity 的负向测试；`npm test` 当前 232 项通过。
 
 ## 已交付能力
 
 1. Stack Map 为主入口，Overview、Fleet、Capabilities、Lifecycle、Wiki、Evidence 使用统一的证据/信任分层。
 2. Episode Studio 已覆盖修订、对比、诊断、Cohort、Evidence occurrence/context、导航恢复和 review session；媒体、回放、导出、重采集和写操作仍未开放。
 3. Jobs 只读界面和 `rolo-job-*/v1` 客户端已在 `main`，但仍由 `workbench.job-read-model/v1` feature gate 控制。
-4. Run Analysis 已展示一份脱敏的真实设备 artifact 投影；当前数据仍是前端静态投影，不是通用 artifact 导入管线。
+4. Run Analysis 已展示一份明确标注 `demo_fixture` 的脱敏真实设备 artifact 投影，并经过 versioned parser；尚不是通用 artifact 导入管线。
 5. Target Readiness、Approval/Gate/Recovery 已有严格解析器和测试，但尚无可激活的公共 rolo endpoint。
 
 ## 开发顺序
@@ -43,7 +45,7 @@
 
 完成标准：真实控制面可读、feature 缺失时完全隐藏、所有 E24A/E24B 测试和 Sites 验证通过。
 
-当前状态：消费者、门禁和 paired rolo fixture gate 已完成；等待 rolo-vis PR 合入及真实控制面 live gate，当前仍保持 candidate。
+当前状态：消费者 PR #19、hardening PR #20、门禁和 paired rolo fixture gate 已完成；真实控制面 live gate 仍待执行，当前仍保持 candidate。
 
 ### P1：激活 E24C Target Readiness
 
@@ -80,12 +82,12 @@
 
 ### P2：产品化真实设备 artifact 分析
 
-- 将 `src/lerobotAnalysisData.ts` 的静态投影替换为 versioned、sanitized、可校验的 read model；保留当前数据作为明确标注的 demo fixture。
+- 已完成第一步：`src/lerobotAnalysisData.ts` 的 demo 投影先经过 versioned、sanitized、可校验 parser；真实 producer 接入仍待 rolo 发布 endpoint。
 - 复用 E24/E25 的 Job、Gate、Target、Evidence opaque ID，不允许前端读取任意文件或 artifact bytes。
 - 增加 source provenance、时间新鲜度、partial/stale 状态和 schema compatibility；不把分析完成提升为 Operation、physical outcome 或 release 验证。
 - 为真实 bundle、部分 bundle、哈希/身份不一致和过期 bundle 增加 fixtures、解析器测试和 live gate。
 
-完成标准：真实 API 优先、API 不可用时明确 demo；没有 silent fallback、任意路径读取或权限边界放宽。
+完成标准：真实 API 优先、API 不可用时明确 demo；没有 silent fallback、任意路径读取或权限边界放宽。当前状态：parser 与负向测试完成，producer endpoint/live gate 待 rolo。
 
 ### P3：体验与工程质量收口
 
