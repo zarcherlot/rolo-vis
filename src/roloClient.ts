@@ -65,7 +65,7 @@ import type {
   ApprovalGateCollection,
   ApprovalGateSummary,
 } from "./types/rolo";
-import { parseArtifactAnalysisSummary, type ArtifactAnalysisSummary } from "./contracts/artifactAnalysis.ts";
+import { assertArtifactAnalysisBinding, parseArtifactAnalysisSummary, type ArtifactAnalysisSummary } from "./contracts/artifactAnalysis.ts";
 import { parseCapabilityCollection, parseCapabilityDetail } from "./contracts/capability.ts";
 import { parseDiscoverySnapshotCollection } from "./contracts/discovery.ts";
 import { parseEpisodeCohort, parseEpisodeCollection, parseEpisodeDetail, parseEpisodeRevisionCollection, parseEpisodeTimelinePage } from "./contracts/episode.ts";
@@ -1140,13 +1140,13 @@ export class RoloClient {
   async targetArtifactAnalysis(targetId: string, options?: RequestInit): Promise<ArtifactAnalysisSummary> {
     const path = `/v1/targets/${encodeURIComponent(targetId)}/artifact-analysis`;
     const payload = await this.request<unknown>(path, options);
-    return parseArtifactAnalysisSummary(payload, path);
+    return assertArtifactAnalysisBinding(parseArtifactAnalysisSummary(payload, path), { targetId });
   }
 
   async jobArtifactAnalysis(jobId: string, options?: RequestInit): Promise<ArtifactAnalysisSummary> {
     const path = `/v1/jobs/${encodeURIComponent(jobId)}/artifact-analysis`;
     const payload = await this.request<unknown>(path, options);
-    return parseArtifactAnalysisSummary(payload, path);
+    return assertArtifactAnalysisBinding(parseArtifactAnalysisSummary(payload, path), { jobId });
   }
 
   async robots(options?: RequestInit) {

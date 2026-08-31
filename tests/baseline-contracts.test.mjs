@@ -116,3 +116,10 @@ test("artifact analysis stays feature-gated and read-only after rolo publishes t
   assert.match(contract, /does not read local[\s\S]*artifact bytes, raw paths/);
   assert.match(contract, /contains_secret_payloads: false/);
 });
+
+test("artifact analysis live states expose retry and assertive error semantics", async () => {
+  const app = await read("../src/App.tsx");
+  assert.match(app, /aria-label=\"Retry artifact analysis\"/);
+  assert.match(app, /role=\"alert\" aria-live=\"assertive\"/);
+  assert.match(app, /refreshArtifactAnalysis/);
+});

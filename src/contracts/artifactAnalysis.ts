@@ -75,6 +75,15 @@ export interface ArtifactAnalysisSummary {
   limitations: string[];
 }
 
+export function assertArtifactAnalysisBinding(
+  summary: ArtifactAnalysisSummary,
+  expected: { targetId?: string; jobId?: string },
+): ArtifactAnalysisSummary {
+  requireContract(expected.targetId === undefined || summary.target_id === expected.targetId, "artifact analysis target identity does not match request", "artifact_analysis");
+  requireContract(expected.jobId === undefined || summary.job_id === expected.jobId, "artifact analysis job identity does not match request", "artifact_analysis");
+  return summary;
+}
+
 const MAX_TEXT = 240;
 const MAX_ID = 128;
 const MAX_ITEMS = 40;
