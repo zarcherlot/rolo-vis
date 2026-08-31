@@ -4,10 +4,9 @@
 
 ## 当前基线
 
-- `origin/main` 已推进到 `d4e4d35`（PR #20，Job read-model hardening）；E24 消费者 PR #19 与 hardening PR #20 均已合入。
-- 本次环境无法写入 `.git/FETCH_HEAD`，所以 `git fetch` 被权限拒绝；现有远端跟踪引用已与本地一致，未发现可合并提交。
-- 同级 rolo 仓库当前 checkout 仍在 `codex/p1-dev10-harness-template`，未跟踪临时目录保持不变；其未检出的本地 `main` 已同步到最新 `origin/main` `780d7a5`，现在 `main...origin/main` 为 `0/0`。
-- rolo `origin/main` 已提供并宣布 `workbench.job-read-model/v1`，且包含 `/v1/jobs`、`/v1/jobs/{job_id}`、`/v1/jobs/{job_id}/events`、只读 `bootstrap-plan`、Verify readiness 和 stage authorization 读接口。远端日志确认 E24 已由 PR #38 合入、E23 Workbench 已由 PR #39 合入、文档刷新由 PR #40/#43 合入，Adapt evidence slice hardening 由 PR #42 合入；旧 E23/E24 远端分支引用已自动清理。Readiness/Gate 仍没有与 E24C/E25 提案完全同名的公共 feature contract。
+- `origin/main` 已包含 E24/E24C hardening；rolo 上游 R1 PR #47、R2 PR #48 已合入，最新 producer main 为 `15e6b7d1`。
+- rolo 远端状态已通过 GitHub API 核对；本地 rolo checkout 不作为本轮修改目标。
+- rolo `origin/main` 已提供并宣布 Job、R1 Target Readiness（`workbench.target-readiness/v1`）和 R2 Approval Gate（`workbench.approval-gate-read-model/v1`）feature，分别暴露分页列表与详情 GET 接口；旧 E23/E24 远端分支引用已自动清理。
 - `npm run verify:baseline` 已通过：232 个应用测试、TypeScript、生产构建、Sites 打包测试全部通过。
 - 当前版本为 `0.37.0`，已冻结 Episode Observation Bundle（E22）只读基线。
 
@@ -30,7 +29,7 @@
 2. Episode Studio 已覆盖修订、对比、诊断、Cohort、Evidence occurrence/context、导航恢复和 review session；媒体、回放、导出、重采集和写操作仍未开放。
 3. Jobs 只读界面和 `rolo-job-*/v1` 客户端已在 `main`，但仍由 `workbench.job-read-model/v1` feature gate 控制。
 4. Run Analysis 已展示一份明确标注 `demo_fixture` 的脱敏真实设备 artifact 投影，并经过 versioned parser；尚不是通用 artifact 导入管线。
-5. Target Readiness、Approval/Gate/Recovery 已有严格解析器和测试，但尚无可激活的公共 rolo endpoint。
+5. Target Readiness、Approval/Gate/Recovery 已接入严格解析器、分页 client、feature-gated 只读 UI 与 live gate 脚本；待真实控制面执行 live gate 后再提升 baseline。
 
 ## 开发顺序
 
@@ -47,9 +46,9 @@
 
 当前状态：消费者 PR #19、hardening PR #20、门禁和 paired rolo fixture gate 已完成；真实控制面 live gate 仍待执行，当前仍保持 candidate。
 
-### P1：激活 E24C Target Readiness
+### P1：激活 R1 Target Readiness
 
-前置：rolo 发布 `rolo-target-readiness-summary/v1` 与 `workbench.target-readiness/v1`。现有 Verify readiness 和 `bootstrap-plan` 只能作为候选输入，不能由前端自行拼装成该 contract。
+前置已满足：rolo main `15e6b7d1`（PR #47）发布 `rolo-target-readiness-summary/v1` 与 `workbench.target-readiness/v1`。
 
 - 在 Overview/Fleet/Jobs 之间复用同一份 target readiness 读模型，展示连接、主机密钥、平台/架构、workspace、companion 和 blocker 的独立状态。
 - 明确 `READY` 只是 producer-owned readiness，不等同于 Job 成功、物理结果或 release readiness。
@@ -58,9 +57,9 @@
 
 完成标准：feature-negotiated UI、跨机器人切换和失效/部分读模型测试通过，未发布 feature 时零新增请求。
 
-### P1：激活 E25 Approval/Gate/Recovery（只读）
+### P1：激活 R2 Approval/Gate/Recovery（只读）
 
-前置：E24 Job 与 Target Readiness 已稳定；rolo 当前的 stage authorization、bootstrap-plan、Job recovery 输出需先收敛为 `rolo-approval-gate-summary/v1`，并由 `/health` 宣布对应 feature gate。
+前置已满足：rolo main `15e6b7d1`（PR #48）发布 `rolo-approval-gate-summary/v1`，并由 `/health` 宣布对应 feature gate。
 
 - 展示 plan、approval、Gate、recovery 四个独立 producer-owned 维度，并绑定 opaque `job_id`/`target_id`。
 - 从 Job、Target 和 Evidence 建立只读上下文跳转；不把 approval 或 Gate 结果合并成执行/发布结论。

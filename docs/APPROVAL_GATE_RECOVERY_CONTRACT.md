@@ -1,6 +1,6 @@
 # Approval / Gate / Recovery read contract
 
-Status: E25 consumer boundary implemented; activation blocked on upstream publication
+Status: R2 producer published in rolo; rolo-vis consumer integration in progress
 
 E25 defines the future read-only projection required by an approval and recovery
 workbench. It does not add browser approval or execution authority.
@@ -31,9 +31,10 @@ package bytes, command arguments, artifact bodies, or unredacted transport outpu
 - Recovery is a producer-owned state summary. The browser must never resume mutation
   automatically after refresh or reconnect.
 
-The current rolo API exposes only the write-side bootstrap endpoint, so E25 remains
-contract-only until the read model and governance boundary are published.
+rolo main includes the read model and governance boundary as of `15e6b7d1`
+(PR #48). The producer endpoints are `GET /v1/approval-gates` and
+`GET /v1/jobs/{job_id}/approval-gate`.
 
-The workbench validates the proposed projection with the fail-closed parser in
-`src/contracts/targetReadiness.ts`; this does not add a read endpoint or any browser
-approval, execution, recovery, or rollback authority.
+The workbench validates the projection with the fail-closed parser in
+`src/contracts/targetReadiness.ts`; the consumer remains feature-gated and adds no
+browser approval, execution, recovery, or rollback authority.
