@@ -1,11 +1,12 @@
 import assert from "node:assert/strict";
 
 import { RoloClient, RoloApiError, ROLO_API_FEATURES } from "../src/roloClient.ts";
+import { liveAuthConfig } from "./liveAuth.mjs";
 
 const baseUrl = (process.env.ROLO_BASE_URL || "http://127.0.0.1:8080").replace(/\/$/, "");
 const requestedJobId = process.env.ROLO_JOB_ID || "";
 const pageLimit = Math.min(Math.max(Number(process.env.ROLO_JOB_PAGE_LIMIT || 25), 1), 100);
-const client = new RoloClient(baseUrl);
+const client = new RoloClient(baseUrl, liveAuthConfig());
 
 const health = await client.health();
 assert.ok(health.api_features.includes(ROLO_API_FEATURES.jobReadModel), "rolo does not advertise workbench.job-read-model/v1");
@@ -67,4 +68,6 @@ console.log(JSON.stringify({
   invalid_job_status: invalidJobStatus,
   reads_only: true,
   unsafe_fields_exposed: false,
+  auth_mode: client.authMode,
+  required_scope: "jobs:read",
 }, null, 2));

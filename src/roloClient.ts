@@ -81,6 +81,9 @@ import {
   requireContract,
   RoloContractError,
 } from "./contracts/guards.ts";
+import { createRoloAuthTransport, type RoloAuthConfig, type RoloAuthTransport } from "./authTransport.ts";
+
+export type { RoloAuthConfig, RoloAuthTransport } from "./authTransport.ts";
 
 export { RoloContractError } from "./contracts/guards.ts";
 
@@ -114,18 +117,24 @@ export class RoloApiError extends Error {
   status: number | null;
   path: string;
   code: "HTTP" | "NETWORK" | "ABORTED" | "HEALTH";
+  authFailure: "UNAUTHENTICATED" | "FORBIDDEN" | null;
+  requiredScope: string | null;
 
   constructor(
     message: string,
     status: number | null,
     path = "",
     code: RoloApiError["code"] = "HTTP",
+    authFailure: RoloApiError["authFailure"] = null,
+    requiredScope: string | null = null,
   ) {
     super(message);
     this.name = "RoloApiError";
     this.status = status;
     this.path = path;
     this.code = code;
+    this.authFailure = authFailure;
+    this.requiredScope = requiredScope;
   }
 }
 
@@ -1041,18 +1050,24 @@ function parseFleetBlockerDetail(value: unknown, path: string, blockerId: string
 
 export class RoloClient {
   baseUrl: string;
+  private readonly auth: RoloAuthTransport;
 
-  constructor(baseUrl = import.meta.env?.VITE_ROLO_API_BASE || DEFAULT_BASE) {
+  constructor(baseUrl = import.meta.env?.VITE_ROLO_API_BASE || DEFAULT_BASE, auth?: RoloAuthConfig) {
     this.baseUrl = baseUrl.replace(/\/$/, "");
+    this.auth = createRoloAuthTransport(auth ?? { mode: "none" });
+  }
+
+  get authMode() {
+    return this.auth.mode;
   }
 
   async request<T>(path: string, options: RequestInit = {}): Promise<T> {
     let response: Response;
     try {
-      response = await fetch(`${this.baseUrl}${path}`, {
-        ...options,
+      response = await fetch(`${this.baseUrl}${path}`, this.auth.apply({
         headers: { Accept: "application/json", ...options.headers },
-      });
+        ...options,
+      }));
     } catch (error) {
       const aborted = error instanceof Error && error.name === "AbortError";
       throw new RoloApiError(
@@ -1063,7 +1078,17 @@ export class RoloClient {
       );
     }
     if (!response.ok) {
-      throw new RoloApiError(`rolo request failed: ${response.status}`, response.status, path);
+      const authFailure = response.status === 401 ? "UNAUTHENTICATED" : response.status === 403 ? "FORBIDDEN" : null;
+      const scopeHeader = response.headers?.get?.("x-rolo-required-scope") || response.headers?.get?.("www-authenticate") || "";
+      const requiredScope = scopeHeader.includes("=")
+        ? scopeHeader.match(/scope=["']?([^"' ,]+)["']?/i)?.[1] || null
+        : scopeHeader.trim() || null;
+      const message = response.status === 401
+        ? "rolo authentication required (401)"
+        : response.status === 403
+          ? "rolo authorization denied (403)"
+          : `rolo request failed: ${response.status}`;
+      throw new RoloApiError(message, response.status, path, "HTTP", authFailure, requiredScope);
     }
     try {
       return await response.json() as T;
@@ -1601,4 +1626,6 @@ export class RoloClient {
   }
 }
 
-export const roloClient = new RoloClient();
+// The browser client uses an HttpOnly same-origin session by default. Live gates
+// may explicitly construct a bearer client for a short-lived staging token.
+export const roloClient = new RoloClient(undefined, { mode: "session" });
