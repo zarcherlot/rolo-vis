@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { parseArtifactAnalysisSummary } from "../src/contracts/artifactAnalysis.ts";
+import { assertArtifactAnalysisBinding, parseArtifactAnalysisSummary } from "../src/contracts/artifactAnalysis.ts";
 import { RoloContractError } from "../src/contracts/guards.ts";
 import { REAL_DEVICE_ARTIFACT_ANALYSIS } from "../src/lerobotAnalysisData.ts";
 
@@ -55,6 +55,15 @@ test("artifact analysis parser accepts bounded sanitized summaries", () => {
   assert.equal(parsed.analysis_id, "analysis-1");
   assert.equal(parsed.operations[0].routeStatus, "observed");
   assert.equal(parsed.contains_secret_payloads, false);
+});
+
+test("artifact analysis preserves partial and stale states without readiness promotion", () => {
+  const partial = parseArtifactAnalysisSummary({ ...validPayload(), freshness: "stale", run_status: "PARTIAL", gate_status: "BLOCKED" });
+  assert.equal(partial.freshness, "stale");
+  assert.equal(partial.run_status, "PARTIAL");
+  assert.equal(partial.gate_status, "BLOCKED");
+  assert.throws(() => assertArtifactAnalysisBinding(partial, { targetId: "other-target" }), RoloContractError);
+  assert.throws(() => assertArtifactAnalysisBinding(partial, { jobId: "other-job" }), RoloContractError);
 });
 
 test("artifact analysis parser rejects unsafe references, oversized text, and secret flags", () => {

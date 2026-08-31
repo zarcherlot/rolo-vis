@@ -112,7 +112,8 @@
    负向 fixture、分页/刷新策略和跨 Job/target 的只读上下文跳转；不得加入 artifact 下载、任意
    文件浏览或 release/physical outcome 推断。
 5. **P3：下一版产品合同评估**。只有在上述 baseline 稳定后，才评估 Episode 媒体/回放/导出或
-   任何写侧能力；每项必须先有独立公共契约、权限模型、审计和安全评审。
+   任何写侧能力；每项必须先有独立公共契约、权限模型、审计和安全评审。详细候选见
+   [ROLO_VIS_NEXT_PRODUCT_CONTRACTS.md](./ROLO_VIS_NEXT_PRODUCT_CONTRACTS.md)。
 
 ## 暂不合并与风险控制
 

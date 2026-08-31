@@ -2220,6 +2220,19 @@ test("RoloClient reads feature-gated artifact analysis for targets and jobs", as
   }
 });
 
+test("RoloClient fails closed when artifact analysis endpoint identity drifts", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => ({ ok: true, json: async () => ({ ...ARTIFACT_ANALYSIS, target_id: "other-target" }) });
+  try {
+    await assert.rejects(
+      () => new RoloClient("http://rolo.test").targetArtifactAnalysis("ready-local"),
+      (error) => error instanceof RoloContractError && /target identity/.test(error.message),
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("RoloClient rejects a Job page with an unsafe contract version", async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () => ({ ok: true, json: async () => ({ ...JOB_PAGE, schema_version: "rolo-job-page/v2" }) });

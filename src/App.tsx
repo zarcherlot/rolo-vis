@@ -2414,9 +2414,9 @@ function ApprovalGateView({
   return <section className="content-view"><PageTitle title="Approval Gates" description="Display-only plan, approval, gate, and recovery state for published Jobs." /><div className="job-trust-banner"><Info size={18} /><span><strong>No approval or recovery actions</strong><small>This surface never submits approvals, executes steps, or resumes a Job.</small></span></div>{error && <div className="panel read-model-unavailable" role="alert"><WarningCircle size={23} /><div><strong>Approval gate read model unavailable</strong><p>{error}</p></div></div>}<div className="job-layout"><div className="panel job-inbox-panel"><div className="job-panel-heading"><div><span>Gates</span><h3>{gates ? `${gates.total} published gates` : "Loading gates…"}</h3></div><span className="read-only-chip">R2 · READ ONLY</span></div>{loading && !gates && <div className="job-empty"><Pulse size={23} /><span>Reading approval gates…</span></div>}<div className="job-list" role="list" aria-label="Approval gate summaries">{gates?.items.map((item) => <button key={item.job_id} className={`job-row ${selected?.job_id === item.job_id ? "is-selected" : ""}`} onClick={() => onSelect(item.job_id)}><span className="job-row-main"><strong>{item.job_id}</strong><code>{item.target_id}</code></span><span className={`job-status job-status-${item.gate_status.toLowerCase()}`}>{item.gate_status}</span><span className="job-row-target">plan · {item.plan_status} · approval · {item.approval_status || "none"}</span><time dateTime={item.observed_at}>{formatJobTime(item.observed_at)}</time><ArrowRight size={15} /></button>)}</div></div><div className="panel job-detail-panel" aria-live="polite">{detailLoading && <div className="job-empty"><Pulse size={23} /><span>Reading gate detail…</span></div>}{!detailLoading && !selected && <div className="job-empty"><ShieldCheck size={23} /><strong>Select a gate</strong><span>Its bounded plan and recovery state will appear here.</span></div>}{!detailLoading && selected && <><div className="job-panel-heading"><div><span>Gate detail</span><h3>{selected.job_id}</h3><code>{selected.target_id}</code></div><span className={`job-status job-status-${selected.gate_status.toLowerCase()}`}>{selected.gate_status}</span></div><dl className="job-facts"><div><dt>Plan</dt><dd>{selected.plan_status}</dd></div><div><dt>Approval</dt><dd>{selected.approval_status || "Not required"}</dd></div><div><dt>Recovery</dt><dd>{selected.recovery_state}</dd></div><div><dt>Freshness</dt><dd>{selected.freshness}</dd></div></dl><div className="job-detail-section"><h4>Steps</h4>{selected.steps.map((step) => <div className="job-checkpoint" key={step.action}><CheckCircle size={17} /><span>{step.action} · {step.risk}<small>{step.description}</small></span></div>)}</div>{selected.gate_checks.length > 0 && <div className="job-detail-section"><h4>Gate checks</h4>{selected.gate_checks.map((item) => <p className="job-muted" key={item}>{item}</p>)}</div>}{selected.blockers.length > 0 && <div className="job-limitations"><Warning size={17} /><span><strong>Blockers</strong>{selected.blockers.map((item) => <small key={item}>{item}</small>)}</span></div>}</>}</div></div></section>;
 }
 
-function RunAnalysisView({ liveAnalysis, loading = false, error = "" }: { liveAnalysis?: ArtifactAnalysisSummary | null; loading?: boolean; error?: string }) {
-  if (loading) return <section className="content-view"><PageTitle title="Artifact Analysis" description="Reading the bounded rolo producer projection…" /><div className="panel read-model-unavailable" role="status"><Pulse size={26} /><div><strong>Loading artifact analysis</strong><p>No artifact bytes or runtime commands are requested by this view.</p></div></div></section>;
-  if (liveAnalysis === null) return <ReadModelUnavailableView title="Artifact Analysis" description={error || "The rolo artifact-analysis producer did not return a summary for this target."} />;
+function RunAnalysisView({ liveAnalysis, loading = false, error = "", onRefresh }: { liveAnalysis?: ArtifactAnalysisSummary | null; loading?: boolean; error?: string; onRefresh?: () => void }) {
+  if (loading) return <section className="content-view"><PageTitle title="Artifact Analysis" description="Reading the bounded rolo producer projection…" action={onRefresh && <button className="secondary-button" onClick={onRefresh} aria-label="Refresh artifact analysis">Refresh</button>} /><div className="panel read-model-unavailable" role="status" aria-live="polite"><Pulse size={26} /><div><strong>Loading artifact analysis</strong><p>No artifact bytes or runtime commands are requested by this view.</p></div></div></section>;
+  if (liveAnalysis === null) return <section className="content-view"><PageTitle title="Artifact Analysis" description="The bounded rolo producer projection could not be read." action={onRefresh && <button className="secondary-button" onClick={onRefresh} aria-label="Retry artifact analysis">Retry</button>} /><div className="panel read-model-unavailable" role="alert" aria-live="assertive"><WarningCircle size={26} /><div><strong>Artifact Analysis is unavailable in live mode.</strong><p>{error || "The rolo artifact-analysis producer did not return a summary for this target."}</p><small>Demo data is opt-in; no fixture has been substituted automatically.</small></div></div></section>;
   const analysis = liveAnalysis ? {
     sourceLabel: liveAnalysis.source_label,
     kind: liveAnalysis.kind,
@@ -2575,6 +2575,7 @@ function AppContent() {
   const [artifactAnalysis, setArtifactAnalysis] = useState<ArtifactAnalysisSummary | null | undefined>(undefined);
   const [artifactAnalysisLoading, setArtifactAnalysisLoading] = useState(false);
   const [artifactAnalysisMessage, setArtifactAnalysisMessage] = useState("");
+  const [artifactAnalysisRequestKey, setArtifactAnalysisRequestKey] = useState(0);
   const [wiki, setWiki] = useState<RobotWikiSnapshot | null>(null);
   const [discoveryHistory, setDiscoveryHistory] = useState<DiscoverySnapshotCollection | null>(null);
   const [wikiRequestRobotId, setWikiRequestRobotId] = useState("");
@@ -2616,7 +2617,7 @@ function AppContent() {
     setJobMessage("");
     setReadiness(null); setSelectedReadiness(null); setReadinessLoading(false); setReadinessDetailLoading(false); setReadinessMessage("");
     setApprovalGates(null); setSelectedApprovalGate(null); setApprovalLoading(false); setApprovalDetailLoading(false); setApprovalMessage("");
-    setArtifactAnalysis(undefined); setArtifactAnalysisLoading(false); setArtifactAnalysisMessage("");
+    setArtifactAnalysis(undefined); setArtifactAnalysisLoading(false); setArtifactAnalysisMessage(""); setArtifactAnalysisRequestKey(0);
     const controller = new AbortController();
     const timeout = window.setTimeout(() => controller.abort(), 5000);
     try {
@@ -2677,6 +2678,7 @@ function AppContent() {
       setArtifactAnalysis(undefined);
       setArtifactAnalysisLoading(false);
       setArtifactAnalysisMessage("");
+      setArtifactAnalysisRequestKey(0);
       setWiki(null);
       setDiscoveryHistory(null);
       setConnectionMessage(error instanceof RoloApiError ? `${error.message}${error.path ? ` (${error.path})` : ""}` : "The rolo control plane could not be read.");
@@ -2701,7 +2703,12 @@ function AppContent() {
       })
       .finally(() => { if (!controller.signal.aborted) setArtifactAnalysisLoading(false); });
     return () => controller.abort();
-  }, [active, artifactAnalysisSupported, mode, robot]);
+  }, [active, artifactAnalysisRequestKey, artifactAnalysisSupported, mode, robot]);
+
+  const refreshArtifactAnalysis = useCallback(() => {
+    setArtifactAnalysis(undefined);
+    setArtifactAnalysisRequestKey((value) => value + 1);
+  }, []);
 
   const useDemo = useCallback(() => {
     setStackContextFocus(null);
@@ -2735,6 +2742,7 @@ function AppContent() {
     setArtifactAnalysis(undefined);
     setArtifactAnalysisLoading(false);
     setArtifactAnalysisMessage("");
+    setArtifactAnalysisRequestKey(0);
     setWiki(null);
     setDiscoveryHistory(null);
     setWikiRequestRobotId("");
@@ -3049,7 +3057,7 @@ function AppContent() {
       <Topbar robot={robot} robots={robots} activeLabel={activeLabel} mode={mode} snapshot={overview?.observed_at || (mode === "demo" ? "2026-08-29T02:31:36.190654Z" : undefined)} onRetry={() => connect(robot?.robot_id)} onRobotChange={connect} />
       <main className="app-main">
         <>
-          {active === "analysis" && (mode === "demo" ? <RunAnalysisView /> : artifactAnalysisSupported ? <RunAnalysisView liveAnalysis={artifactAnalysis ?? null} loading={artifactAnalysisLoading} error={artifactAnalysisMessage} /> : <ReadModelUnavailableView title="Artifact Analysis" description="rolo has not advertised the bounded artifact-analysis read model for this connection." />)}
+          {active === "analysis" && (mode === "demo" ? <RunAnalysisView /> : artifactAnalysisSupported ? <RunAnalysisView liveAnalysis={artifactAnalysis ?? null} loading={artifactAnalysisLoading} error={artifactAnalysisMessage} onRefresh={refreshArtifactAnalysis} /> : <ReadModelUnavailableView title="Artifact Analysis" description="rolo has not advertised the bounded artifact-analysis read model for this connection." />)}
           {active === "stack" && (stackSource === "demo" ? <StackMapView focusLayer={stackContextFocus} onOpenWikiLayer={openWikiLayer} onOpenEvidence={openEvidence} /> : stackSource === "live" ? <StackMapView topology={topology} topologySnapshots={topologySnapshots} robotId={robot!.robot_id} focusLayer={stackContextFocus} onOpenWikiLayer={openWikiLayer} onOpenEvidence={openEvidence} /> : <ReadModelUnavailableView title="Stack Map" description="Live topology needs a versioned rolo topology read model." />)}
           {active === "fleet" && (mode === "demo" ? <ReadModelUnavailableView title="Fleet" description="The labeled demo fixture represents one robot and does not include a fleet aggregate." /> : fleet && fleetBlockers ? <FleetView fleet={fleet} blockers={fleetBlockers} sliceFleet={fleetSlice} blockerDetailSupported={apiFeatures.includes(ROLO_API_FEATURES.blockerDetail)} onSelectRobot={selectFleetRobot} onOpenEvidence={openEvidence} /> : fleetLoading ? <section className="content-view"><PageTitle title="Fleet" description="Aggregating validated robot overviews and pipeline blockers…" /><div className="panel read-model-unavailable" role="status"><Pulse size={26} /><div><strong>Loading Fleet</strong><p>No runtime telemetry is inferred while this read model is loading.</p></div></div></section> : <ReadModelUnavailableView title="Fleet" description={fleetMessage || "Open this surface to read the validated Fleet aggregate."} />)}
           {active === "overview" && (connectionUnavailable ? <ConnectionStateView mode={mode} message={connectionMessage} onRetry={() => connect(episodeTarget?.robotId)} onUseDemo={useDemo} /> : <OverviewView robot={robot} pipeline={pipeline} overview={overview} mode={mode} evidenceItems={evidenceItems} onOpenEvidence={openEvidence} onNavigate={navigate} />)}
