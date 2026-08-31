@@ -9,6 +9,7 @@
 - rolo `origin/main` 已提供并宣布 Job、R1 Target Readiness（`workbench.target-readiness/v1`）和 R2 Approval Gate（`workbench.approval-gate-read-model/v1`）feature，分别暴露分页列表与详情 GET 接口；旧 E23/E24 远端分支引用已自动清理。
 - `npm run verify:baseline` 已通过：234 个应用测试、TypeScript、生产构建、Sites 打包测试全部通过。
 - 当前版本为 `0.37.0`，已冻结 Episode Observation Bundle（E22）只读基线。
+- R1/R2 runtime live gate 与 Artifact Analysis producer 的 rolo 工程移交已整理在 [ROLO_ENGINEERING_HANDOFF_LIVE_ARTIFACT.md](./ROLO_ENGINEERING_HANDOFF_LIVE_ARTIFACT.md)。
 
 ## 本轮推进（2026-08-31）
 
