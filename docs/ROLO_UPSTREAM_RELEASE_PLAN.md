@@ -10,14 +10,14 @@
 
 当前已知基线：
 
-- rolo `origin/main`：`780d7a5`。
+- rolo `origin/main`：`8441e222a6cb91efb6e7b6f694e68f78c7919685`。
 - E24 Job producer 已由 PR #38 合入。
 - E23 Workbench plugin host 已由 PR #39 合入。
 - Adapt evidence slice hardening 已由 PR #42 合入。
 - 文档刷新已由 PR #40/#43 合入。
 - rolo 已提供并宣布 `workbench.job-read-model/v1`，包括 `/v1/jobs`、`/v1/jobs/{job_id}`、`/v1/jobs/{job_id}/events`。
-- rolo-vis consumer PR #19 和 Job hardening PR #20 已合入；真实控制面 live gate 仍待执行。
-- rolo 当前尚未发布 `workbench.target-readiness/v1` 或 `workbench.approval-gate-read-model/v1`。
+- rolo-vis consumer PR #19、Job hardening PR #20 和后续 P1–P3 收口 PR #29 已合入；真实控制面 live gate 仍待执行。
+- rolo 已通过 PR #47/#48 发布 `workbench.target-readiness/v1` 与 `workbench.approval-gate-read-model/v1`；PR #49/#50 已发布并修正 artifact analysis producer 的 live fixture 绑定。
 
 ## 2. 不可突破的发布原则
 
@@ -52,7 +52,7 @@ rolo 需要确认并固化：
 
 ### R1：E24C Target Readiness / Connection Assessment
 
-状态：尚未发布；当前 rolo-vis 只保留 parser 和 blocked contract。
+状态：producer 已由 PR #47 合入；rolo-vis 已有 parser/UI surface，真实 staging gate 待执行。
 
 #### 必须发布的公共 contract
 
@@ -93,7 +93,7 @@ rolo 需要确认并固化：
 
 ### R2：E25 Approval / Gate / Recovery read-model
 
-状态：尚未发布；当前 rolo-vis 只保留 parser 和 blocked contract。
+状态：producer 已由 PR #48 合入；rolo-vis 已有 parser/UI surface，真实 staging gate 待执行。
 
 #### 必须发布的公共 contract
 
@@ -151,7 +151,7 @@ rolo 需要提供：
 
 ### R4：真实设备 artifact analysis read-model
 
-状态：rolo-vis 已完成明确标注 demo fixture 的 versioned/sanitized parser；rolo producer endpoint 尚未发布。
+状态：rolo producer 已由 PR #49 发布并由 PR #50 修正 live fixture identity；rolo-vis 已完成 versioned/sanitized parser，真实 artifact live gate 待执行。
 
 rolo 需要提供：
 
@@ -186,15 +186,16 @@ rolo 需要提供：
 ### rolo 团队
 
 - [ ] 维护并发布 R0 Job contract 的正式 schema/文档版本。
-- [ ] 评审并确定 R1 Target Readiness endpoint、scope 和分页语义。
-- [ ] 评审并确定 R2 Approval/Gate/Recovery endpoint、scope 和 revision 语义。
+- [x] 评审并确定 R1 Target Readiness endpoint、scope 和分页语义（rolo PR #47）。
+- [x] 评审并确定 R2 Approval/Gate/Recovery endpoint、scope 和 revision 语义（rolo PR #48）。
 - [ ] 提供 R3 staging harness 和脱敏设备证据入口。
-- [ ] 设计 R4 artifact analysis producer contract。
+- [x] 设计并发布 R4 artifact analysis producer contract（rolo PR #49/#50）。
 
 ### rolo-vis 团队
 
 - [x] 合入 `codex/e24-job-read-model-consumer`（PR #19）并完成 Job contract hardening（PR #20）。
-- [ ] 连接真实 rolo 控制面，运行 `npm run check:job-live`。
-- [ ] 在 R1/R2 feature 发布前保持 parser、negative tests 和 UI surface blocked。
+- [ ] 由 rolo 团队提供 staging endpoint、短时 token 和脱敏 evidence bundle；使用 `docs/ROLO_EXTERNAL_CLOSURE_RUNBOOK.md` 运行 `npm run check:job-live`、`npm run check:r1-r2-live` 和 `npm run check:artifact-analysis-live`。
+- [x] 提供 `rolo-vis-device-hardening-evidence/v1` parser 与 fail-closed 校验命令，等待真实 bundle。
+- [x] 在 R1/R2 feature 发布前保持 parser、negative tests 和 UI surface blocked；feature 已发布，等待真实 live gate。
 - [x] 为 R4 建立 artifact analysis parser、demo-only contract 和负向安全测试；等待 rolo producer contract。
-- [ ] 每个 upstream contract 发布后建立 paired live gate，并更新 baseline/roadmap。
+- [ ] 每个 upstream contract 发布后执行真实 staging live gate，并更新 baseline/roadmap。

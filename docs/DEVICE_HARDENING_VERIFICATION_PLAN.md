@@ -1,6 +1,6 @@
 # Device-side hardening verification plan
 
-Status: E26 candidate; no production device evidence attached
+Status: E26 candidate; local/paired gates checked, external device evidence pending
 
 This plan is the handoff checklist for validating the robot-hosted workbench against
 real targets. It deliberately keeps local build/test results separate from external
@@ -43,3 +43,11 @@ rolo remains the robot-owned host and control plane. rolo-vis is a read-only plu
 this matrix does not add a hosted site, browser-side SSH, bootstrap execution, or
 rollback authority. Real-device execution must happen through the controlled rolo
 staging/CLI path, then publish only the sanitized evidence needed for review.
+
+## External closure handoff
+
+Use [`ROLO_EXTERNAL_CLOSURE_RUNBOOK.md`](./ROLO_EXTERNAL_CLOSURE_RUNBOOK.md) for the
+staging command sequence and evidence intake contract. The machine-readable bundle is
+validated by `npm run check:device-hardening-evidence`; validation is fail-closed and
+does not promote scenarios automatically. Until a real staging endpoint and reviewed
+bundle are supplied, all ten external scenarios remain `PENDING_EXTERNAL`.
