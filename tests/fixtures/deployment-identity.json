@@ -1,0 +1,17 @@
+{
+  "schema_version": "rolo-vis-deployment-identity/v1",
+  "release_line": "v0.37.x",
+  "rolo_revision": "ec8f635656806776c2dc8ced04a2e6c057980410",
+  "rolo_vis_revision": "942e41e617b9f58a0fa1d09cff9b02851fa81b11",
+  "plugin_digest": "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+  "target_id": "ready-local",
+  "target_kind": "local",
+  "machine_id": "machine-ready-local",
+  "workspace_id": "workspace-ready-local",
+  "platform": "linux",
+  "architecture": "x86_64",
+  "ros_domain": "0",
+  "rmw": "rmw_cyclonedds_cpp",
+  "host_key_fingerprint": "SHA256:abcdef0123456789",
+  "deployment_observed_at": "2026-08-31T08:45:00Z"
+}
