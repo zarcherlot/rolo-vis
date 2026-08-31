@@ -1,7 +1,7 @@
 # rolo 真机调试前剩余开发项
 
 更新时间：2026-08-31  
-适用版本：rolo `main@ec8f6356`、rolo-vis `main@9cd6e7a`
+适用版本：rolo `main@ec8f6356`、rolo-vis `main@9cd6e7a`（RV-01 实现在审查分支）
 
 这份清单只列“第一次连接真实机器人前”仍需完成的工作。确定性 harness 已通过，
 不再把 harness 结果当作真机证据。
@@ -113,8 +113,10 @@ digest；公开材料无凭据、路径、transport dump 或 artifact bytes。
 | RV-06 | P2 | baseline promotion 记录 | 在所有 live gate、证据 review 和安全门禁通过后，更新 candidate → baseline 的版本/证据记录 | RV-03～RV-05 |
 
 当前 rolo-vis 已完成：parser、feature gate、read-only UI、deterministic live gates、
-证据 bundle validator 和基础构建验证。RV-01～RV-03 是首次真机前仍可能需要代码变更的
-项目；RV-04～RV-06 应在首轮数据可用后执行。
+证据 bundle validator 和基础构建验证。RV-01 的 bearer transport 已在审查分支实现，
+并在启用 rolo token/scopes 的 harness 上验证通过；浏览器端仍只使用 same-origin
+credentials。RV-02～RV-03 是首次真机前仍可能需要代码变更的项目；RV-04～RV-06 应在
+首轮数据可用后执行。
 
 ### B. rolo 开发项
 

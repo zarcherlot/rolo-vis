@@ -3,9 +3,11 @@ import { parseArtifactAnalysisSummary } from "../src/contracts/artifactAnalysis.
 const baseUrl = (process.env.ROLO_API_BASE || "http://127.0.0.1:8765").replace(/\/$/, "");
 const targetId = process.env.ROLO_ARTIFACT_TARGET_ID || "ready-local";
 const jobId = process.env.ROLO_ARTIFACT_JOB_ID || "";
+const apiToken = process.env.ROLO_API_TOKEN?.trim();
+const headers = { Accept: "application/json", ...(apiToken ? { Authorization: `Bearer ${apiToken}` } : {}) };
 
 async function read(path) {
-  const response = await fetch(`${baseUrl}${path}`, { headers: { Accept: "application/json" } });
+  const response = await fetch(`${baseUrl}${path}`, { headers });
   if (!response.ok) throw new Error(`${path} returned HTTP ${response.status}`);
   return response.json();
 }

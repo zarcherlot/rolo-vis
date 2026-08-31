@@ -129,6 +129,12 @@ export class RoloApiError extends Error {
   }
 }
 
+export interface RoloClientOptions {
+  /** Short-lived token for non-browser live gates; never source this from VITE_* browser env. */
+  apiToken?: string;
+  credentials?: RequestCredentials;
+}
+
 function isStringRecord(value: unknown): value is Record<string, string> {
   return isRecord(value) && Object.values(value).every((item) => typeof item === "string");
 }
@@ -1041,9 +1047,16 @@ function parseFleetBlockerDetail(value: unknown, path: string, blockerId: string
 
 export class RoloClient {
   baseUrl: string;
+  private readonly apiToken: string | undefined;
+  private readonly credentials: RequestCredentials;
 
-  constructor(baseUrl = import.meta.env?.VITE_ROLO_API_BASE || DEFAULT_BASE) {
+  constructor(
+    baseUrl = import.meta.env?.VITE_ROLO_API_BASE || DEFAULT_BASE,
+    options: RoloClientOptions = {},
+  ) {
     this.baseUrl = baseUrl.replace(/\/$/, "");
+    this.apiToken = options.apiToken?.trim() || undefined;
+    this.credentials = options.credentials || "same-origin";
   }
 
   async request<T>(path: string, options: RequestInit = {}): Promise<T> {
@@ -1051,7 +1064,12 @@ export class RoloClient {
     try {
       response = await fetch(`${this.baseUrl}${path}`, {
         ...options,
-        headers: { Accept: "application/json", ...options.headers },
+        credentials: options.credentials || this.credentials,
+        headers: {
+          Accept: "application/json",
+          ...(this.apiToken ? { Authorization: `Bearer ${this.apiToken}` } : {}),
+          ...options.headers,
+        },
       });
     } catch (error) {
       const aborted = error instanceof Error && error.name === "AbortError";
