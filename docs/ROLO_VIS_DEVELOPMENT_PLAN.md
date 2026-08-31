@@ -7,19 +7,17 @@
 - `origin/main` 已包含 E24/E24C hardening；rolo 上游 R1 PR #47、R2 PR #48 已合入，最新 producer main 为 `15e6b7d1`。
 - rolo 远端状态已通过 GitHub API 核对；本地 rolo checkout 不作为本轮修改目标。
 - rolo `origin/main` 已提供并宣布 Job、R1 Target Readiness（`workbench.target-readiness/v1`）和 R2 Approval Gate（`workbench.approval-gate-read-model/v1`）feature，分别暴露分页列表与详情 GET 接口；旧 E23/E24 远端分支引用已自动清理。
-- `npm run verify:baseline` 已通过：232 个应用测试、TypeScript、生产构建、Sites 打包测试全部通过。
+- `npm run verify:baseline` 已通过：234 个应用测试、TypeScript、生产构建、Sites 打包测试全部通过。
 - 当前版本为 `0.37.0`，已冻结 Episode Observation Bundle（E22）只读基线。
 
 ## 本轮推进（2026-08-31）
 
-- 补齐 `rolo.plugin.json` 的 `job.history.read` 能力声明和三个 `/v1/jobs*` 只读 endpoint。
+- 补齐 `rolo.plugin.json` 的 Job、R1、R2 只读能力声明和对应 endpoint 白名单。
 - Job Inbox 增加事件分页、独立加载状态和跨页 event/job ID 去重；feature 缺失时仍完全隐藏且不发请求。
-- 已同步 rolo 本地未检出的 `main` 到 `origin/main` `780d7a5`，未切换当前 checkout，也未触碰临时目录。
-- `codex/e24-job-read-model-consumer` 已提交并推送，作为 rolo-vis 侧待合入分支；GitHub CLI OAuth 仍不稳定，PR 尚未自动创建，但可直接使用 compare 链接。
-- rolo-vis 消费者分支 compare：[codex/e24-job-read-model-consumer](https://github.com/zarcherlot/rolo-vis/pull/new/codex/e24-job-read-model-consumer)。
-- 已补充 `scripts/check-job-read-model.mjs` 与 `npm run check:job-live`：只读检查 feature 协商、Job/事件分页、身份绑定、recovery 一致性及敏感字段；在 rolo `main@780d7a5` 配合脱敏 fixture 已通过 paired integration gate，生产/真机 live gate 仍待执行。
+- rolo-vis R1/R2 consumer 已由 PR #23 合入 `main`，merge commit 为 `3d5343e3`；新增 Readiness、Approval Gates 两个 feature-gated 只读 surface。
+- 已补充 `scripts/check-job-read-model.mjs`、`scripts/check-r1-r2-live.mjs` 及对应 npm 命令：只读检查 feature 协商、分页、身份绑定、一致性及敏感字段；真实控制面 live gate 仍待执行。
 - 已完成 P3 分包优化：React、Flow、图标和 artifact 数据独立成 chunk，主 JS 约 381 kB；完整 `npm run verify:baseline` 通过（225 tests、typecheck、build、Sites 4 tests）。
-- paired rolo 服务已停止并清理临时 fixture；生产/真机控制面未提供，因此 E24 仍未从 candidate 提升为 baseline。
+- paired rolo 服务已停止并清理临时 fixture；生产/真机控制面未提供，因此 E24、R1、R2 均保持 candidate，不提前提升 baseline。
 - 新增 `rolo-artifact-analysis-summary/v1` 的 fail-closed parser、兼容性声明和 [ARTIFACT_ANALYSIS_CONTRACT.md](./ARTIFACT_ANALYSIS_CONTRACT.md)；现有真实设备投影先作为 `demo_fixture` 通过同一解析边界，未激活 API 请求。
 - 新增超长文本、unsafe reference、secret flag、非法 run identity 的负向测试；`npm test` 当前 232 项通过。
 
@@ -33,18 +31,18 @@
 
 ## 开发顺序
 
-### P0：完成 E24 Job 只读基线
+### P0：完成 Job/R1/R2 真实控制面验收
 
-前置：以 rolo `origin/main` `780d7a5` 为 paired producer baseline，将 rolo-vis 消费者分支合入并把 `/v1/jobs` 三个接口的响应与 E24 schema 逐字段对齐；`npm run check:job-live` 通过后再提升 baseline。
+前置已满足：rolo main `15e6b7d1` 已发布 Job、R1、R2 producer；rolo-vis consumer 已合入 `main`。
 
-- 用真实 rolo 数据跑 Job Inbox、Job detail、Event timeline、Checkpoint/recovery 的 live gate。
+- 用真实 rolo 数据跑 Job、Target Readiness、Approval Gate 三组 live gate。
 - 验证分页单调推进、重复/重叠页、Job/事件身份绑定、序列和时间戳异常均 fail closed。
 - 验证旧版 rolo 不出现 Jobs 导航，不回退到 demo 数据，不构造命令或目标路径。
-- 将 `JOB_READONLY_CONTRACT` 从 candidate 提升为 baseline，并补齐发布证据和配套版本号。
+- 仅在三组 live gate 均通过后，分别将 `JOB_READONLY_CONTRACT`、`TARGET_READINESS_CONTRACT`、`APPROVAL_GATE_CONTRACT` 从 candidate 提升为 baseline，并补齐发布证据和版本号。
 
 完成标准：真实控制面可读、feature 缺失时完全隐藏、所有 E24A/E24B 测试和 Sites 验证通过。
 
-当前状态：消费者 PR #19、hardening PR #20、门禁和 paired rolo fixture gate 已完成；真实控制面 live gate 仍待执行，当前仍保持 candidate。
+当前状态：消费者与 hardening PR 已完成；真实控制面 live gate 仍待执行，当前仍保持 candidate。
 
 ### P1：激活 R1 Target Readiness
 
@@ -57,6 +55,8 @@
 
 完成标准：feature-negotiated UI、跨机器人切换和失效/部分读模型测试通过，未发布 feature 时零新增请求。
 
+当前状态：consumer 已在 PR #23 合入；功能已可在 feature 宣布时激活，仍需真实控制面 live gate 才能晋级 baseline。
+
 ### P1：激活 R2 Approval/Gate/Recovery（只读）
 
 前置已满足：rolo main `15e6b7d1`（PR #48）发布 `rolo-approval-gate-summary/v1`，并由 `/health` 宣布对应 feature gate。
@@ -67,6 +67,8 @@
 - 增加 secret-bearing payload、raw path、command args、未脱敏 transport output 的拒绝测试。
 
 完成标准：只读审阅工作台可独立降级，任何恢复/审批动作都没有浏览器入口或 endpoint。
+
+当前状态：consumer 已在 PR #23 合入；功能已可在 feature 宣布时激活，仍需真实控制面 live gate 才能晋级 baseline。
 
 ### P1：E26 设备侧加固外部验证
 
