@@ -113,3 +113,13 @@ test("artifact analysis stays a parsed demo-only contract until rolo publishes a
   assert.match(contract, /does not read local[\s\S]*artifact bytes, raw paths/);
   assert.match(contract, /contains_secret_payloads: false/);
 });
+
+test("R1/R2 producer brief keeps upstream contracts independent and read-only", async () => {
+  const brief = await read("../docs/ROLO_R1_R2_PRODUCER_BRIEF.md");
+  assert.match(brief, /workbench\.target-readiness\/v1/);
+  assert.match(brief, /workbench\.approval-gate-read-model\/v1/);
+  assert.match(brief, /plan_status.*APPROVAL_REQUIRED/);
+  assert.match(brief, /recovery_state.*AVAILABLE/);
+  assert.match(brief, /bootstrap-execute/);
+  assert.match(brief, /合入前保持 feature gate 默认关闭/);
+});
