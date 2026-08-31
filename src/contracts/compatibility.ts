@@ -73,10 +73,14 @@ export const ARTIFACT_ANALYSIS_SCHEMA_COMPATIBILITY = {
 
 export const ARTIFACT_ANALYSIS_CONTRACT = {
   id: "rolo-vis-artifact-analysis/2026-08",
-  status: "candidate-demo-only",
+  status: "candidate",
   mode: "read-only",
   requiredFeature: "workbench.artifact-analysis-read-model/v1",
-  endpoint: "not-published",
+  endpoints: [
+    "/v1/targets/{target_id}/artifact-analysis",
+    "/v1/jobs/{job_id}/artifact-analysis",
+  ],
+  producerMinimum: "8a4bd6a2b5316ea21118ed83139e4f89bc9412f3",
   containsSecretPayloads: false,
   allowsBrowserMutation: false,
   readsArtifactBytes: false,

@@ -106,12 +106,13 @@ test("E26 device hardening keeps external evidence pending and browser read-only
   assert.match(plan, /does not add a hosted site/);
 });
 
-test("artifact analysis stays a parsed demo-only contract until rolo publishes a producer", async () => {
+test("artifact analysis stays feature-gated and read-only after rolo publishes the producer", async () => {
   const compatibility = await read("../src/contracts/compatibility.ts");
   const contract = await read("../docs/ARTIFACT_ANALYSIS_CONTRACT.md");
   assert.match(compatibility, /rolo-artifact-analysis-summary\/v1/);
-  assert.match(compatibility, /status: "candidate-demo-only"/);
-  assert.match(contract, /Endpoint: not published by rolo/);
+  assert.match(compatibility, /status: "candidate"/);
+  assert.match(compatibility, /producerMinimum: "8a4bd6a2b5316ea21118ed83139e4f89bc9412f3"/);
+  assert.match(contract, /GET \/v1\/targets\/\{target_id\}\/artifact-analysis/);
   assert.match(contract, /does not read local[\s\S]*artifact bytes, raw paths/);
   assert.match(contract, /contains_secret_payloads: false/);
 });
