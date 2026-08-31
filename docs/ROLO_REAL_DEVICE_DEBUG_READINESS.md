@@ -1,7 +1,7 @@
 # rolo 真机调试前剩余开发项
 
 更新时间：2026-08-31  
-适用版本：rolo `main@ec8f6356`、rolo-vis `codex/rv02-real-device-preflight@f825eac`
+适用版本：rolo `main@56b8f90`、rolo-vis `main@1fcb4c7`
 
 这份清单只列“第一次连接真实机器人前”仍需完成的工作。确定性 harness 已通过，
 不再把 harness 结果当作真机证据。
@@ -15,8 +15,11 @@
   bootstrap harness 和 producer/API 定向测试通过。
 - rolo-vis 已能校验 rolo `export-device-hardening` 生成的 v1 bundle，包括 producer
   对未执行项显式输出 `evidence: null` 的情况。
-- RV-01 bearer transport 已合入 rolo-vis `main`（PR #34）；RV-02/RV-03 已在 PR #36
-  提交，CI 通过，待合入 `main`。
+- RV-01 bearer transport 已合入 rolo-vis `main`（PR #34）；RV-02/RV-03 已通过 PR #36
+  合入 `main`。
+- rolo 最新 `main@56b8f90` 的全量 pytest 通过；使用该 revision 启动的 paired harness
+  上，带只读 token 的 RV-02、R1/R2 和 R4 live gates 全部通过。该结果仍属于
+  deterministic harness 验证，不等同于真实机器人证据。
 
 ## P0：真机前必须完成的工程项
 
@@ -115,8 +118,8 @@ digest；公开材料无凭据、路径、transport dump 或 artifact bytes。
 | RV-06 | P2 | baseline promotion 记录 | 在所有 live gate、证据 review 和安全门禁通过后，更新 candidate → baseline 的版本/证据记录 | RV-03～RV-05 |
 
 当前 rolo-vis 已完成：parser、feature gate、read-only UI、deterministic live gates、
-证据 bundle validator、RV-01 bearer transport，以及 RV-02/RV-03 的实现（PR #36）。
-PR #36 已通过 CI；浏览器端仍只使用 same-origin credentials。RV-04～RV-06 应在首轮
+证据 bundle validator、RV-01 bearer transport，以及 RV-02/RV-03/RV-04/RV-05 的实现。
+浏览器端仍只使用 same-origin credentials。RV-06 以及真实数据验收仍需在 staging/真机
 数据可用后执行。
 
 ### B. rolo 开发项
