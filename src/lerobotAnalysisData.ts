@@ -140,6 +140,7 @@ const REAL_DEVICE_ARTIFACT_ANALYSIS_RAW = {
 /** Parsed locally so the demo fixture exercises the same fail-closed boundary as a future rolo API response. */
 const REAL_DEVICE_ARTIFACT_ANALYSIS_PARSED = parseArtifactAnalysisSummary({
   ...REAL_DEVICE_ARTIFACT_ANALYSIS_RAW,
+  target_id: REAL_DEVICE_ARTIFACT_ANALYSIS_RAW.robotId,
   robot_id: REAL_DEVICE_ARTIFACT_ANALYSIS_RAW.robotId,
   run_id: REAL_DEVICE_ARTIFACT_ANALYSIS_RAW.runId,
   discovery_id: REAL_DEVICE_ARTIFACT_ANALYSIS_RAW.discoveryId,

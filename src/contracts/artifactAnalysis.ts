@@ -41,7 +41,9 @@ export interface ArtifactAnalysisFinding {
 export interface ArtifactAnalysisSummary {
   schema_version: "rolo-artifact-analysis-summary/v1";
   analysis_id: string;
+  target_id: string;
   robot_id: string;
+  job_id: string | null;
   run_id: string | null;
   discovery_id: string;
   source_kind: "rolo_api" | "demo_fixture";
@@ -143,7 +145,7 @@ function parseFinding(value: unknown, path: string): ArtifactAnalysisFinding {
 }
 
 /**
- * Parses the future rolo artifact-analysis read model. The browser only accepts
+ * Parses the rolo artifact-analysis read model. The browser only accepts
  * bounded, sanitized summaries and never receives artifact bytes or paths.
  */
 export function parseArtifactAnalysisSummary(value: unknown, path = "artifact_analysis"): ArtifactAnalysisSummary {
@@ -183,7 +185,9 @@ export function parseArtifactAnalysisSummary(value: unknown, path = "artifact_an
   return {
     schema_version: "rolo-artifact-analysis-summary/v1",
     analysis_id: id(value.analysis_id, `${path}/analysis_id`),
+    target_id: id(value.target_id, `${path}/target_id`),
     robot_id: id(value.robot_id, `${path}/robot_id`),
+    job_id: value.job_id === null || value.job_id === undefined ? null : id(value.job_id, `${path}/job_id`),
     run_id: value.run_id === null ? null : String(value.run_id),
     discovery_id: id(value.discovery_id, `${path}/discovery_id`),
     source_kind: sourceKind,

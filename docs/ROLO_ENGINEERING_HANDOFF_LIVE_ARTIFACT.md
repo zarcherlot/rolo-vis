@@ -4,17 +4,19 @@
 
 ## 背景与当前状态
 
-rolo 已在 `main@15e6b7d1` 合入：
+rolo 已在 `main@8a4bd6a2` 合入：
 
 - R1 Target Readiness：PR #47，feature `workbench.target-readiness/v1`；
 - R2 Approval Gate：PR #48，feature `workbench.approval-gate-read-model/v1`。
+- Artifact Analysis Producer：PR #49，feature `workbench.artifact-analysis-read-model/v1`，target/job 两条只读 endpoint。
 
 rolo-vis consumer 已在 PR #23 合入，路线图在 PR #24 合入，P3 UX 收口在 PR #25 合入。
-本地契约、parser、feature gate、只读 UI 和负向测试均已完成；当前唯一阻塞是没有可访问的
-rolo runtime，无法执行真实控制面 live gate。Artifact Analysis 仍没有 rolo producer、feature
-或 endpoint，前端仅保留 `demo_fixture`。
+本地契约、parser、feature gate、只读 UI 和负向测试均已完成。rolo 已提供 deterministic
+artifact harness；rolo-vis target live gate 已通过，job 路径当前因 harness 中 seeded job 与
+summary target identity 不一致而返回 409，不能将其误记为通过。
 
-本文将这两项外部依赖转换为 rolo 工程开发项，供 rolo 团队直接领取。
+本文记录 rolo 工程项及其交付状态，供 rolo 团队跟进剩余的 R1/R2 runtime evidence 与 harness
+job identity 修复。
 
 ## Workstream A：R1/R2 Runtime Harness 与 Live Gate
 
@@ -85,11 +87,11 @@ rolo 侧应提供：
 验收标准：两条 live gate 均通过，且重复执行结果稳定；通过前不要把 R1/R2 producer 标记为
 release-ready。
 
-## Workstream B：Artifact Analysis Producer Contract
+## Workstream B：Artifact Analysis Producer Contract（已完成）
 
 ### B1. 发布公共 contract 与 feature
 
-请在 rolo 中发布并写入 API 文档/schema registry：
+rolo PR #49 已完成以下交付：
 
 - schema：`rolo-artifact-analysis-summary/v1`；
 - feature：`workbench.artifact-analysis-read-model/v1`；
@@ -143,8 +145,8 @@ minimum commit SHA。
 
 1. 使用 Workstream A 的 runtime 重跑 Job/R1/R2 live gate。
 2. 记录 live gate 证据，将三个 consumer contract 从 `candidate` 提升为 `baseline`。
-3. 根据 Workstream B 的最终 endpoint/字段，对齐 `src/roloClient.ts`、parser、UI 和 plugin manifest。
-4. 新增 artifact live gate，移除 `demo-only` 限制，但继续保留 fail-closed 和只读边界。
+3. 已根据 Workstream B 的最终 endpoint/字段对齐 `src/roloClient.ts`、parser、UI 和 plugin manifest。
+4. 已新增 artifact live gate，移除 `demo-only` 限制，但继续保留 fail-closed 和只读边界。
 
 ## 不在本移交范围内
 

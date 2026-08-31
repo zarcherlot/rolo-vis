@@ -1,16 +1,18 @@
 # Artifact Analysis Read Model
 
-Status: candidate-demo-only
+Status: candidate · producer released, live gate pending
 
-The UI currently renders a clearly labelled, sanitized fixture. It does not
-pretend that the fixture is a live rolo producer and it does not read local
-files, artifact bytes, raw paths, or signed URLs.
+The UI renders a feature-gated rolo producer projection when the negotiated
+feature is present. Demo mode remains an explicit fallback. The consumer does
+does not read local files, artifact bytes, raw paths, or signed URLs.
 
 ## Proposed producer contract
 
 - Schema: `rolo-artifact-analysis-summary/v1`
 - Feature gate: `workbench.artifact-analysis-read-model/v1`
-- Endpoint: not published by rolo
+- Endpoints: `GET /v1/targets/{target_id}/artifact-analysis` and
+  `GET /v1/jobs/{job_id}/artifact-analysis`
+- Producer minimum: rolo `8a4bd6a2b5316ea21118ed83139e4f89bc9412f3`
 - Mode: read-only
 
 The future producer must own the analysis identity, target/job/discovery
@@ -28,12 +30,17 @@ The parser rejects:
   fields;
 - payloads that do not explicitly declare `contains_secret_payloads: false`.
 
-`source_kind: demo_fixture` is the only currently usable source. The UI labels
-it as a demo fixture and keeps the analysis advisory: it does not establish
+`source_kind: rolo_api` is accepted only after feature negotiation; the demo
+fixture remains explicit and labelled. Both sources keep the analysis advisory:
+it does not establish
 Capability readiness, Job success, physical outcome, or release readiness.
 
 ## Activation gate
 
-Do not add an API request or activate a live navigation item until rolo
-publishes the feature and endpoint, plus positive and negative fixtures for
-fresh, stale, partial, identity-mismatch, oversized, and sensitive payloads.
+The consumer is activated only after feature negotiation. Run
+`npm run check:artifact-analysis-live` against the deterministic rolo harness
+(`python scripts/rolo-live-harness.py --port 8765`) before treating the
+producer path as live-verified. The gate covers positive summaries, target/job
+identity binding, source provenance, and secret-free payloads; malformed,
+identity-mismatched, oversized, and sensitive payloads remain fail-closed in
+the parser and producer.

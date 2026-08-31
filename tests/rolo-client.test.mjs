@@ -22,6 +22,43 @@ const HEALTH = {
   timestamp: "2026-08-20T00:00:00Z",
 };
 
+const ARTIFACT_ANALYSIS = {
+  schema_version: "rolo-artifact-analysis-summary/v1",
+  analysis_id: "analysis-ready-local",
+  target_id: "ready-local",
+  robot_id: "ready-local",
+  job_id: "job_001",
+  run_id: "run-ready-local",
+  discovery_id: "discovery-ready-local",
+  source_kind: "rolo_api",
+  source_label: "Live sanitized artifact analysis",
+  observed_at: "2026-08-31T00:00:00Z",
+  freshness: "fresh",
+  contains_secret_payloads: false,
+  kind: "Artifact analysis summary",
+  run_status: "COMPLETE",
+  title: "Bounded readiness analysis",
+  description: "Producer-authored summary with no artifact contents.",
+  gate_status: "PASSED",
+  gate_label: "Analysis complete",
+  gate_tone: "green",
+  release_status: "SHADOW_ONLY",
+  release_label: "No release effect",
+  release_tone: "amber",
+  run_duration: "42s",
+  event_count: 1,
+  eligible_operation_count: 1,
+  route_review_flags: "0 / 1",
+  context_bars: [],
+  evidence_note: "Read-only bounded summary.",
+  operations: [],
+  graph_nodes: [],
+  stages: [],
+  findings: [],
+  hashes: [],
+  limitations: ["Advisory only."],
+};
+
 const JOB_EVENT = {
   schema_version: "rolo-job-event/v1",
   event_id: "evt_001",
@@ -2116,6 +2153,8 @@ test("plugin manifest declares every trusted read-model endpoint", async () => {
       "/v1/targets/{target_id}/readiness",
       "/v1/approval-gates",
       "/v1/jobs/{job_id}/approval-gate",
+      "/v1/targets/{target_id}/artifact-analysis",
+      "/v1/jobs/{job_id}/artifact-analysis",
       "/v1/robots/{robot_id}/wiki",
       "/v1/robots/{robot_id}/discoveries",
       "/v1/robots/{robot_id}/episodes",
@@ -2152,6 +2191,29 @@ test("RoloClient reads the versioned Job page, recovery state, and event page", 
       "http://rolo.test/v1/jobs?limit=25&offset=0",
       "http://rolo.test/v1/jobs/job_001",
       "http://rolo.test/v1/jobs/job_001/events?limit=10&offset=0",
+    ]);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("RoloClient reads feature-gated artifact analysis for targets and jobs", async () => {
+  const originalFetch = globalThis.fetch;
+  const urls = [];
+  globalThis.fetch = async (url) => {
+    urls.push(String(url));
+    return { ok: true, json: async () => ARTIFACT_ANALYSIS };
+  };
+  try {
+    const client = new RoloClient("http://rolo.test");
+    assert.equal(ROLO_API_FEATURES.artifactAnalysisReadModel, "workbench.artifact-analysis-read-model/v1");
+    const target = await client.targetArtifactAnalysis("ready-local");
+    const job = await client.jobArtifactAnalysis("job_001");
+    assert.equal(target.target_id, "ready-local");
+    assert.equal(job.job_id, "job_001");
+    assert.deepEqual(urls, [
+      "http://rolo.test/v1/targets/ready-local/artifact-analysis",
+      "http://rolo.test/v1/jobs/job_001/artifact-analysis",
     ]);
   } finally {
     globalThis.fetch = originalFetch;

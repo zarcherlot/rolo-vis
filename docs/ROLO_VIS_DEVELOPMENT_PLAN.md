@@ -4,12 +4,12 @@
 
 ## 当前基线
 
-- `origin/main` 已包含 E24/E24C hardening；rolo 上游 R1 PR #47、R2 PR #48 已合入，最新 producer main 为 `15e6b7d1`。
+- `origin/main` 已包含 E24/E24C hardening；rolo 上游 R1 PR #47、R2 PR #48 已合入，Artifact Analysis producer PR #49 也已合入，最新 producer main 为 `8a4bd6a2`。
 - rolo 远端状态已通过 GitHub API 核对；本地 rolo checkout 不作为本轮修改目标。
 - rolo `origin/main` 已提供并宣布 Job、R1 Target Readiness（`workbench.target-readiness/v1`）和 R2 Approval Gate（`workbench.approval-gate-read-model/v1`）feature，分别暴露分页列表与详情 GET 接口；旧 E23/E24 远端分支引用已自动清理。
-- `npm run verify:baseline` 已通过：234 个应用测试、TypeScript、生产构建、Sites 打包测试全部通过。
+- `npm run verify:baseline` 已通过：235 个应用测试、TypeScript、生产构建、Sites 打包测试全部通过。
 - 当前版本为 `0.37.0`，已冻结 Episode Observation Bundle（E22）只读基线。
-- R1/R2 runtime live gate 与 Artifact Analysis producer 的 rolo 工程移交已整理在 [ROLO_ENGINEERING_HANDOFF_LIVE_ARTIFACT.md](./ROLO_ENGINEERING_HANDOFF_LIVE_ARTIFACT.md)。
+- R1/R2 runtime live gate 与 Artifact Analysis producer 的 rolo 工程移交记录在 [ROLO_ENGINEERING_HANDOFF_LIVE_ARTIFACT.md](./ROLO_ENGINEERING_HANDOFF_LIVE_ARTIFACT.md)；B 工作流已完成，剩余为消费者 live gate。
 
 ## 本轮推进（2026-08-31）
 
@@ -19,15 +19,15 @@
 - 已补充 `scripts/check-job-read-model.mjs`、`scripts/check-r1-r2-live.mjs` 及对应 npm 命令：只读检查 feature 协商、分页、身份绑定、一致性及敏感字段；真实控制面 live gate 仍待执行。
 - 已完成 P3 分包优化：React、Flow、图标和 artifact 数据独立成 chunk，主 JS 约 381 kB；完整 `npm run verify:baseline` 通过（225 tests、typecheck、build、Sites 4 tests）。
 - paired rolo 服务已停止并清理临时 fixture；生产/真机控制面未提供，因此 E24、R1、R2 均保持 candidate，不提前提升 baseline。
-- 新增 `rolo-artifact-analysis-summary/v1` 的 fail-closed parser、兼容性声明和 [ARTIFACT_ANALYSIS_CONTRACT.md](./ARTIFACT_ANALYSIS_CONTRACT.md)；现有真实设备投影先作为 `demo_fixture` 通过同一解析边界，未激活 API 请求。
-- 新增超长文本、unsafe reference、secret flag、非法 run identity 的负向测试；`npm test` 当前 232 项通过。
+- Artifact Analysis producer 已由 rolo PR #49 发布；rolo-vis 新增 target/job client、feature-gated live UI、插件 endpoint 白名单与 `check:artifact-analysis-live`。
+- 新增超长文本、unsafe reference、secret flag、非法 run identity 的负向测试；`npm test` 当前 235 项通过。
 
 ## 已交付能力
 
 1. Stack Map 为主入口，Overview、Fleet、Capabilities、Lifecycle、Wiki、Evidence 使用统一的证据/信任分层。
 2. Episode Studio 已覆盖修订、对比、诊断、Cohort、Evidence occurrence/context、导航恢复和 review session；媒体、回放、导出、重采集和写操作仍未开放。
 3. Jobs 只读界面和 `rolo-job-*/v1` 客户端已在 `main`，但仍由 `workbench.job-read-model/v1` feature gate 控制。
-4. Run Analysis 已展示一份明确标注 `demo_fixture` 的脱敏真实设备 artifact 投影，并经过 versioned parser；尚不是通用 artifact 导入管线。
+4. Run Analysis 在 feature 协商后读取 `rolo_api` bounded summary；demo fixture 仍需显式 demo 模式，二者均不读取 artifact bytes。
 5. Target Readiness、Approval/Gate/Recovery 已接入严格解析器、分页 client、feature-gated 只读 UI 与 live gate 脚本；待真实控制面执行 live gate 后再提升 baseline。
 
 ## 开发顺序
@@ -84,12 +84,12 @@
 
 ### P2：产品化真实设备 artifact 分析
 
-- 已完成第一步：`src/lerobotAnalysisData.ts` 的 demo 投影先经过 versioned、sanitized、可校验 parser；真实 producer 接入仍待 rolo 发布 endpoint。
+- rolo PR #49 已发布 producer、schema、scope、target/job endpoints 与 deterministic harness；rolo-vis 已完成消费者接入。
 - 复用 E24/E25 的 Job、Gate、Target、Evidence opaque ID，不允许前端读取任意文件或 artifact bytes。
 - 增加 source provenance、时间新鲜度、partial/stale 状态和 schema compatibility；不把分析完成提升为 Operation、physical outcome 或 release 验证。
 - 为真实 bundle、部分 bundle、哈希/身份不一致和过期 bundle 增加 fixtures、解析器测试和 live gate。
 
-完成标准：真实 API 优先、API 不可用时明确 demo；没有 silent fallback、任意路径读取或权限边界放宽。当前状态：parser 与负向测试完成，producer endpoint/live gate 待 rolo。
+完成标准：真实 API 优先、API 不可用时明确 demo；没有 silent fallback、任意路径读取或权限边界放宽。当前状态：consumer/parser/plugin/UI 已完成；target live gate 已通过 harness，job live gate 暴露 harness fixture identity mismatch，待 rolo 修复后复验。
 
 ### P3：体验与工程质量收口
 

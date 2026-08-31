@@ -9,6 +9,7 @@ function validPayload() {
   return {
     schema_version: "rolo-artifact-analysis-summary/v1",
     analysis_id: "analysis-1",
+    target_id: "robot-1",
     robot_id: "robot-1",
     run_id: "run-1",
     discovery_id: "discovery-1",

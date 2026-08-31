@@ -65,6 +65,7 @@ import type {
   ApprovalGateCollection,
   ApprovalGateSummary,
 } from "./types/rolo";
+import { parseArtifactAnalysisSummary, type ArtifactAnalysisSummary } from "./contracts/artifactAnalysis.ts";
 import { parseCapabilityCollection, parseCapabilityDetail } from "./contracts/capability.ts";
 import { parseDiscoverySnapshotCollection } from "./contracts/discovery.ts";
 import { parseEpisodeCohort, parseEpisodeCollection, parseEpisodeDetail, parseEpisodeRevisionCollection, parseEpisodeTimelinePage } from "./contracts/episode.ts";
@@ -102,6 +103,7 @@ export const ROLO_API_FEATURES = {
   episodeRevisionHistory: "workbench.episode-revision-history/v1",
   episodeCohortReadModel: "workbench.episode-cohort-read-model/v1",
   episodeObservationBundle: "workbench.episode-observation-bundle/v1",
+  artifactAnalysisReadModel: "workbench.artifact-analysis-read-model/v1",
 } as const;
 
 export function supportsApiFeature(health: HealthResponse, feature: string): boolean {
@@ -1133,6 +1135,18 @@ export class RoloClient {
   async jobApprovalGate(jobId: string, options?: RequestInit): Promise<ApprovalGateSummary> {
     const path = `/v1/jobs/${encodeURIComponent(jobId)}/approval-gate`;
     return parseApprovalGateSummary(await this.request<unknown>(path, options), path);
+  }
+
+  async targetArtifactAnalysis(targetId: string, options?: RequestInit): Promise<ArtifactAnalysisSummary> {
+    const path = `/v1/targets/${encodeURIComponent(targetId)}/artifact-analysis`;
+    const payload = await this.request<unknown>(path, options);
+    return parseArtifactAnalysisSummary(payload, path);
+  }
+
+  async jobArtifactAnalysis(jobId: string, options?: RequestInit): Promise<ArtifactAnalysisSummary> {
+    const path = `/v1/jobs/${encodeURIComponent(jobId)}/artifact-analysis`;
+    const payload = await this.request<unknown>(path, options);
+    return parseArtifactAnalysisSummary(payload, path);
   }
 
   async robots(options?: RequestInit) {

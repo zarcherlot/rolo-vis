@@ -28,6 +28,7 @@
     "check:episode-observation-live": "node scripts/check-episode-observation-bundles.mjs",
     "check:job-live": "node scripts/check-job-read-model.mjs",
     "check:r1-r2-live": "node scripts/check-r1-r2-live.mjs",
+    "check:artifact-analysis-live": "node scripts/check-artifact-analysis-live.mjs",
     "prepare:episode-investigation-live": "node scripts/prepare-episode-investigation-live-data.mjs",
     "prepare:episode-observation-live": "node scripts/prepare-episode-observation-live-data.mjs",
     "test:sites": "node --test tests/sites-worker.test.mjs",
