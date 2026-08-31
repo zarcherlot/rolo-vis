@@ -11,7 +11,7 @@ const report = {
   schema_version: "rolo-vis-real-device-preflight/v1",
   status: "BLOCKED",
   source: sanitizeSource(baseUrl),
-  auth: { mode: client.authMode, scopes: ["jobs:read", "target-readiness:read", "approval-gate:read", "artifact-analysis:read"] },
+  auth: { mode: client.authMode, scopes: ["jobs:read", "targets:read", "approval-gates:read", "artifact-analysis:read"] },
   steps: [],
   reads_only: true,
   write_operations_attempted: false,
@@ -60,7 +60,7 @@ async function run() {
   const readiness = await client.targetReadiness(undefined, { limit: 100, offset: 0 });
   const target = requestedTargetId ? readiness.items.find((item) => item.target_id === requestedTargetId) : readiness.items[0];
   assert.ok(target, requestedTargetId ? `target ${requestedTargetId} was not returned by readiness` : "readiness returned no target");
-  addStep("target-readiness", ROLO_API_FEATURES.targetReadiness, readiness, [target.target_id], [...readiness.limitations, ...target.limitations]);
+  addStep("target-readiness", ROLO_API_FEATURES.targetReadiness, readiness, [target.target_id], [...(readiness.limitations || []), ...target.limitations]);
   currentStep = "target-readiness-detail";
   const readinessDetail = await client.targetReadinessDetail(target.target_id);
   assert.equal(readinessDetail.target_id, target.target_id, "target readiness detail identity drifted");
@@ -82,7 +82,7 @@ async function run() {
   const gate = gates.items.find((item) => item.job_id === selectedJob.job_id && item.target_id === target.target_id) || gates.items.find((item) => item.job_id === selectedJob.job_id) || gates.items[0];
   assert.ok(gate, "approval-gate list returned no selectable Gate");
   assert.equal(gate.job_id, selectedJob.job_id, "Gate does not bind to selected Job");
-  addStep("approval-gate", ROLO_API_FEATURES.approvalGateReadModel, gates, [gate.job_id, gate.target_id], [...gates.limitations, ...gate.limitations]);
+  addStep("approval-gate", ROLO_API_FEATURES.approvalGateReadModel, gates, [gate.job_id, gate.target_id], [...(gates.limitations || []), ...gate.limitations]);
   currentStep = "approval-gate-detail";
   const gateDetail = await client.jobApprovalGate(selectedJob.job_id);
   assert.equal(gateDetail.job_id, selectedJob.job_id, "Gate detail identity drifted");
