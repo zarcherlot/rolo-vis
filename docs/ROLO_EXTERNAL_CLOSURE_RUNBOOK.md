@@ -33,7 +33,8 @@ SSH URI、known-hosts、workspace/raw path、命令参数、transport dump 或 a
 ```
 
 每个 evidence item 必须包含 `scenario_id`、`status`（`VERIFIED`、`BLOCKED` 或
-`PENDING_EXTERNAL`）。只有 `VERIFIED` 必须附带 `os`、`architecture`、签名包
+`PENDING_EXTERNAL`）。rolo producer 对未执行项允许显式输出 `"evidence": null`；
+rolo-vis 会将其视为缺省证据。只有 `VERIFIED` 必须附带 `os`、`architecture`、签名包
 `package_digest`、opaque `job_id`、`gate_result`、ISO 时间戳 `observed_at` 和脱敏
 `summary`。一个 target 的 scenario 不得重复。
 

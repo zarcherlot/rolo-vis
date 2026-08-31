@@ -31,10 +31,18 @@ test("evidence bundle accepts bounded sanitized verified evidence", () => {
   assert.equal(parsed.evidence[0].status, "VERIFIED");
 });
 
+test("evidence bundle accepts rolo producer's explicit null for pending evidence", () => {
+  const pending = { ...valid, evidence: [{ scenario_id: "linux-arm64", status: "PENDING_EXTERNAL", evidence: null }] };
+  const parsed = parseDeviceHardeningEvidenceBundle(pending);
+  assert.equal(parsed.evidence[0].evidence, undefined);
+});
+
 test("evidence bundle rejects incomplete, duplicate, or unsafe evidence", () => {
   assert.throws(() => parseDeviceHardeningEvidenceBundle({ ...valid, evidence: [] }), RoloContractError);
   assert.throws(() => parseDeviceHardeningEvidenceBundle({ ...valid, evidence: [valid.evidence[0], valid.evidence[0]] }), RoloContractError);
   assert.throws(() => parseDeviceHardeningEvidenceBundle({ ...valid, evidence: [{ ...valid.evidence[0], scenario_id: "unknown-scenario" }] }), RoloContractError);
   assert.throws(() => parseDeviceHardeningEvidenceBundle({ ...valid, evidence: [{ ...valid.evidence[0], evidence: { ...valid.evidence[0].evidence, summary: "C:\\workspace\\secret" } }] }), RoloContractError);
+  assert.throws(() => parseDeviceHardeningEvidenceBundle({ ...valid, evidence: [{ ...valid.evidence[0], evidence: { ...valid.evidence[0].evidence, summary: "https://internal.example/evidence" } }] }), RoloContractError);
+  assert.throws(() => parseDeviceHardeningEvidenceBundle({ ...valid, evidence: [{ ...valid.evidence[0], evidence: { ...valid.evidence[0].evidence, summary: "token was printed" } }] }), RoloContractError);
   assert.throws(() => parseDeviceHardeningEvidenceBundle({ ...valid, target_id: "ssh://host" }), RoloContractError);
 });

@@ -28,6 +28,11 @@ const EXTERNAL_SCENARIOS = new Set([
   "ssh-jump-host", "host-key-rotation", "network-interruption", "restart-resume",
   "upgrade-rollback", "enrollment-rotation",
 ]);
+const PRODUCER_RESTRICTED_REFERENCE = /artifact:\/\/|(?:ssh|https?):\/\/|known[_ -]?hosts?|private key|credential|password|secret|token|command|shell|argv|raw[_ -]?path|local[_ -]?path|remote[_ -]?path/i;
+
+function containsProducerRestrictedReference(value: unknown): boolean {
+  return PRODUCER_RESTRICTED_REFERENCE.test(JSON.stringify(value));
+}
 
 function boundedText(value: unknown, path: string, max = 160): string {
   requireContract(typeof value === "string" && value.length > 0 && value.length <= max, "device hardening evidence bundle text is invalid", path);
@@ -36,7 +41,7 @@ function boundedText(value: unknown, path: string, max = 160): string {
 
 function parseEvidence(value: unknown, path: string): DeviceHardeningEvidence {
   requireContract(isRecord(value), "device hardening evidence must be an object", path);
-  requireContract(!containsUnsafeReference(value), "device hardening evidence contains an unsafe reference", path);
+  requireContract(!containsUnsafeReference(value) && !containsProducerRestrictedReference(value), "device hardening evidence contains an unsafe reference", path);
   const packageDigest = boundedText(value.package_digest, `${path}/package_digest`);
   requireContract(/^[0-9a-f]{8,64}(?:…[0-9a-f]{8,64})?$/.test(packageDigest), "device hardening package digest is invalid", `${path}/package_digest`);
   requireContract(isTimestamp(value.observed_at), "device hardening evidence timestamp is invalid", `${path}/observed_at`);
@@ -54,7 +59,7 @@ function parseEvidence(value: unknown, path: string): DeviceHardeningEvidence {
 export function parseDeviceHardeningEvidenceBundle(value: unknown, path = "device_hardening_evidence"): DeviceHardeningEvidenceBundle {
   requireContract(isRecord(value), "device hardening evidence bundle must be an object", path);
   requireContract(value.schema_version === "rolo-vis-device-hardening-evidence/v1", "unsupported device hardening evidence schema", path);
-  requireContract(!containsUnsafeReference(value), "device hardening evidence bundle contains an unsafe reference", path);
+  requireContract(!containsUnsafeReference(value) && !containsProducerRestrictedReference(value), "device hardening evidence bundle contains an unsafe reference", path);
   requireContract(REVISION.test(String(value.rolo_revision)), "rolo revision is invalid", `${path}/rolo_revision`);
   requireContract(REVISION.test(String(value.producer_revision)), "producer revision is invalid", `${path}/producer_revision`);
   requireContract(OPAQUE_ID.test(String(value.target_id)), "target identity is invalid", `${path}/target_id`);
@@ -67,11 +72,12 @@ export function parseDeviceHardeningEvidenceBundle(value: unknown, path = "devic
     requireContract(ID.test(scenarioId) && EXTERNAL_SCENARIOS.has(scenarioId), "unknown external hardening scenario", `${itemPath}/scenario_id`);
     const status = String(candidate.status) as DeviceHardeningEvidenceStatus;
     requireContract(["PENDING_EXTERNAL", "BLOCKED", "VERIFIED"].includes(status), "device hardening evidence status is invalid", `${itemPath}/status`);
-    if (status === "VERIFIED") requireContract(candidate.evidence !== undefined, "verified evidence item requires evidence", itemPath);
+    const rawEvidence = candidate.evidence;
+    if (status === "VERIFIED") requireContract(rawEvidence !== undefined && rawEvidence !== null, "verified evidence item requires evidence", itemPath);
     return {
       scenario_id: scenarioId,
       status,
-      ...(candidate.evidence === undefined ? {} : { evidence: parseEvidence(candidate.evidence, `${itemPath}/evidence`) }),
+      ...(rawEvidence === undefined || rawEvidence === null ? {} : { evidence: parseEvidence(rawEvidence, `${itemPath}/evidence`) }),
     };
   });
   requireContract(new Set(evidence.map((item) => item.scenario_id)).size === evidence.length, "device hardening evidence scenarios must be unique", `${path}/evidence`);
