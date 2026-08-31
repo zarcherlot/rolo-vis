@@ -1,7 +1,7 @@
 # rolo 真机调试前剩余开发项
 
 更新时间：2026-08-31  
-适用版本：rolo `main@ec8f6356`、rolo-vis `main@9cd6e7a`（RV-01 实现在审查分支）
+适用版本：rolo `main@ec8f6356`、rolo-vis `codex/rv02-real-device-preflight@f825eac`
 
 这份清单只列“第一次连接真实机器人前”仍需完成的工作。确定性 harness 已通过，
 不再把 harness 结果当作真机证据。
@@ -15,6 +15,8 @@
   bootstrap harness 和 producer/API 定向测试通过。
 - rolo-vis 已能校验 rolo `export-device-hardening` 生成的 v1 bundle，包括 producer
   对未执行项显式输出 `evidence: null` 的情况。
+- RV-01 bearer transport 已合入 rolo-vis `main`（PR #34）；RV-02/RV-03 已在 PR #36
+  提交，CI 通过，待合入 `main`。
 
 ## P0：真机前必须完成的工程项
 
@@ -106,17 +108,16 @@ digest；公开材料无凭据、路径、transport dump 或 artifact bytes。
 | ID | 优先级 | 开发项 | 交付物 | 依赖 |
 |---|---|---|---|---|
 | RV-01 | P0 | 认证传输适配 | `RoloClient` 与 Job/R1/R2/R4 gate 的统一 auth transport；401/403、scope 缺失、过期测试；token 不落 URL/storage/log | rolo 确认 bearer 或同源 session 方案 |
-| RV-02 | P0 | 真机只读 preflight | 一条 bounded preflight 命令，固定顺序检查 health、feature、readiness、Job、Gate、Artifact Analysis，并输出脱敏报告 | RV-01、rolo staging endpoint |
-| RV-03 | P0 | 设备证据导入与矩阵映射 | 将 rolo bundle/ledger 映射到 `device-hardening-matrix`，保留 `PENDING_EXTERNAL`/`BLOCKED`，禁止自动 READY | rolo `export-device-hardening` 产物 |
+| RV-02 | P0 | 真机只读 preflight | `check:real-device-preflight` 固定顺序检查 health、feature、readiness、Job、Gate、Artifact Analysis，并输出脱敏报告 | RV-01、rolo staging endpoint |
+| RV-03 | P0 | 设备证据导入与矩阵映射 | `import:device-hardening-evidence` 将 rolo bundle 映射到 `device-hardening-matrix`，保留 `PENDING_EXTERNAL`/`BLOCKED`，禁止自动 READY | rolo `export-device-hardening` 产物 |
 | RV-04 | P1 | 真实数据 UI 回归 | fresh/stale/unknown/404/409、跨 target/job、重连、键盘焦点、窄屏和 reduced-motion 验收记录 | RV-02、真实 staging 数据 |
 | RV-05 | P1 | 部署包与 revision 复核 | 校验 rolo-vis commit、插件包 digest、构建产物和目标安装版本一致 | rolo 部署记录 |
 | RV-06 | P2 | baseline promotion 记录 | 在所有 live gate、证据 review 和安全门禁通过后，更新 candidate → baseline 的版本/证据记录 | RV-03～RV-05 |
 
 当前 rolo-vis 已完成：parser、feature gate、read-only UI、deterministic live gates、
-证据 bundle validator 和基础构建验证。RV-01 的 bearer transport 已在审查分支实现，
-并在启用 rolo token/scopes 的 harness 上验证通过；浏览器端仍只使用 same-origin
-credentials。RV-02～RV-03 是首次真机前仍可能需要代码变更的项目；RV-04～RV-06 应在
-首轮数据可用后执行。
+证据 bundle validator、RV-01 bearer transport，以及 RV-02/RV-03 的实现（PR #36）。
+PR #36 已通过 CI；浏览器端仍只使用 same-origin credentials。RV-04～RV-06 应在首轮
+数据可用后执行。
 
 ### B. rolo 开发项
 
