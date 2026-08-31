@@ -1,69 +1,114 @@
 # rolo-vis
 
-`rolo-vis` is the read-only Web workbench plugin for [rolo](../robot_loop). It turns robot discovery, lifecycle, capability, and evidence data into an explorable engineering interface.
+[中文说明](README.zh-CN.md)
 
-## MVP
+`rolo-vis` is the read-only web workbench for [rolo](https://github.com/zarcherlot/rolo).
+It turns robot discovery, topology, capabilities, lifecycle state, Episodes, and
+evidence into one traceable engineering view.
 
-- Fleet readiness and Blocker Inbox aggregated from validated robot overview and pipeline models.
-- Topology-first Stack Map across Hardware, Linux, ROS/Middleware, and Application.
-- Hash-verified gated topology history with snapshot comparison and bounded change details.
-- Bounded topology path explanations with relationship direction and evidence drilldown.
-- Robot Overview focused on trust, blockers, and next action.
-- Capability Explorer for canonical operations, risk, lifecycle, and bindings.
-- Capability coverage map by product layer with distinct verified, available, unavailable, and unknown trust states.
-- Canonical operation families with explicit paired, replacement, and compensation navigation.
-- Read-only contract schema inspector for required fields, constraints, units, frames, and execution semantics.
-- Binding trust inspector for endpoint authority, provenance, evidence coverage, digests, and limitations.
-- Capability readiness lens that keeps contract, applicability, registration, binding, availability, and verification signals independent.
-- Agent-inferred capability routes shown in a separate discovered-unverified lane that never contributes to readiness.
-- Feature-negotiated Adapt context lens for on-demand target-operation slices, execution classes, deferred reasons, governance mappings, and bounded Capability Explorer focus.
-- Bounded operation-governance matrix with cross-layer summaries, combined filters, pagination, and Registry detail navigation.
-- Governance filters for risk, access, lifecycle, and data classification with row-level policy context.
-- Lifecycle gate view for Adapt → Diagnose → Verify.
-- Feature-gated read-only Job Inbox with bounded recovery and event timeline.
-- Lifecycle assessment matrix for current stage status, blockers, prerequisites, artifacts, owners, and supported runs.
-- Immutable lifecycle run details with independent gate checks and verified handoffs.
-- Robot Wiki with manifest-verified discovery summaries, advisory insights, and evidence-linked changes.
-- Manifest-verified discovery history with bounded probe coverage and capability-candidate summaries.
-- Sanitized target-evidence scope and freshness with read-only recollection guidance.
-- Bidirectional Wiki and Stack Map layer context without inferred entity relationships.
-- Evidence ledger with provenance and integrity status.
-- Episode Studio with revision-pinned timelines, diagnostic focus, neutral pair comparison,
-  feature-negotiated immutable revision history, and descriptive-only exact-match Cohort
-  Review over bounded 7/30/90-day windows.
-- Live rolo API probing with an explicit demo fallback when no robot runtime is reachable.
+> Understand the stack. Inspect the contract. Follow the evidence.
 
-## Run
+![Stack Map preview](docs/design/selected-stack-map.png)
+
+## Status
+
+The current release is `0.37.0`. The MVP is intentionally read-only: it can explain
+what rolo has published, but it cannot operate a robot, approve a Job, or mutate a
+target. Live data is preferred; an explicitly labelled demo mode is available when a
+rolo control plane is not reachable.
+
+## What it includes
+
+- **Stack Map:** a four-layer Hardware → Linux → ROS/Middleware → Application view with
+  verified topology snapshots, bounded diffs, paths, and evidence drill-down.
+- **Fleet and robot views:** readiness, blockers, robot overview, lifecycle gates, Wiki,
+  discovery history, and evidence provenance.
+- **Capabilities:** canonical operation contracts, bindings, coverage, risk/lifecycle
+  filters, readiness signals, and a separate discovered-unverified lane for inference.
+- **Episode Studio:** revision-pinned timelines, diagnostic focus, pair comparison,
+  exact-match cohort review, evidence context, review handoffs, and observation bundles.
+- **Feature-negotiated read models:** Job history, Target Readiness, Approval/Gate/
+  Recovery, and Artifact Analysis appear only when the connected rolo advertises their
+  versioned feature. Unsupported or unsafe payloads fail closed.
+
+The UI never reads local files or artifact bytes, exposes raw paths or credentials, or
+calls write endpoints such as bootstrap, resume, retry, cancel, rollback, or release.
+See the [MVP baseline](docs/MVP_READONLY_BASELINE.md) for the full boundary.
+
+## Quick start
+
+Requirements: Node.js 24 (the version used by CI) and npm.
 
 ```powershell
 npm install
 npm run dev
 ```
 
-By default, the UI requests the rolo control plane through `/rolo-api`. During Vite development this path is proxied to `http://127.0.0.1:8080`. Override it with:
+Open the URL printed by Vite. During development, `/rolo-api` is proxied to
+`http://127.0.0.1:8080`. To use another control-plane URL:
 
 ```powershell
-$env:VITE_ROLO_API_BASE='http://127.0.0.1:8080'
+$env:VITE_ROLO_API_BASE = 'http://127.0.0.1:8080'
 npm run dev
 ```
 
-To keep the browser on the same origin while targeting a different local rolo port, set `ROLO_API_PROXY_TARGET` before starting Vite.
+To keep the browser on the same origin while changing the local proxy target, set
+`ROLO_API_PROXY_TARGET` before starting Vite. If no compatible rolo API is available,
+the app clearly labels its demo data; it never silently substitutes fixtures for a
+failed live request.
 
-The plugin is read-only. It does not provide teleoperation, a free-form terminal, arbitrary file browsing, or operation invocation.
-
-Robot Wiki keeps its trust lanes explicit: machine insights and discovery diffs come from the verified discovery manifest, while human-maintained Wiki text is shown separately as validated, unverified, or unavailable. Human prose is never promoted to a machine-observed fact.
-
-## Build and verify
+## Verify a change
 
 ```powershell
-npm run build
-npm run test:sites
+npm run typecheck       # TypeScript checks
+npm test                # application and contract tests
+npm run build           # production bundle and Sites handoff files
+npm run test:sites      # worker/hosting packaging checks
 ```
 
-For the complete MVP release-candidate gate, run:
+The release-candidate gate runs all of the above plus hardening checks:
 
 ```powershell
 npm run verify:baseline
 ```
 
-The selected visual target is stored at `docs/design/selected-stack-map.png`, and the product scope is in `docs/WEB_VISUALIZATION_PRODUCT_PROPOSAL.md`.
+## Architecture at a glance
+
+The browser talks to rolo through a small client layer. Versioned parsers in
+`src/contracts/` validate every response; feature negotiation in `/health` controls
+which surfaces may request data; views render only bounded, producer-owned summaries.
+The `worker/` entrypoint and `scripts/prepare-sites-build.mjs` package the same build
+for Sites hosting.
+
+```text
+rolo control plane ── /rolo-api ──> roloClient ──> contracts + feature gates ──> views
+                                      │
+                                      └── explicit demo fixtures when live data is unavailable
+```
+
+## Documentation
+
+The [documentation guide](docs/README.md) is the canonical map. It separates durable
+contracts and promoted baselines from operational handoffs and archived planning
+snapshots.
+
+- [Product proposal](docs/WEB_VISUALIZATION_PRODUCT_PROPOSAL.md) — product intent and
+  information architecture.
+- [MVP read-only baseline](docs/MVP_READONLY_BASELINE.md) — trust and capability
+  boundary.
+- [Episode Studio contract](docs/EPISODE_STUDIO_CONSUMER_CONTRACT.md) — Episode read
+  models and interaction rules.
+- [External closure runbook](docs/ROLO_EXTERNAL_CLOSURE_RUNBOOK.md) — staging/device
+  evidence required before promoting a candidate baseline.
+- [Selected visual direction](docs/design/selected-stack-map.png) — topology-first
+  visual source of truth.
+
+## Contributing
+
+Keep changes bounded and evidence-led. When a public read model changes, update its
+contract, parser, feature gate, negative tests, and baseline record together. Preserve
+the read-only boundary and run `npm run verify:baseline` before opening a pull request.
+
+The repository is designed to be handed to [Sites](https://openai.com/index/introducing-codex/)
+without changing `.openai/hosting.json`, `worker/index.js`,
+`scripts/prepare-sites-build.mjs`, or `tests/sites-worker.test.mjs`.
