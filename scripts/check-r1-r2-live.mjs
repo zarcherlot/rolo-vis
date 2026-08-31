@@ -1,7 +1,9 @@
 const baseUrl = (process.env.ROLO_API_BASE || "http://127.0.0.1:8000").replace(/\/$/, "");
+const apiToken = process.env.ROLO_API_TOKEN?.trim();
+const headers = { Accept: "application/json", ...(apiToken ? { Authorization: `Bearer ${apiToken}` } : {}) };
 
 async function read(path) {
-  const response = await fetch(`${baseUrl}${path}`, { headers: { Accept: "application/json" } });
+  const response = await fetch(`${baseUrl}${path}`, { headers });
   if (!response.ok) throw new Error(`${path} returned HTTP ${response.status}`);
   return response.json();
 }

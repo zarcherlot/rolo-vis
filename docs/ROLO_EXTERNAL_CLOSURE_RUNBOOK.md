@@ -62,6 +62,9 @@ npm run check:r1-r2-live
 npm run check:artifact-analysis-live
 ```
 
+当前 live gate 已支持从 `ROLO_API_TOKEN` 注入 `Authorization: Bearer` header；未设置或
+过期 token 时应明确返回 401/403，不能回退到 fixture。浏览器端不读取此环境变量。
+
 收到 bundle 后先做本地 fail-closed 校验：
 
 ```powershell

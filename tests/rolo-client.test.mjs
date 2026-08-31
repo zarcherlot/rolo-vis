@@ -1314,6 +1314,25 @@ test("RoloClient preserves HTTP failure status", async () => {
   }
 });
 
+test("RoloClient injects an explicit bearer token only when supplied by a caller", async () => {
+  const originalFetch = globalThis.fetch;
+  const requests = [];
+  globalThis.fetch = async (url, options) => {
+    requests.push({ url, options });
+    return { ok: true, json: async () => HEALTH };
+  };
+  try {
+    await new RoloClient("https://staging.rolo.test", { apiToken: " short-lived-token " }).health();
+    await new RoloClient("https://same-origin.rolo.test").health();
+    assert.equal(requests[0].options.headers.Authorization, "Bearer short-lived-token");
+    assert.equal(requests[0].options.credentials, "same-origin");
+    assert.equal(requests[1].options.headers.Authorization, undefined);
+    assert.equal(requests[1].options.credentials, "same-origin");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("RoloClient requests bounded evidence pages with an authority filter", async () => {
   const originalFetch = globalThis.fetch;
   let requestedUrl = "";
