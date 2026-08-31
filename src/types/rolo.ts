@@ -100,6 +100,22 @@ export interface TargetReadinessSummary {
   blockers: string[];
   diagnostics: string[];
   limitations: string[];
+  observed_at: string;
+  freshness: "fresh" | "stale" | "unknown";
+  producer_revision: string;
+  contains_secret_payloads: false;
+}
+
+export interface TargetReadinessCollection {
+  schema_version: "rolo-target-readiness-collection/v1";
+  items: TargetReadinessSummary[];
+  total: number;
+  limit: number;
+  offset: number;
+  next_offset: number | null;
+  observed_at: string;
+  freshness: "fresh" | "stale" | "unknown";
+  producer_revision: string;
   contains_secret_payloads: false;
 }
 
@@ -130,6 +146,22 @@ export interface ApprovalGateSummary {
   recovery_state: "NOT_REQUIRED" | "AVAILABLE" | "BLOCKED" | "UNKNOWN";
   blockers: string[];
   limitations: string[];
+  observed_at: string;
+  freshness: "fresh" | "stale" | "unknown";
+  producer_revision: string;
+  contains_secret_payloads: false;
+}
+
+export interface ApprovalGateCollection {
+  schema_version: "rolo-approval-gate-collection/v1";
+  items: ApprovalGateSummary[];
+  total: number;
+  limit: number;
+  offset: number;
+  next_offset: number | null;
+  observed_at: string;
+  freshness: "fresh" | "stale" | "unknown";
+  producer_revision: string;
   contains_secret_payloads: false;
 }
 

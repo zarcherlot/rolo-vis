@@ -70,23 +70,25 @@ test("E24B Job Inbox remains feature-gated and read-only", async () => {
   assert.doesNotMatch(app, /roloClient\.(bootstrapExecute|resumeJob|retryJob|cancelJob)/);
 });
 
-test("E24C Target Readiness stays blocked until a sanitized producer contract exists", async () => {
+test("R1 Target Readiness stays feature-gated after producer publication", async () => {
   const compatibility = await read("../src/contracts/compatibility.ts");
   const contract = await read("../docs/TARGET_READINESS_CONTRACT.md");
   assert.match(compatibility, /workbench\.target-readiness\/v1/);
-  assert.match(compatibility, /status: "blocked-upstream"/);
+  assert.match(compatibility, /status: "candidate"/);
+  assert.match(compatibility, /\/v1\/targets\/readiness/);
   assert.match(contract, /rolo-target-readiness-summary\/v1/);
-  assert.match(contract, /does not provide a safe GET endpoint/);
+  assert.match(contract, /GET \/v1\/targets\/readiness/);
   assert.match(contract, /bootstrap-execute/);
   assert.match(contract, /private keys/i);
   assert.match(contract, /browser contract/i);
 });
 
-test("E25 Approval/Gate/Recovery keeps governance and execution authority separate", async () => {
+test("R2 Approval/Gate/Recovery keeps governance and execution authority separate", async () => {
   const compatibility = await read("../src/contracts/compatibility.ts");
   const contract = await read("../docs/APPROVAL_GATE_RECOVERY_CONTRACT.md");
   assert.match(compatibility, /workbench\.approval-gate-read-model\/v1/);
-  assert.match(compatibility, /status: "blocked-upstream"/);
+  assert.match(compatibility, /status: "candidate"/);
+  assert.match(compatibility, /\/v1\/approval-gates/);
   assert.match(contract, /rolo-approval-gate-summary\/v1/);
   assert.match(contract, /Approval must remain separate from Gate outcome/);
   assert.match(contract, /bootstrap-execute/);

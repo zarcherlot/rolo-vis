@@ -79,6 +79,10 @@ import type {
   JobEventPage,
   JobPage,
   JobRecovery,
+  TargetReadinessCollection,
+  TargetReadinessSummary,
+  ApprovalGateCollection,
+  ApprovalGateSummary,
   RobotCapability,
   RobotOverview,
   RobotTopology,
@@ -143,7 +147,7 @@ import {
 } from "./episodeNavigation";
 import type { EpisodeDeepLinkTarget, WorkbenchViewId } from "./episodeNavigation";
 
-type NavId = WorkbenchViewId | "analysis";
+type NavId = WorkbenchViewId;
 type ViewRobot = DemoRobot | (RobotCapability & { status: "online" });
 type RobotOption = DemoRobot | RobotCapability;
 type OpenEvidence = (item: EvidenceItem | string) => void;
@@ -158,6 +162,8 @@ const NAV_ITEMS: Array<{ id: NavId; label: string; icon: typeof House; feature?:
   { id: "analysis", label: "Run Analysis", icon: Pulse },
   { id: "episode", label: "Episode Studio", icon: Pulse, feature: ROLO_API_FEATURES.episodeReadModel },
   { id: "jobs", label: "Jobs", icon: Pulse, feature: ROLO_API_FEATURES.jobReadModel },
+  { id: "readiness", label: "Readiness", icon: Target, feature: ROLO_API_FEATURES.targetReadiness },
+  { id: "governance", label: "Approval Gates", icon: ShieldCheck, feature: ROLO_API_FEATURES.approvalGateReadModel },
   { id: "wiki", label: "Robot Wiki", icon: BookOpenText },
   { id: "evidence", label: "Evidence", icon: FileText },
 ];
@@ -2363,6 +2369,50 @@ function JobInboxView({
   );
 }
 
+function ReadinessView({
+  readiness,
+  selected,
+  loading,
+  detailLoading,
+  error,
+  onSelect,
+}: {
+  readiness: TargetReadinessCollection | null;
+  selected: TargetReadinessSummary | null;
+  loading: boolean;
+  detailLoading: boolean;
+  error: string;
+  onSelect: (targetId: string) => void;
+}) {
+  return <section className="content-view"><PageTitle title="Target Readiness" description="Sanitized target connectivity and workspace facts published by rolo." />
+    <div className="job-trust-banner"><Info size={18} /><span><strong>Read-only producer facts</strong><small>Host keys, paths, credentials, and transport details remain producer-side.</small></span></div>
+    {error && <div className="panel read-model-unavailable" role="alert"><WarningCircle size={23} /><div><strong>Target readiness unavailable</strong><p>{error}</p></div></div>}
+    <div className="job-layout"><div className="panel job-inbox-panel"><div className="job-panel-heading"><div><span>Targets</span><h3>{readiness ? `${readiness.total} published targets` : "Loading targets…"}</h3></div><span className="read-only-chip">R1 · READ ONLY</span></div>
+      {loading && !readiness && <div className="job-empty"><Pulse size={23} /><span>Reading target readiness…</span></div>}
+      {!loading && readiness && !readiness.items.length && <div className="job-empty"><Target size={23} /><span>No target readiness records have been published.</span></div>}
+      <div className="job-list" role="list" aria-label="Target readiness summaries">{readiness?.items.map((item) => <button key={item.target_id} className={`job-row ${selected?.target_id === item.target_id ? "is-selected" : ""}`} onClick={() => onSelect(item.target_id)}><span className="job-row-main"><strong>{item.target_id}</strong><code>{item.target_kind}</code></span><span className={`job-status job-status-${item.state.toLowerCase()}`}>{item.state}</span><span className="job-row-target">{item.platform || "platform unknown"} · {item.architecture || "arch unknown"}</span><time dateTime={item.observed_at}>{formatJobTime(item.observed_at)}</time><ArrowRight size={15} /></button>)}</div>
+    </div><div className="panel job-detail-panel" aria-live="polite">{detailLoading && <div className="job-empty"><Pulse size={23} /><span>Reading target detail…</span></div>}{!detailLoading && !selected && <div className="job-empty"><Target size={23} /><strong>Select a target</strong><span>Its sanitized readiness facts will appear here.</span></div>}{!detailLoading && selected && <><div className="job-panel-heading"><div><span>Target detail</span><h3>{selected.target_id}</h3><code>{selected.producer_revision.slice(0, 12)}…</code></div><span className={`job-status job-status-${selected.state.toLowerCase()}`}>{selected.state}</span></div><dl className="job-facts"><div><dt>Kind</dt><dd>{selected.target_kind}</dd></div><div><dt>Reachable</dt><dd>{selected.reachable ? "Yes" : "No"}</dd></div><div><dt>Workspace</dt><dd>{selected.workspace_accessible ? "Accessible" : "Unavailable"}</dd></div><div><dt>Companion</dt><dd>{selected.companion}</dd></div><div><dt>Freshness</dt><dd>{selected.freshness}</dd></div></dl>{selected.blockers.length > 0 && <div className="job-limitations"><Warning size={17} /><span><strong>Blockers</strong>{selected.blockers.map((item) => <small key={item}>{item}</small>)}</span></div>}{selected.diagnostics.length > 0 && <div className="job-detail-section"><h4>Diagnostics</h4>{selected.diagnostics.map((item) => <p className="job-muted" key={item}>{item}</p>)}</div>}{selected.limitations.length > 0 && <div className="job-detail-section"><h4>Limitations</h4>{selected.limitations.map((item) => <p className="job-muted" key={item}>{item}</p>)}</div>}</>}</div></div>
+  </section>;
+}
+
+function ApprovalGateView({
+  gates,
+  selected,
+  loading,
+  detailLoading,
+  error,
+  onSelect,
+}: {
+  gates: ApprovalGateCollection | null;
+  selected: ApprovalGateSummary | null;
+  loading: boolean;
+  detailLoading: boolean;
+  error: string;
+  onSelect: (jobId: string) => void;
+}) {
+  return <section className="content-view"><PageTitle title="Approval Gates" description="Display-only plan, approval, gate, and recovery state for published Jobs." /><div className="job-trust-banner"><Info size={18} /><span><strong>No approval or recovery actions</strong><small>This surface never submits approvals, executes steps, or resumes a Job.</small></span></div>{error && <div className="panel read-model-unavailable" role="alert"><WarningCircle size={23} /><div><strong>Approval gate read model unavailable</strong><p>{error}</p></div></div>}<div className="job-layout"><div className="panel job-inbox-panel"><div className="job-panel-heading"><div><span>Gates</span><h3>{gates ? `${gates.total} published gates` : "Loading gates…"}</h3></div><span className="read-only-chip">R2 · READ ONLY</span></div>{loading && !gates && <div className="job-empty"><Pulse size={23} /><span>Reading approval gates…</span></div>}<div className="job-list" role="list" aria-label="Approval gate summaries">{gates?.items.map((item) => <button key={item.job_id} className={`job-row ${selected?.job_id === item.job_id ? "is-selected" : ""}`} onClick={() => onSelect(item.job_id)}><span className="job-row-main"><strong>{item.job_id}</strong><code>{item.target_id}</code></span><span className={`job-status job-status-${item.gate_status.toLowerCase()}`}>{item.gate_status}</span><span className="job-row-target">plan · {item.plan_status} · approval · {item.approval_status || "none"}</span><time dateTime={item.observed_at}>{formatJobTime(item.observed_at)}</time><ArrowRight size={15} /></button>)}</div></div><div className="panel job-detail-panel" aria-live="polite">{detailLoading && <div className="job-empty"><Pulse size={23} /><span>Reading gate detail…</span></div>}{!detailLoading && !selected && <div className="job-empty"><ShieldCheck size={23} /><strong>Select a gate</strong><span>Its bounded plan and recovery state will appear here.</span></div>}{!detailLoading && selected && <><div className="job-panel-heading"><div><span>Gate detail</span><h3>{selected.job_id}</h3><code>{selected.target_id}</code></div><span className={`job-status job-status-${selected.gate_status.toLowerCase()}`}>{selected.gate_status}</span></div><dl className="job-facts"><div><dt>Plan</dt><dd>{selected.plan_status}</dd></div><div><dt>Approval</dt><dd>{selected.approval_status || "Not required"}</dd></div><div><dt>Recovery</dt><dd>{selected.recovery_state}</dd></div><div><dt>Freshness</dt><dd>{selected.freshness}</dd></div></dl><div className="job-detail-section"><h4>Steps</h4>{selected.steps.map((step) => <div className="job-checkpoint" key={step.action}><CheckCircle size={17} /><span>{step.action} · {step.risk}<small>{step.description}</small></span></div>)}</div>{selected.gate_checks.length > 0 && <div className="job-detail-section"><h4>Gate checks</h4>{selected.gate_checks.map((item) => <p className="job-muted" key={item}>{item}</p>)}</div>}{selected.blockers.length > 0 && <div className="job-limitations"><Warning size={17} /><span><strong>Blockers</strong>{selected.blockers.map((item) => <small key={item}>{item}</small>)}</span></div>}</>}</div></div></section>;
+}
+
 function RunAnalysisView() {
   const analysis = REAL_DEVICE_ARTIFACT_ANALYSIS;
   const maxContext = Math.max(...analysis.contextBars.map((item) => item.value));
@@ -2484,6 +2534,16 @@ function AppContent() {
   const [jobDetailLoading, setJobDetailLoading] = useState(false);
   const [jobEventsLoading, setJobEventsLoading] = useState(false);
   const [jobMessage, setJobMessage] = useState("");
+  const [readiness, setReadiness] = useState<TargetReadinessCollection | null>(null);
+  const [selectedReadiness, setSelectedReadiness] = useState<TargetReadinessSummary | null>(null);
+  const [readinessLoading, setReadinessLoading] = useState(false);
+  const [readinessDetailLoading, setReadinessDetailLoading] = useState(false);
+  const [readinessMessage, setReadinessMessage] = useState("");
+  const [approvalGates, setApprovalGates] = useState<ApprovalGateCollection | null>(null);
+  const [selectedApprovalGate, setSelectedApprovalGate] = useState<ApprovalGateSummary | null>(null);
+  const [approvalLoading, setApprovalLoading] = useState(false);
+  const [approvalDetailLoading, setApprovalDetailLoading] = useState(false);
+  const [approvalMessage, setApprovalMessage] = useState("");
   const [wiki, setWiki] = useState<RobotWikiSnapshot | null>(null);
   const [discoveryHistory, setDiscoveryHistory] = useState<DiscoverySnapshotCollection | null>(null);
   const [wikiRequestRobotId, setWikiRequestRobotId] = useState("");
@@ -2523,6 +2583,8 @@ function AppContent() {
     setJobDetailLoading(false);
     setJobEventsLoading(false);
     setJobMessage("");
+    setReadiness(null); setSelectedReadiness(null); setReadinessLoading(false); setReadinessDetailLoading(false); setReadinessMessage("");
+    setApprovalGates(null); setSelectedApprovalGate(null); setApprovalLoading(false); setApprovalDetailLoading(false); setApprovalMessage("");
     const controller = new AbortController();
     const timeout = window.setTimeout(() => controller.abort(), 5000);
     try {
@@ -2574,6 +2636,12 @@ function AppContent() {
       setJobDetailLoading(false);
       setJobEventsLoading(false);
       setJobMessage("");
+      setReadiness(null);
+      setSelectedReadiness(null);
+      setReadinessMessage("");
+      setApprovalGates(null);
+      setSelectedApprovalGate(null);
+      setApprovalMessage("");
       setWiki(null);
       setDiscoveryHistory(null);
       setConnectionMessage(error instanceof RoloApiError ? `${error.message}${error.path ? ` (${error.path})` : ""}` : "The rolo control plane could not be read.");
@@ -2606,6 +2674,12 @@ function AppContent() {
     setJobDetailLoading(false);
     setJobEventsLoading(false);
     setJobMessage("");
+    setReadiness(null);
+    setSelectedReadiness(null);
+    setReadinessMessage("");
+    setApprovalGates(null);
+    setSelectedApprovalGate(null);
+    setApprovalMessage("");
     setWiki(null);
     setDiscoveryHistory(null);
     setWikiRequestRobotId("");
@@ -2733,6 +2807,38 @@ function AppContent() {
     };
   }, [active, apiFeatures, mode, selectedJobId]);
   useEffect(() => {
+    if (active !== "readiness" || !apiFeatures.includes(ROLO_API_FEATURES.targetReadiness) || !["live", "partial"].includes(mode)) return;
+    let current = true;
+    const controller = new AbortController();
+    setReadinessLoading(true); setReadinessMessage("");
+    void roloClient.targetReadiness({ signal: controller.signal }).then((page) => { if (current) setReadiness(page); }).catch((error: unknown) => { if (current) setReadinessMessage(error instanceof Error ? error.message : "The target readiness read model could not be read."); }).finally(() => { if (current) setReadinessLoading(false); });
+    return () => { current = false; controller.abort(); setReadinessLoading(false); };
+  }, [active, apiFeatures, mode]);
+  useEffect(() => {
+    if (active !== "readiness" || !selectedReadiness || !apiFeatures.includes(ROLO_API_FEATURES.targetReadiness) || !["live", "partial"].includes(mode)) return;
+    let current = true;
+    const controller = new AbortController();
+    setReadinessDetailLoading(true);
+    void roloClient.targetReadinessDetail(selectedReadiness.target_id, { signal: controller.signal }).then((detail) => { if (current) setSelectedReadiness(detail); }).catch((error: unknown) => { if (current) setReadinessMessage(error instanceof Error ? error.message : "The target readiness detail could not be read."); }).finally(() => { if (current) setReadinessDetailLoading(false); });
+    return () => { current = false; controller.abort(); setReadinessDetailLoading(false); };
+  }, [active, apiFeatures, mode, selectedReadiness?.target_id]);
+  useEffect(() => {
+    if (active !== "governance" || !apiFeatures.includes(ROLO_API_FEATURES.approvalGateReadModel) || !["live", "partial"].includes(mode)) return;
+    let current = true;
+    const controller = new AbortController();
+    setApprovalLoading(true); setApprovalMessage("");
+    void roloClient.approvalGates({ signal: controller.signal }).then((page) => { if (current) setApprovalGates(page); }).catch((error: unknown) => { if (current) setApprovalMessage(error instanceof Error ? error.message : "The approval gate read model could not be read."); }).finally(() => { if (current) setApprovalLoading(false); });
+    return () => { current = false; controller.abort(); setApprovalLoading(false); };
+  }, [active, apiFeatures, mode]);
+  useEffect(() => {
+    if (active !== "governance" || !selectedApprovalGate || !apiFeatures.includes(ROLO_API_FEATURES.approvalGateReadModel) || !["live", "partial"].includes(mode)) return;
+    let current = true;
+    const controller = new AbortController();
+    setApprovalDetailLoading(true);
+    void roloClient.jobApprovalGate(selectedApprovalGate.job_id, { signal: controller.signal }).then((detail) => { if (current) setSelectedApprovalGate(detail); }).catch((error: unknown) => { if (current) setApprovalMessage(error instanceof Error ? error.message : "The approval gate detail could not be read."); }).finally(() => { if (current) setApprovalDetailLoading(false); });
+    return () => { current = false; controller.abort(); setApprovalDetailLoading(false); };
+  }, [active, apiFeatures, mode, selectedApprovalGate?.job_id]);
+  useEffect(() => {
     if (active !== "fleet" || fleetRequested || (fleet && fleetBlockers) || !["live", "partial"].includes(mode)) return;
     let current = true;
     const controller = new AbortController();
@@ -2815,6 +2921,16 @@ function AppContent() {
     setJobEventsLoading(false);
     setJobMessage("");
   }, []);
+  const selectReadiness = useCallback((targetId: string) => {
+    const item = readiness?.items.find((candidate) => candidate.target_id === targetId) || null;
+    setSelectedReadiness(item);
+    setReadinessMessage("");
+  }, [readiness]);
+  const selectApprovalGate = useCallback((jobId: string) => {
+    const item = approvalGates?.items.find((candidate) => candidate.job_id === jobId) || null;
+    setSelectedApprovalGate(item);
+    setApprovalMessage("");
+  }, [approvalGates]);
   const loadMoreJobs = useCallback(() => {
     if (!jobs || jobs.next_offset === null || jobLoading) return;
     setJobLoading(true);
@@ -2886,6 +3002,8 @@ function AppContent() {
           {active === "lifecycle" && (lifecycleSource === "demo" ? <DemoLifecycleView pipeline={pipeline} onOpenEvidence={setEvidence} /> : lifecycleSource === "live" && lifecycleRuns ? <LiveLifecycleView pipeline={pipeline} runs={lifecycleRuns} robotId={robot!.robot_id} onOpenEvidence={openEvidence} /> : <ReadModelUnavailableView title="Lifecycle" description="Live lifecycle requires trusted stage and run read models." />)}
           {active === "episode" && (episodeSupported ? <EpisodeStudio key={`episode-navigation-${episodeNavigationRevision}`} robotId={robot!.robot_id} initialTarget={episodeTarget} revisionHistorySupported={episodeRevisionHistorySupported} cohortSupported={episodeCohortSupported} observationBundleSupported={episodeObservationBundleSupported} onOpenEvidence={openEvidence} /> : <ReadModelUnavailableView title="Episode Studio" description="rolo has not advertised the versioned Episode read model for this robot connection." />)}
           {active === "jobs" && (jobReadModelSupported ? <JobInboxView jobs={jobs} selectedJob={selectedJob} events={jobEvents} loading={jobLoading} detailLoading={jobDetailLoading} eventsLoading={jobEventsLoading} error={jobMessage} onSelectJob={selectJob} onLoadMore={loadMoreJobs} onLoadMoreEvents={loadMoreJobEvents} /> : <ReadModelUnavailableView title="Jobs" description="rolo has not advertised the versioned Job read model for this robot connection." />)}
+          {active === "readiness" && (apiFeatures.includes(ROLO_API_FEATURES.targetReadiness) ? <ReadinessView readiness={readiness} selected={selectedReadiness} loading={readinessLoading} detailLoading={readinessDetailLoading} error={readinessMessage} onSelect={selectReadiness} /> : <ReadModelUnavailableView title="Target Readiness" description="rolo has not advertised the R1 target readiness read model for this connection." />)}
+          {active === "governance" && (apiFeatures.includes(ROLO_API_FEATURES.approvalGateReadModel) ? <ApprovalGateView gates={approvalGates} selected={selectedApprovalGate} loading={approvalLoading} detailLoading={approvalDetailLoading} error={approvalMessage} onSelect={selectApprovalGate} /> : <ReadModelUnavailableView title="Approval Gates" description="rolo has not advertised the R2 approval gate read model for this connection." />)}
           {active === "wiki" && (mode === "demo" ? <ReadModelUnavailableView title="Robot Wiki" description="The labeled demo fixture does not include discovery Wiki evidence." /> : wiki && discoveryHistory ? <WikiView wiki={wiki} history={discoveryHistory} focusLayer={wikiContextFocus} onOpenStackLayer={openStackLayer} onClearFocus={() => setWikiContextFocus(null)} onOpenEvidence={openEvidence} /> : wikiLoading ? <section className="content-view"><PageTitle title="Robot Wiki" description="Reading manifest-verified discovery snapshots…" /><div className="panel read-model-unavailable" role="status"><Pulse size={26} /><div><strong>Loading Robot Wiki</strong><p>Current knowledge and verified history are being resolved independently.</p></div></div></section> : <ReadModelUnavailableView title="Robot Wiki" description={wikiMessage || "Open this surface to read a verified discovery Wiki."} />)}
           {active === "evidence" && (evidenceSource === "demo" ? <EvidenceView onOpenEvidence={openEvidence} /> : evidenceSource === "live" ? <EvidenceView live collection={evidenceList} robotId={robot!.robot_id} onOpenEvidence={openEvidence} /> : <ReadModelUnavailableView title="Evidence" description="Live evidence resolution needs a versioned rolo evidence read model." />)}
         </>

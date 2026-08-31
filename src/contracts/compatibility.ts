@@ -43,10 +43,11 @@ export const TARGET_READINESS_SCHEMA_COMPATIBILITY = {
 
 export const TARGET_READINESS_CONTRACT = {
   id: "rolo-vis-target-readiness/2026-08",
-  status: "blocked-upstream",
+  status: "candidate",
   mode: "read-only",
   requiredFeature: "workbench.target-readiness/v1",
-  endpoint: "not-published",
+  endpoint: "/v1/targets/readiness",
+  producerMinimum: "15e6b7d1f49e1df3784da80624d95b66e12e88ce",
   containsSecretPayloads: false,
   allowsBrowserMutation: false,
 } as const;
@@ -57,10 +58,11 @@ export const APPROVAL_GATE_SCHEMA_COMPATIBILITY = {
 
 export const APPROVAL_GATE_CONTRACT = {
   id: "rolo-vis-approval-gate-recovery/2026-08",
-  status: "blocked-upstream",
+  status: "candidate",
   mode: "read-only",
   requiredFeature: "workbench.approval-gate-read-model/v1",
-  endpoint: "not-published",
+  endpoint: "/v1/approval-gates",
+  producerMinimum: "15e6b7d1f49e1df3784da80624d95b66e12e88ce",
   containsSecretPayloads: false,
   allowsBrowserMutation: false,
 } as const;

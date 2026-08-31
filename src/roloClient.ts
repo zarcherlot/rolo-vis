@@ -60,12 +60,17 @@ import type {
   TopologyPathExplanation,
   TopologySnapshotCollection,
   TopologySnapshotSummary,
+  TargetReadinessCollection,
+  TargetReadinessSummary,
+  ApprovalGateCollection,
+  ApprovalGateSummary,
 } from "./types/rolo";
 import { parseCapabilityCollection, parseCapabilityDetail } from "./contracts/capability.ts";
 import { parseDiscoverySnapshotCollection } from "./contracts/discovery.ts";
 import { parseEpisodeCohort, parseEpisodeCollection, parseEpisodeDetail, parseEpisodeRevisionCollection, parseEpisodeTimelinePage } from "./contracts/episode.ts";
 import { parseEpisodeObservationBundleCollection, type EpisodeObservationValidationContext } from "./contracts/episodeObservation.ts";
-export { parseApprovalGateSummary, parseTargetReadinessSummary } from "./contracts/targetReadiness.ts";
+export { parseApprovalGateSummary, parseApprovalGateCollection, parseTargetReadinessSummary, parseTargetReadinessCollection } from "./contracts/targetReadiness.ts";
+import { parseApprovalGateCollection, parseApprovalGateSummary, parseTargetReadinessCollection, parseTargetReadinessSummary } from "./contracts/targetReadiness.ts";
 import {
   containsUnsafeReference,
   isConfidence,
@@ -1096,6 +1101,38 @@ export class RoloClient {
     const query = new URLSearchParams({ limit: String(limit), offset: String(offset) });
     const path = `/v1/jobs/${encodeURIComponent(jobId)}/events?${query.toString()}`;
     return parseJobEventPage(await this.request<unknown>(path, options), path, jobId);
+  }
+
+  async targetReadiness(
+    options?: RequestInit,
+    page: { limit?: number; offset?: number } = {},
+  ): Promise<TargetReadinessCollection> {
+    const limit = page.limit ?? 100;
+    const offset = page.offset ?? 0;
+    const query = new URLSearchParams({ limit: String(limit), offset: String(offset) });
+    const path = `/v1/targets/readiness?${query.toString()}`;
+    return parseTargetReadinessCollection(await this.request<unknown>(path, options), path, { limit, offset });
+  }
+
+  async targetReadinessDetail(targetId: string, options?: RequestInit): Promise<TargetReadinessSummary> {
+    const path = `/v1/targets/${encodeURIComponent(targetId)}/readiness`;
+    return parseTargetReadinessSummary(await this.request<unknown>(path, options), path);
+  }
+
+  async approvalGates(
+    options?: RequestInit,
+    page: { limit?: number; offset?: number } = {},
+  ): Promise<ApprovalGateCollection> {
+    const limit = page.limit ?? 100;
+    const offset = page.offset ?? 0;
+    const query = new URLSearchParams({ limit: String(limit), offset: String(offset) });
+    const path = `/v1/approval-gates?${query.toString()}`;
+    return parseApprovalGateCollection(await this.request<unknown>(path, options), path, { limit, offset });
+  }
+
+  async jobApprovalGate(jobId: string, options?: RequestInit): Promise<ApprovalGateSummary> {
+    const path = `/v1/jobs/${encodeURIComponent(jobId)}/approval-gate`;
+    return parseApprovalGateSummary(await this.request<unknown>(path, options), path);
   }
 
   async robots(options?: RequestInit) {
