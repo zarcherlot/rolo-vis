@@ -1,0 +1,20 @@
+{
+  "schema_version": "rolo-vis-device-hardening-evidence/v1",
+  "release_line": "v0.37.x",
+  "rolo_revision": "8441e222a6cb91e",
+  "producer_revision": "8441e222a6cb91e",
+  "target_id": "staging-handoff-pending",
+  "target_kind": "ssh",
+  "evidence": [
+    { "scenario_id": "linux-arm64", "status": "PENDING_EXTERNAL" },
+    { "scenario_id": "linux-x86_64", "status": "PENDING_EXTERNAL" },
+    { "scenario_id": "offline-install", "status": "PENDING_EXTERNAL" },
+    { "scenario_id": "non-root-sudo", "status": "PENDING_EXTERNAL" },
+    { "scenario_id": "ssh-jump-host", "status": "PENDING_EXTERNAL" },
+    { "scenario_id": "host-key-rotation", "status": "PENDING_EXTERNAL" },
+    { "scenario_id": "network-interruption", "status": "PENDING_EXTERNAL" },
+    { "scenario_id": "restart-resume", "status": "PENDING_EXTERNAL" },
+    { "scenario_id": "upgrade-rollback", "status": "PENDING_EXTERNAL" },
+    { "scenario_id": "enrollment-rotation", "status": "PENDING_EXTERNAL" }
+  ]
+}

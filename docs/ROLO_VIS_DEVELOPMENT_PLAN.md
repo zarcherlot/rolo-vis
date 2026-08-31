@@ -4,10 +4,10 @@
 
 ## 当前基线
 
-- `origin/main` 已包含 E24/E24C hardening；rolo 上游 R1 PR #47、R2 PR #48 已合入，Artifact Analysis producer PR #49 也已合入，最新 producer main 为 `8a4bd6a2`。
+- `origin/main` 已包含 E24/E24C hardening；rolo 上游 R1 PR #47、R2 PR #48、Artifact Analysis producer PR #49/#50 均已合入，最新 producer main 为 `8441e222`。
 - rolo 远端状态已通过 GitHub API 核对；本地 rolo checkout 不作为本轮修改目标。
 - rolo `origin/main@8441e222` 已提供并宣布 Job、R1 Target Readiness（`workbench.target-readiness/v1`）、R2 Approval Gate（`workbench.approval-gate-read-model/v1`）和 Artifact Analysis（`workbench.artifact-analysis-read-model/v1`）feature；旧 E23/E24 远端分支引用已自动清理。
-- `npm run verify:baseline` 已通过：235 个应用测试、TypeScript、生产构建、Sites 打包测试全部通过。
+- `npm run verify:baseline` 已通过：242 个应用测试、TypeScript、生产构建、Sites 打包测试全部通过。
 - 当前版本为 `0.37.0`，已冻结 Episode Observation Bundle（E22）只读基线。
 - R1/R2 与 Artifact Analysis deterministic live gates 均已通过；真实 staging/production 证据仍需单独收集，相关记录在 [ROLO_ENGINEERING_HANDOFF_LIVE_ARTIFACT.md](./ROLO_ENGINEERING_HANDOFF_LIVE_ARTIFACT.md)。
 
@@ -18,9 +18,9 @@
 - rolo-vis R1/R2 consumer 已由 PR #23 合入 `main`，merge commit 为 `3d5343e3`；新增 Readiness、Approval Gates 两个 feature-gated 只读 surface。
 - 已补充 Job、R1/R2、Artifact Analysis 三组 live gate：检查 feature 协商、分页、身份绑定、一致性及敏感字段；最新 rolo deterministic harness 全部通过。
 - 已完成 P3 分包优化：React、Flow、图标和 artifact 数据独立成 chunk，主 JS 约 381 kB；完整 `npm run verify:baseline` 通过（225 tests、typecheck、build、Sites 4 tests）。
-- paired rolo harness 已验证并停止；由于尚无 staging/真机控制面证据，E24、R1、R2 与 Artifact Analysis 仍保持 candidate，不提前提升 baseline。
+- paired rolo harness 已验证并停止；由于尚无 staging/真机控制面证据，E24、R1、R2 与 Artifact Analysis 仍保持 candidate，不提前提升 baseline。外部收口流程见 `docs/ROLO_EXTERNAL_CLOSURE_RUNBOOK.md`。
 - Artifact Analysis producer 已由 rolo PR #49 发布；rolo-vis 新增 target/job client、feature-gated live UI、插件 endpoint 白名单与 `check:artifact-analysis-live`。
-- 新增超长文本、unsafe reference、secret flag、非法 run identity 的负向测试；`npm test` 当前 235 项通过。
+- 新增超长文本、unsafe reference、secret flag、非法 run identity 的负向测试；`npm test` 当前 242 项通过。
 
 ## 已交付能力
 
