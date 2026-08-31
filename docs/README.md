@@ -11,6 +11,7 @@ opening a contract or a release note.
 | What is the supported read-only boundary? | [MVP baseline](./MVP_READONLY_BASELINE.md) |
 | What is shipped today? | [README status and commands](../README.md) |
 | What is still waiting on rolo/staging evidence? | [External closure runbook](./ROLO_EXTERNAL_CLOSURE_RUNBOOK.md) |
+| What remains before the first real-robot debug? | [Real-device debug readiness](./ROLO_REAL_DEVICE_DEBUG_READINESS.md) |
 | What visual direction should changes follow? | [Selected Stack Map](./design/selected-stack-map.png) |
 
 ## Contract and baseline records

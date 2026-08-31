@@ -4,19 +4,19 @@
 
 ## 背景与当前状态
 
-rolo 已在 `main@8a4bd6a2` 合入：
+rolo 已在 `main@ec8f6356` 合入：
 
 - R1 Target Readiness：PR #47，feature `workbench.target-readiness/v1`；
 - R2 Approval Gate：PR #48，feature `workbench.approval-gate-read-model/v1`。
-- Artifact Analysis Producer：PR #49，feature `workbench.artifact-analysis-read-model/v1`，target/job 两条只读 endpoint。
+- Artifact Analysis Producer：PR #49，feature `workbench.artifact-analysis-read-model/v1`，target/job 两条只读 endpoint；PR #50 修复 live fixture identity，PR #51 发布 device-hardening evidence producer，PR #52 修复 heuristic mapping runtime timeout。
 
-rolo-vis consumer 已在 PR #23 合入，路线图在 PR #24 合入，P3 UX 收口在 PR #25 合入。
-本地契约、parser、feature gate、只读 UI 和负向测试均已完成。rolo 已提供 deterministic
-artifact harness；rolo-vis target live gate 已通过，job 路径当前因 harness 中 seeded job 与
-summary target identity 不一致而返回 409，不能将其误记为通过。
+rolo-vis consumer 已在 PR #23 合入，后续收口 PR #29、外部证据 PR #30 和兼容性修复 PR #32
+均已合入。契约、parser、feature gate、只读 UI、负向测试和 deterministic live gate 均已完成。
+最新 rolo harness 上 Job、R1/R2、Artifact Analysis live gate 全部通过；剩余工作是带认证的
+staging 访问、真实设备 preflight 和脱敏 evidence review。
 
-本文记录 rolo 工程项及其交付状态，供 rolo 团队跟进剩余的 R1/R2 runtime evidence 与 harness
-job identity 修复。
+本文记录 rolo 工程项及其交付状态，剩余项以
+[`ROLO_REAL_DEVICE_DEBUG_READINESS.md`](./ROLO_REAL_DEVICE_DEBUG_READINESS.md) 为准。
 
 ## Workstream A：R1/R2 Runtime Harness 与 Live Gate
 

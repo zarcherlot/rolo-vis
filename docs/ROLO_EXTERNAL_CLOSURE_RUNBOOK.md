@@ -8,7 +8,7 @@ promotion 的唯一入口。它不授予浏览器任何执行、恢复、回滚�
 ## 当前状态
 
 - rolo-vis 本地 `verify:baseline`、paired read-model gate 和安全负向测试已通过。
-- rolo 远端没有未关闭的 PR 或 issue；最新 `main` 为 `8441e222a6cb91efb6e7b6f694e68f78c7919685`。
+- rolo 远端没有未关闭的 PR 或 issue；最新 `main` 为 `ec8f635656806776c2dc8ced04a2e6c057980410`（PR #52）。
 - 当前环境没有 staging endpoint、token 或真实设备证据，因此 R0 live gate 与 R3
   真实设备收口仍保持 `PENDING_EXTERNAL`，不会用 fixture 冒充真实证据。
 
