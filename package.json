@@ -29,12 +29,15 @@
     "check:job-live": "node scripts/check-job-read-model.mjs",
     "check:r1-r2-live": "node scripts/check-r1-r2-live.mjs",
     "check:artifact-analysis-live": "node scripts/check-artifact-analysis-live.mjs",
+    "check:real-device-preflight": "node scripts/check-real-device-preflight.mjs",
     "prepare:episode-investigation-live": "node scripts/prepare-episode-investigation-live-data.mjs",
     "prepare:episode-observation-live": "node scripts/prepare-episode-observation-live-data.mjs",
     "test:sites": "node --test tests/sites-worker.test.mjs",
+    "import:device-hardening-evidence": "node scripts/import-device-hardening-evidence.mjs",
     "check:device-hardening": "node scripts/check-device-hardening.mjs && node --test tests/device-hardening-contract.test.mjs",
     "check:device-hardening-evidence": "node scripts/check-device-hardening-evidence.mjs",
-    "verify:baseline": "npm test && npm run check:device-hardening && npm run typecheck && npm run build && npm run test:sites"
+    "test:real-device-readiness": "node --test tests/real-device-readiness.test.mjs",
+    "verify:baseline": "npm test && npm run test:real-device-readiness && npm run check:device-hardening && npm run typecheck && npm run build && npm run test:sites"
   },
   "dependencies": {
     "@phosphor-icons/react": "^2.1.10",
