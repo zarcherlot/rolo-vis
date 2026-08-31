@@ -1,5 +1,7 @@
 # rolo-vis
 
+[中文说明](README.zh-CN.md)
+
 `rolo-vis` is the read-only web workbench for [rolo](https://github.com/zarcherlot/rolo).
 It turns robot discovery, topology, capabilities, lifecycle state, Episodes, and
 evidence into one traceable engineering view.
