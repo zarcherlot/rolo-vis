@@ -139,6 +139,8 @@ import { filterSliceObservations } from "./sliceStability";
 import { getOverviewPresentation, getSurfaceSource } from "./workbenchPolicy";
 import type { WorkbenchMode } from "./workbenchPolicy";
 import { REAL_DEVICE_ARTIFACT_ANALYSIS, TARGET_VALIDATION_ANALYSIS } from "./lerobotAnalysisData";
+import { LOCAL_ADAPT_RELEASE } from "./localReleaseArtifact";
+import type { LocalReleaseArtifact } from "./localReleaseArtifact";
 import { EpisodeStudio } from "./EpisodeStudio";
 import {
   buildWorkbenchViewLink,
@@ -2527,6 +2529,111 @@ function RunAnalysisView({ liveAnalysis, loading = false, error = "", onRefresh 
   );
 }
 
+function formatReleaseDuration(seconds: number) {
+  const minutes = Math.floor(seconds / 60);
+  const remainder = Math.round(seconds % 60);
+  return `${minutes}m ${String(remainder).padStart(2, "0")}s`;
+}
+
+function shortReleaseDigest(value?: string) {
+  if (!value) return "not recorded";
+  return `${value.slice(0, 12)}…${value.slice(-8)}`;
+}
+
+function LocalAdaptReleaseView({ artifact }: { artifact: LocalReleaseArtifact }) {
+  const contextMetrics = [
+    { label: "Requested context", value: artifact.context.sliceOperationCount, display: `${artifact.context.sliceOperationCount} operations`, tone: "blue" },
+    { label: "Effective context", value: artifact.context.injectedTargetAdapterOperationCount, display: `${artifact.context.injectedTargetAdapterOperationCount} operation`, tone: "green" },
+    { label: "Prepared details", value: artifact.context.preparedOperationDetailCount, display: `${artifact.context.preparedOperationDetailCount} prepared`, tone: "violet" },
+    { label: "Outside eligibility", value: artifact.context.shadowTargetAdapterNotInEligibleCount, display: `${artifact.context.shadowTargetAdapterNotInEligibleCount} shadow`, tone: "amber" },
+  ] as const;
+  const maxContext = Math.max(...contextMetrics.map((item) => item.value), 1);
+  const timeline = [
+    { label: "Agent run", timestamp: artifact.run.startedAt, detail: `SUCCEEDED · ${artifact.run.eventCount} events · ${artifact.run.provider}`, tone: "green" },
+    { label: "Adapt summary", timestamp: artifact.run.completedAt, detail: "COMPLETE · immutable run, snapshot, gate, and handoff refs emitted", tone: "green" },
+    { label: "Independent gate", timestamp: artifact.gate.checkedAt, detail: `PASSED · ${artifact.gate.checks.length} checks · no gate error`, tone: "green" },
+    { label: "Promotion handoff", timestamp: artifact.handoff.promotedAt, detail: "VERIFIED · release manifest reference published", tone: "green" },
+  ] as const;
+  return (
+    <section className="content-view local-release-view">
+      <PageTitle
+        eyebrow="Local artifact mirror · read only"
+        title={`Adapt release · ${artifact.robotId}`}
+        description="A sanitized projection of the release artifact directory. Artifact bytes, prompts, and adapter package contents are not loaded into the browser."
+        action={<span className="analysis-source-chip"><HardDrive size={15} /> local artifact mirror</span>}
+      />
+
+      <div className="local-release-hero panel">
+        <div className="local-release-hero-main">
+          <div className="analysis-kicker"><span className="status-dot status-observed" /> {artifact.summary.status} <code>{artifact.releaseId}</code></div>
+          <h3>{artifact.analysis.headline}</h3>
+          <p>{artifact.analysis.summary}</p>
+          <div className="local-release-meta"><span>robot <strong>{artifact.robotId}</strong></span><span>discovery <code>{artifact.discoveryId}</code></span><span>captured <time dateTime={artifact.capturedAt}>{new Date(artifact.capturedAt).toLocaleString()}</time></span></div>
+        </div>
+        <div className="analysis-hero-status is-green"><span>Gate</span><strong>{artifact.gate.status}</strong><small>{artifact.gate.checks.length} independent checks</small></div>
+        <div className="analysis-hero-status is-green"><span>Handoff</span><strong>{artifact.handoff.status}</strong><small>promoted {new Date(artifact.handoff.promotedAt).toLocaleTimeString()}</small></div>
+        <div className="analysis-hero-status is-amber"><span>Slice</span><strong>{artifact.slice.outcome}</strong><small>selected: no · release effect: no</small></div>
+      </div>
+
+      <div className="analysis-kpi-grid local-release-kpis">
+        <div className="panel analysis-kpi"><span>Adapt run</span><strong>{formatReleaseDuration(artifact.run.durationS)}</strong><small>{artifact.run.status.toLowerCase()} · {artifact.run.eventCount} events</small></div>
+        <div className="panel analysis-kpi"><span>Gate checks</span><strong>{artifact.gate.checks.length}</strong><small>all passed · immutable gate.json</small></div>
+        <div className="panel analysis-kpi"><span>Authoritative ops</span><strong>{artifact.slice.authoritativeOperations.length}</strong><small>of {artifact.slice.requestedContextOperations.length} requested</small></div>
+        <div className="panel analysis-kpi is-warn"><span>Native tool calls</span><strong>{artifact.nativeTools.callCount}</strong><small>rollout off · {artifact.nativeTools.toolCount} catalog tools</small></div>
+      </div>
+
+      <div className="analysis-main-grid local-release-grid">
+        <section className="panel analysis-panel">
+          <header className="analysis-panel-heading"><div><span>Validation progression</span><h3>Evidence chain</h3></div><small>{artifact.discoveryId}</small></header>
+          <div className="analysis-timeline local-release-timeline">
+            {timeline.map((stage, index) => <div className="analysis-stage" key={stage.label}>
+              <div className={`analysis-stage-marker stage-${stage.tone}`}><span>{index + 1}</span></div>
+              {index < timeline.length - 1 && <div className="analysis-stage-line" />}
+              <div className="analysis-stage-copy"><strong>{stage.label}</strong><small>{new Date(stage.timestamp).toLocaleTimeString()}</small><p>{stage.detail}</p></div>
+            </div>)}
+          </div>
+        </section>
+
+        <section className="panel analysis-panel">
+          <header className="analysis-panel-heading"><div><span>Release topology</span><h3>Bound artifact chain</h3></div><small>{artifact.artifacts.length} tracked artifacts</small></header>
+          <div className="local-release-artifact-list">
+            {artifact.artifacts.map((item) => <div className="local-release-artifact" key={item.name}><span className={`local-release-artifact-dot kind-${item.kind}`} /><div><strong>{item.name}</strong><code>{item.reference}</code>{item.digest && <small>sha256:{shortReleaseDigest(item.digest)}</small>}</div></div>)}
+          </div>
+        </section>
+      </div>
+
+      <div className="analysis-main-grid analysis-second-grid local-release-grid">
+        <section className="panel analysis-panel">
+          <header className="analysis-panel-heading"><div><span>Slice activation</span><h3>Shadow boundary</h3></div><small>{artifact.slice.mode} · no release authority</small></header>
+          <div className="local-release-slice-facts"><div><span>Authoritative</span><strong>{artifact.slice.authoritativeOperations.length}</strong><small>{artifact.slice.authoritativeOperations.join(", ")}</small></div><div><span>Effective context</span><strong>{artifact.slice.effectiveContextOperations.length}</strong><small>{artifact.slice.effectiveContextOperations.join(", ")}</small></div><div><span>Blocking alerts</span><strong className="is-alert">{artifact.slice.alerts.length}</strong><small>{artifact.slice.alerts[0]?.code || "none"}</small></div></div>
+          {artifact.slice.alerts.map((alert) => <div className="local-release-alert" key={alert.code}><WarningCircle size={15} /><span><strong>{alert.severity} · {alert.code}</strong><small>{alert.message}</small></span></div>)}
+        </section>
+
+        <section className="panel analysis-panel">
+          <header className="analysis-panel-heading"><div><span>Context budget</span><h3>What reached the agent</h3></div><small>bounded preparation metrics</small></header>
+          <div className="analysis-bars local-release-bars">{contextMetrics.map((item) => <div className="analysis-bar-row" key={item.label}><div><span>{item.label}</span><strong>{item.display}</strong></div><div className="analysis-bar-track"><i className={`bar-${item.tone}`} style={{ width: `${Math.max(8, (item.value / maxContext) * 100)}%` }} /></div></div>)}</div>
+          <div className="analysis-metric-note"><Info size={15} /><span>{artifact.context.agentNativeOperationCount} native operations were selected; the shadow comparison found {artifact.context.shadowTargetAdapterNotInEligibleCount} target-adapter operations outside eligibility.</span></div>
+        </section>
+      </div>
+
+      <div className="analysis-main-grid analysis-third-grid local-release-grid">
+        <section className="panel analysis-panel local-release-summary-panel">
+          <header className="analysis-panel-heading"><div><span>Analysis summary</span><h3>Validation result</h3></div><span className="local-release-ready"><CheckCircle size={15} weight="fill" /> HANDOFF READY</span></header>
+          <p className="local-release-summary-copy">{artifact.analysis.summary}</p>
+          <div className="local-release-summary-columns"><div><strong>Completed</strong>{artifact.analysis.completedTasks.map((item) => <span key={item}><CheckCircle size={13} />{item}</span>)}</div><div><strong>Validated</strong>{artifact.analysis.validations.map((item) => <span key={item}><ShieldCheck size={13} />{item}</span>)}</div></div>
+        </section>
+        <section className="panel analysis-panel local-release-guardrails">
+          <header className="analysis-panel-heading"><div><span>Safety boundary</span><h3>Release influence</h3></div><ShieldCheck size={17} /></header>
+          <dl><div><dt>Native tools</dt><dd>{artifact.nativeTools.status}</dd></div><div><dt>Slice selected</dt><dd>{artifact.slice.selected ? "Yes" : "No"}</dd></div><div><dt>Influences release</dt><dd>{artifact.slice.influencesRelease ? "Yes" : "No"}</dd></div><div><dt>Handoff digest</dt><dd><code>{shortReleaseDigest(artifact.handoff.releaseManifestSha256)}</code></dd></div></dl>
+          <div className="local-release-reference"><span>Release manifest</span><code>{artifact.handoff.releaseRef}</code></div>
+        </section>
+      </div>
+
+      <footer className="analysis-artifact-footer local-release-footer"><span><FileText size={14} /> local artifact refs</span><code>gate.json · sha256:{shortReleaseDigest(artifact.handoff.gateReportSha256)}</code><code>state-graph.json · sha256:{shortReleaseDigest(artifact.handoff.stateGraphSha256)}</code><code>conformance-report.json · sha256:{shortReleaseDigest(artifact.handoff.conformanceReportSha256)}</code><small>source · {artifact.sourceRoot}\adapt\{artifact.robotId}\runs\{artifact.releaseId}</small></footer>
+    </section>
+  );
+}
+
 function AppContent() {
   const [initialNavigationIntent] = useState(() => readWorkbenchNavigationIntent(window.location.href));
   const [episodeTarget, setEpisodeTarget] = useState<EpisodeDeepLinkTarget | null>(() => (
@@ -3057,7 +3164,7 @@ function AppContent() {
       <Topbar robot={robot} robots={robots} activeLabel={activeLabel} mode={mode} snapshot={overview?.observed_at || (mode === "demo" ? "2026-08-29T02:31:36.190654Z" : undefined)} onRetry={() => connect(robot?.robot_id)} onRobotChange={connect} />
       <main className="app-main">
         <>
-          {active === "analysis" && (mode === "demo" ? <RunAnalysisView /> : artifactAnalysisSupported ? <RunAnalysisView liveAnalysis={artifactAnalysis ?? null} loading={artifactAnalysisLoading} error={artifactAnalysisMessage} onRefresh={refreshArtifactAnalysis} /> : <ReadModelUnavailableView title="Artifact Analysis" description="rolo has not advertised the bounded artifact-analysis read model for this connection." />)}
+          {active === "analysis" && (mode === "demo" ? <RunAnalysisView /> : artifactAnalysis ? <RunAnalysisView liveAnalysis={artifactAnalysis} loading={artifactAnalysisLoading} error={artifactAnalysisMessage} onRefresh={refreshArtifactAnalysis} /> : (!robot || robot.robot_id === LOCAL_ADAPT_RELEASE.robotId) ? <LocalAdaptReleaseView artifact={LOCAL_ADAPT_RELEASE} /> : artifactAnalysisSupported ? <RunAnalysisView liveAnalysis={artifactAnalysis ?? null} loading={artifactAnalysisLoading} error={artifactAnalysisMessage} onRefresh={refreshArtifactAnalysis} /> : <ReadModelUnavailableView title="Artifact Analysis" description="rolo has not advertised the bounded artifact-analysis read model for this connection." />)}
           {active === "stack" && (stackSource === "demo" ? <StackMapView focusLayer={stackContextFocus} onOpenWikiLayer={openWikiLayer} onOpenEvidence={openEvidence} /> : stackSource === "live" ? <StackMapView topology={topology} topologySnapshots={topologySnapshots} robotId={robot!.robot_id} focusLayer={stackContextFocus} onOpenWikiLayer={openWikiLayer} onOpenEvidence={openEvidence} /> : <ReadModelUnavailableView title="Stack Map" description="Live topology needs a versioned rolo topology read model." />)}
           {active === "fleet" && (mode === "demo" ? <ReadModelUnavailableView title="Fleet" description="The labeled demo fixture represents one robot and does not include a fleet aggregate." /> : fleet && fleetBlockers ? <FleetView fleet={fleet} blockers={fleetBlockers} sliceFleet={fleetSlice} blockerDetailSupported={apiFeatures.includes(ROLO_API_FEATURES.blockerDetail)} onSelectRobot={selectFleetRobot} onOpenEvidence={openEvidence} /> : fleetLoading ? <section className="content-view"><PageTitle title="Fleet" description="Aggregating validated robot overviews and pipeline blockers…" /><div className="panel read-model-unavailable" role="status"><Pulse size={26} /><div><strong>Loading Fleet</strong><p>No runtime telemetry is inferred while this read model is loading.</p></div></div></section> : <ReadModelUnavailableView title="Fleet" description={fleetMessage || "Open this surface to read the validated Fleet aggregate."} />)}
           {active === "overview" && (connectionUnavailable ? <ConnectionStateView mode={mode} message={connectionMessage} onRetry={() => connect(episodeTarget?.robotId)} onUseDemo={useDemo} /> : <OverviewView robot={robot} pipeline={pipeline} overview={overview} mode={mode} evidenceItems={evidenceItems} onOpenEvidence={openEvidence} onNavigate={navigate} />)}
