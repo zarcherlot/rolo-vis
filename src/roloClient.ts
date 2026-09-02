@@ -66,6 +66,7 @@ import type {
   ApprovalGateSummary,
 } from "./types/rolo";
 import { assertArtifactAnalysisBinding, parseArtifactAnalysisSummary, type ArtifactAnalysisSummary } from "./contracts/artifactAnalysis.ts";
+import { parseArtifactRegistrationReceipt, type ArtifactRegistrationReceipt, type ArtifactRegistrationRequest } from "./contracts/artifactRegistration.ts";
 import { parseCapabilityCollection, parseCapabilityDetail } from "./contracts/capability.ts";
 import { parseDiscoverySnapshotCollection } from "./contracts/discovery.ts";
 import { parseEpisodeCohort, parseEpisodeCollection, parseEpisodeDetail, parseEpisodeRevisionCollection, parseEpisodeTimelinePage } from "./contracts/episode.ts";
@@ -104,6 +105,7 @@ export const ROLO_API_FEATURES = {
   episodeCohortReadModel: "workbench.episode-cohort-read-model/v1",
   episodeObservationBundle: "workbench.episode-observation-bundle/v1",
   artifactAnalysisReadModel: "workbench.artifact-analysis-read-model/v1",
+  artifactRegistration: "workbench.artifact-registration/v1",
 } as const;
 
 export function supportsApiFeature(health: HealthResponse, feature: string): boolean {
@@ -1165,6 +1167,44 @@ export class RoloClient {
     const path = `/v1/jobs/${encodeURIComponent(jobId)}/artifact-analysis`;
     const payload = await this.request<unknown>(path, options);
     return assertArtifactAnalysisBinding(parseArtifactAnalysisSummary(payload, path), { jobId });
+  }
+
+  /**
+   * Register one already-sanitized analysis summary. The caller must provide a
+   * short-lived token carrying artifact-analysis:write; this method never reads
+   * artifact URLs, filesystem paths, or raw bytes.
+   */
+  async registerArtifactAnalysis(
+    request: ArtifactRegistrationRequest,
+    options?: RequestInit,
+  ): Promise<ArtifactRegistrationReceipt> {
+    requireContract(request.kind === "analysis_summary", "unsupported artifact registration kind", "artifact_registration");
+    requireContract(/^[a-z][a-z0-9._-]{0,127}$/.test(request.idempotency_key), "artifact registration idempotency key is invalid", "artifact_registration");
+    const summary = assertArtifactAnalysisBinding(
+      parseArtifactAnalysisSummary(request.summary, "artifact_registration/summary"),
+      { targetId: request.target_id },
+    );
+    requireContract(summary.source_kind === "rolo_api", "only rolo_api summaries may be registered", "artifact_registration/summary");
+    const path = "/v1/artifact-registrations";
+    const payload = {
+      schema_version: "rolo-artifact-registration-request/v1" as const,
+      kind: "analysis_summary" as const,
+      idempotency_key: request.idempotency_key,
+      target_id: request.target_id,
+      summary,
+    };
+    return parseArtifactRegistrationReceipt(
+      await this.request<unknown>(path, {
+        ...options,
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...options?.headers,
+        },
+        body: JSON.stringify(payload),
+      }),
+      path,
+    );
   }
 
   async robots(options?: RequestInit) {

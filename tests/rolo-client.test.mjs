@@ -2239,6 +2239,62 @@ test("RoloClient reads feature-gated artifact analysis for targets and jobs", as
   }
 });
 
+test("RoloClient registers a sanitized analysis summary with bearer auth and idempotency", async () => {
+  const originalFetch = globalThis.fetch;
+  let request;
+  globalThis.fetch = async (url, options) => {
+    request = { url: String(url), options };
+    return {
+      ok: true,
+      status: 201,
+      json: async () => ({
+        schema_version: "rolo-artifact-registration-receipt/v1",
+        registration_id: "reg_1234567890abcdef",
+        idempotency_key: "mentorpi-analysis-1",
+        kind: "analysis_summary",
+        target_id: "ready-local",
+        job_id: "job_001",
+        status: "REGISTERED",
+        producer_revision: "a".repeat(64),
+        registered_at: "2026-09-01T00:00:00Z",
+        limitations: ["summary only"],
+      }),
+    };
+  };
+  try {
+    const receipt = await new RoloClient("https://staging.rolo.test", { apiToken: "short-lived" }).registerArtifactAnalysis({
+      schema_version: "rolo-artifact-registration-request/v1",
+      kind: "analysis_summary",
+      idempotency_key: "mentorpi-analysis-1",
+      target_id: "ready-local",
+      summary: ARTIFACT_ANALYSIS,
+    });
+    assert.equal(receipt.status, "REGISTERED");
+    assert.equal(request.url, "https://staging.rolo.test/v1/artifact-registrations");
+    assert.equal(request.options.method, "POST");
+    assert.equal(request.options.headers.Authorization, "Bearer short-lived");
+    assert.equal(request.options.headers["Content-Type"], "application/json");
+    const body = JSON.parse(request.options.body);
+    assert.equal(body.idempotency_key, "mentorpi-analysis-1");
+    assert.equal(body.summary.source_kind, "rolo_api");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("RoloClient refuses demo summaries at the authenticated registration boundary", async () => {
+  await assert.rejects(
+    () => new RoloClient("http://rolo.test").registerArtifactAnalysis({
+      schema_version: "rolo-artifact-registration-request/v1",
+      kind: "analysis_summary",
+      idempotency_key: "demo-registration",
+      target_id: "ready-local",
+      summary: { ...ARTIFACT_ANALYSIS, source_kind: "demo_fixture" },
+    }),
+    (error) => error instanceof RoloContractError && /rolo_api/.test(error.message),
+  );
+});
+
 test("RoloClient fails closed when artifact analysis endpoint identity drifts", async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () => ({ ok: true, json: async () => ({ ...ARTIFACT_ANALYSIS, target_id: "other-target" }) });

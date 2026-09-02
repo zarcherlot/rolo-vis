@@ -86,6 +86,23 @@ export const ARTIFACT_ANALYSIS_CONTRACT = {
   readsArtifactBytes: false,
 } as const;
 
+/** Experimental producer-ingestion contract; writes stay outside the browser UI. */
+export const ARTIFACT_REGISTRATION_CONTRACT = {
+  id: "rolo-vis-artifact-registration/2026-09",
+  status: "experimental",
+  mode: "authenticated-producer",
+  requiredFeature: "workbench.artifact-registration/v1",
+  endpoint: "/v1/artifact-registrations",
+  requiredScope: "artifact-analysis:write",
+  schema: "rolo-artifact-registration-request/v1",
+  receiptSchema: "rolo-artifact-registration-receipt/v1",
+  supportedKinds: ["analysis_summary"],
+  allowsBrowserMutation: false,
+  readsArtifactBytes: false,
+  idempotent: true,
+  stagingCheck: "scripts/check-artifact-registration-live.mjs",
+} as const;
+
 export const MVP_BASELINE = {
   id: "rolo-vis-mvp-readonly/2026-08",
   status: "baseline",
