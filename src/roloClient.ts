@@ -64,6 +64,13 @@ import type {
   TargetReadinessSummary,
   ApprovalGateCollection,
   ApprovalGateSummary,
+  MhsInventory,
+  RkbProjection,
+  ToolSurfaceReadModel,
+  ProbeEvidenceView,
+  AssociationReport,
+  EvidenceRequest,
+  UserIntentReceipt,
 } from "./types/rolo";
 import { assertArtifactAnalysisBinding, parseArtifactAnalysisSummary, type ArtifactAnalysisSummary } from "./contracts/artifactAnalysis.ts";
 import { parseArtifactRegistrationReceipt, type ArtifactRegistrationReceipt, type ArtifactRegistrationRequest } from "./contracts/artifactRegistration.ts";
@@ -71,6 +78,8 @@ import { parseCapabilityCollection, parseCapabilityDetail } from "./contracts/ca
 import { parseDiscoverySnapshotCollection } from "./contracts/discovery.ts";
 import { parseEpisodeCohort, parseEpisodeCollection, parseEpisodeDetail, parseEpisodeRevisionCollection, parseEpisodeTimelinePage } from "./contracts/episode.ts";
 import { parseEpisodeObservationBundleCollection, type EpisodeObservationValidationContext } from "./contracts/episodeObservation.ts";
+import { parseMhsInventory, parseRkbProjection, parseToolSurface } from "./contracts/rkb.ts";
+import { parseAssociationReport, parseEvidenceRequest, parseProbeEvidenceView, parseUserIntentReceipt } from "./contracts/association.ts";
 export { parseApprovalGateSummary, parseApprovalGateCollection, parseTargetReadinessSummary, parseTargetReadinessCollection } from "./contracts/targetReadiness.ts";
 import { parseApprovalGateCollection, parseApprovalGateSummary, parseTargetReadinessCollection, parseTargetReadinessSummary } from "./contracts/targetReadiness.ts";
 import {
@@ -106,6 +115,14 @@ export const ROLO_API_FEATURES = {
   episodeObservationBundle: "workbench.episode-observation-bundle/v1",
   artifactAnalysisReadModel: "workbench.artifact-analysis-read-model/v1",
   artifactRegistration: "workbench.artifact-registration/v1",
+  rkbReadModel: "rkb.read-model/v1",
+  mhsInventoryReadModel: "mhs.inventory-read-model/v1",
+  toolVerificationReadModel: "tool.verification-read-model/v1",
+  rkbEpisodesReadModel: "rkb.episodes-read-model/v1",
+  probeEvidenceView: "probe.evidence-view/v1",
+  associationReport: "association.report/v1",
+  evidenceRequest: "probe.evidence-request/v1",
+  userIntentReceipt: "confirmation.user-intent-receipt/v1",
 } as const;
 
 export function supportsApiFeature(health: HealthResponse, feature: string): boolean {
@@ -1097,6 +1114,50 @@ export class RoloClient {
     return parseHealthResponse(await this.request<unknown>(path, options), path);
   }
 
+  async rkb(robotId: string, options?: RequestInit): Promise<RkbProjection> {
+    const path = `/v1/robots/${encodeURIComponent(robotId)}/rkb`;
+    return parseRkbProjection(await this.request<unknown>(path, options), path);
+  }
+
+  async probeEvidenceView(robotId: string, options?: RequestInit): Promise<ProbeEvidenceView> {
+    const path = `/v1/probe/${encodeURIComponent(robotId)}/evidence-view`;
+    return parseProbeEvidenceView(await this.request<unknown>(path, options), path);
+  }
+
+  async associationReport(robotId: string, associationId?: string, options?: RequestInit): Promise<AssociationReport> {
+    const suffix = associationId ? `/${encodeURIComponent(associationId)}` : "";
+    const path = `/v1/associations/${encodeURIComponent(robotId)}${suffix}`;
+    return parseAssociationReport(await this.request<unknown>(path, options), path);
+  }
+
+  async requestEvidence(request: EvidenceRequest, options: RequestInit = {}): Promise<ProbeEvidenceView> {
+    const validated = parseEvidenceRequest(request);
+    const path = `/v1/probe/evidence-requests`;
+    return parseProbeEvidenceView(await this.request<unknown>(path, { ...options, method: "POST", headers: { "Content-Type": "application/json", ...options.headers }, body: JSON.stringify(validated) }), path);
+  }
+
+  async createConfirmation(receipt: UserIntentReceipt, options: RequestInit = {}): Promise<UserIntentReceipt> {
+    const validated = parseUserIntentReceipt(receipt);
+    const path = `/v1/confirmations`;
+    return parseUserIntentReceipt(await this.request<unknown>(path, { ...options, method: "POST", headers: { "Content-Type": "application/json", ...options.headers }, body: JSON.stringify(validated) }), path);
+  }
+
+  async mhs(robotId: string, options?: RequestInit, page: { limit?: number; offset?: number } = {}): Promise<MhsInventory> {
+    const limit = page.limit ?? 100;
+    const offset = page.offset ?? 0;
+    const query = new URLSearchParams({ limit: String(limit), offset: String(offset) });
+    const path = `/v1/robots/${encodeURIComponent(robotId)}/mhs?${query.toString()}`;
+    return parseMhsInventory(await this.request<unknown>(path, options), path);
+  }
+
+  async tools(robotId: string, options?: RequestInit, page: { limit?: number; offset?: number } = {}): Promise<ToolSurfaceReadModel> {
+    const limit = page.limit ?? 100;
+    const offset = page.offset ?? 0;
+    const query = new URLSearchParams({ limit: String(limit), offset: String(offset) });
+    const path = `/v1/robots/${encodeURIComponent(robotId)}/tools?${query.toString()}`;
+    return parseToolSurface(await this.request<unknown>(path, options), path);
+  }
+
   async jobs(
     options?: RequestInit,
     page: { limit?: number; offset?: number } = {},
@@ -1209,7 +1270,9 @@ export class RoloClient {
 
   async robots(options?: RequestInit) {
     const path = "/v1/robots";
-    return parseRobotCapabilities(await this.request<unknown>(path, options), path);
+    const payload = await this.request<unknown>(path, options);
+    if (isRecord(payload) && Array.isArray(payload.items)) return parseRobotCapabilities(payload.items, `${path}/items`);
+    return parseRobotCapabilities(payload, path);
   }
 
   async pipeline(robotId: string, options?: RequestInit) {
@@ -1654,6 +1717,45 @@ export class RoloClient {
       capabilities,
       capabilityLimitations: capabilityResult?.limitations || [],
       runs,
+      issues,
+    };
+  }
+
+  async bootstrapV2(options: RequestInit = {}, requestedRobotId?: string) {
+    const health = await this.health(options);
+    const robots = await this.robots(options);
+    const robot = robots.find((item) => item.robot_id === requestedRobotId) || robots[0] || null;
+    if (!robot) {
+      return { mode: "partial" as const, health, robots, robot: null, rkb: null, mhs: null, tools: null, episodes: null, association: null, issues: ["No verified RKB snapshot is published."] };
+    }
+    const issues: string[] = health.status === "DEGRADED" ? ["Rolo reports degraded health; live data may be partial."] : [];
+    const [rkbResult, mhsResult, toolsResult, episodesResult, associationResult] = await Promise.allSettled([
+      this.rkb(robot.robot_id, options),
+      this.mhs(robot.robot_id, options),
+      this.tools(robot.robot_id, options),
+      this.episodeCollection(robot.robot_id, options),
+      this.associationReport(robot.robot_id, undefined, options),
+    ]);
+    const optional = <T>(result: PromiseSettledResult<T>, label: string): T | null => {
+      if (result.status === "fulfilled") return result.value;
+      issues.push(`${label} read model is unavailable.`);
+      return null;
+    };
+    const rkb = optional(rkbResult, "RKB");
+    const mhs = optional(mhsResult, "MHS");
+    const tools = optional(toolsResult, "Tool Surface");
+    const episodes = optional(episodesResult, "Episode");
+    const association = optional(associationResult, "Association report");
+    return {
+      mode: rkb && health.status !== "UNHEALTHY" ? "live" as const : "partial" as const,
+      health,
+      robots,
+      robot,
+      rkb,
+      mhs,
+      tools,
+      episodes,
+      association,
       issues,
     };
   }

@@ -12,7 +12,7 @@ evidence into one traceable engineering view.
 
 ## Status
 
-The current release is `0.37.0`. The MVP is intentionally read-only: it can explain
+The current release is `0.38.0`, the rolo v2 robot-hosted Workbench baseline. The MVP is intentionally read-only: it can explain
 what rolo has published, but it cannot operate a robot, approve a Job, or mutate a
 target. Live data is preferred; an explicitly labelled demo mode is available when a
 rolo control plane is not reachable.

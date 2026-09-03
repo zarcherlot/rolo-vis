@@ -1428,3 +1428,218 @@ export interface BootstrapResult {
   runs: LifecycleRunCollection | null;
   issues: string[];
 }
+
+export type RkbQueryStatus = "FRESH" | "STALE" | "UNKNOWN" | "DISCOVERED_UNVERIFIED" | "ELIGIBLE" | "VERIFIED" | "UNAVAILABLE";
+
+export interface RkbQueryResult<T = unknown> {
+  schema_version: "rkb-typed-query-result/v1";
+  status: RkbQueryStatus;
+  value: T | null;
+  evidence_ids: string[];
+  observed_at?: string | null;
+  fresh_until?: string | null;
+  limitations: string[];
+  status_reason: string;
+  total?: number | null;
+  offset?: number;
+  limit?: number | null;
+  next_offset?: number | null;
+}
+
+export interface RkbProjection {
+  schema_version: "rkb-robot-knowledge-base/v1";
+  robot_id: string;
+  snapshot_digest: string;
+  observed_at: string;
+  fresh_until: string;
+  source_kind: "verified_rkb_snapshot";
+  access: "READ_ONLY";
+  sections: {
+    identity: RkbQueryResult<Record<string, unknown>>;
+    os_runtime: RkbQueryResult<Record<string, unknown>>;
+    hardware: RkbQueryResult<{ resources: Array<Record<string, unknown>> }>;
+    middleware: RkbQueryResult<{ endpoints: Array<Record<string, unknown>>; relationships: Array<Record<string, unknown>> }>;
+    application: RkbQueryResult<Array<Record<string, unknown>>>;
+    episodes: RkbQueryResult<Array<Record<string, unknown>>>;
+    capabilities: RkbQueryResult<Array<Record<string, unknown>>>;
+    state_safety: RkbQueryResult<Record<string, unknown>>;
+  };
+  provenance: { snapshot_digest: string; evidence_ids: string[]; limitations: string[] };
+}
+
+export interface MhsDeviceRecord {
+  schema_version: "rolo-mhs-device-read-model/v1";
+  device_id: string;
+  device_class: string;
+  model: string;
+  discovery: "DISCOVERED";
+  registration: "REGISTERED" | "UNREGISTERED" | "REJECTED" | "PENDING";
+  tool_state: "DISCOVERED_UNVERIFIED" | "VERIFIED" | "UNAVAILABLE" | "STALE";
+  callable: boolean;
+  route: string;
+  manifest_sha256?: string | null;
+  driver_id?: string | null;
+  driver_sha256?: string | null;
+  evidence_ids: string[];
+  limitations: string[];
+}
+
+export interface MhsInventory {
+  schema_version: "rolo-mhs-inventory/v1";
+  robot_id: string;
+  snapshot_digest: string;
+  items: MhsDeviceRecord[];
+  total: number;
+  offset: number;
+  limit: number;
+  next_offset: number | null;
+  discovered_count: number;
+  registered_count: number;
+  verified_count: number;
+  callable_count: number;
+  limitations: string[];
+}
+
+export interface ToolVerificationRecord {
+  schema_version: "rolo-tool-verification-read-model/v1";
+  operation_id: string;
+  state: RkbQueryStatus;
+  verified: boolean;
+  agent_callable: boolean;
+  reason: string;
+  fingerprint: string | null;
+  target_host_fingerprint?: string | null;
+  conformance_status?: "PASS" | "FAIL" | "MISSING";
+  session_id?: string | null;
+  surface_digest?: string | null;
+  evidence_ids: string[];
+  limitations: string[];
+}
+
+export interface ToolSurfaceReadModel {
+  schema_version: "rolo-tool-surface/v1";
+  robot_id: string;
+  snapshot_digest: string;
+  items: ToolVerificationRecord[];
+  total: number;
+  offset: number;
+  limit: number;
+  next_offset: number | null;
+  verified_count: number;
+  agent_callable_count: number;
+  limitations: string[];
+}
+
+export type AssociationDecision = "PROPOSED" | "UNKNOWN" | "UNSUPPORTED";
+
+export interface ProbeEvidenceFact {
+  fact_id: string;
+  layer: "Hardware" | "Linux" | "Middleware" | "Application";
+  source_kind: "DECLARED" | "OBSERVED" | "VERIFIED" | "INFERRED";
+  value_summary: string;
+  value_type: string;
+  observed_at: string;
+  fresh_until: string;
+  confidence: number;
+  status: "FRESH" | "STALE" | "UNKNOWN" | "UNAVAILABLE";
+  limitations: string[];
+}
+
+export interface ProbeEvidenceResource {
+  resource_id: string;
+  kind: string;
+  identity: string;
+  digest: string;
+  stability: "STABLE" | "DYNAMIC" | "UNKNOWN";
+}
+
+export interface ProbeEvidenceRoute {
+  route_id: string;
+  endpoint: string;
+  interface: string;
+  schema_digest: string;
+  provider: string;
+  revision: number;
+}
+
+export interface ProbeCandidateOperation {
+  operation_id: string;
+  access: "READ_ONLY";
+  risk: "R0" | "R1" | "R2";
+  matched_fact_ids: string[];
+  missing_fact_ids: string[];
+}
+
+export interface ProbeEvidenceView {
+  schema_version: "probe-evidence-view/v1";
+  view_id: string;
+  target: { robot_id: string; target_fingerprint: string; collector_id: string };
+  snapshot: { snapshot_id: string; observed_at: string; fresh_until: string; digest: string };
+  facts: ProbeEvidenceFact[];
+  resources: ProbeEvidenceResource[];
+  routes: ProbeEvidenceRoute[];
+  candidate_operations: ProbeCandidateOperation[];
+  restrictions: string[];
+  artifact_refs: string[];
+}
+
+export interface AssociationProposal {
+  operation_id: string;
+  resource_id: string | null;
+  decision: AssociationDecision;
+  confidence: number;
+  evidence_ids: string[];
+  rationale: string;
+  missing_evidence: string[];
+  limitations: string[];
+  requires_user_confirmation: boolean;
+}
+
+export interface AssociationReport {
+  schema_version: "association-report/v1";
+  association_id: string;
+  parent_association_id: string | null;
+  robot_id: string;
+  target_fingerprint: string;
+  snapshot_id: string;
+  evidence_view_digest: string;
+  evidence_delta_digest: string | null;
+  proposals: AssociationProposal[];
+  unresolved: string[];
+  model_ref: string;
+  prompt_digest: string;
+  generated_at: string;
+  limitations: string[];
+}
+
+export interface EvidenceRequest {
+  schema_version: "evidence-request/v1";
+  request_id: string;
+  kind: "READ_ONLY_EVIDENCE_REQUEST";
+  robot_id: string;
+  target_fingerprint: string;
+  requested_signal: string;
+  route_hint: string | null;
+  reason: string;
+  max_calls: number;
+  max_bytes: number;
+  freshness_ttl_s: number;
+}
+
+export interface UserIntentReceipt {
+  schema_version: "user-intent-receipt/v1";
+  receipt_id: string;
+  status: "PENDING" | "REVOKED" | "EXPIRED";
+  robot_id: string;
+  target_fingerprint: string;
+  snapshot_id: string;
+  association_id: string;
+  operation_id: string;
+  resource_id: string | null;
+  parameter_digest: string;
+  scope: { kind: "OPERATION_RESOURCE"; operation_id: string; resource_id: string | null };
+  risk: "R0" | "R1" | "R2";
+  issued_at: string;
+  expires_at: string;
+  limitations: string[];
+}

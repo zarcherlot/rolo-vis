@@ -12,5 +12,6 @@ When implementing from a selected generated mock, treat that image as the source
 - The MVP is a read-only rolo plugin. Do not add teleoperation, arbitrary shell commands, arbitrary file browsing, or bypasses around rolo runtime policy.
 - The primary screen is Stack Map. Overview, Capabilities, Lifecycle, and Evidence use the same visual system.
 - Real rolo API data should be preferred; when unavailable, a clearly labeled demo mode may provide realistic fixture data for evaluation.
+- The v2 primary attention path is Tool Surface: make MHS discovery/registration and Tool `VERIFIED`/Agent-callable state immediately scannable. Present Robot Knowledge Base as a structured, read-only projection of the robot's current state; label derived or unknown values explicitly.
 
 Build app UI in `src/`. Keep `.openai/hosting.json`, `worker/index.js`, `scripts/prepare-sites-build.mjs`, and `tests/sites-worker.test.mjs` intact so the same local prototype can be handed to Sites. Before a Sites handoff, run `npm run build` and `npm run test:sites`; the build must leave `dist/client/index.html`, `dist/server/index.js`, and `dist/.openai/hosting.json`.

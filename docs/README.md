@@ -12,6 +12,7 @@ opening a contract or a release note.
 | What is shipped today? | [README status and commands](../README.md) |
 | What is still waiting on rolo/staging evidence? | [External closure runbook](./ROLO_EXTERNAL_CLOSURE_RUNBOOK.md) |
 | What remains before the first real-robot debug? | [Real-device debug readiness](./ROLO_REAL_DEVICE_DEBUG_READINESS.md) |
+| What is the current rolo-vis v2 delivery plan? | [rolo-vis v2 development plan](./ROLO_VIS_V2_DEVELOPMENT_PLAN_ZH.md) |
 | What visual direction should changes follow? | [Selected Stack Map](./design/selected-stack-map.png) |
 
 ## Contract and baseline records

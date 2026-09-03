@@ -11,7 +11,7 @@
 
 ## 当前状态
 
-当前版本为 `0.37.0`。MVP 有意保持只读：工作台可以解释 rolo 已发布的数据，但不会
+当前版本为 `0.38.0`，对应 rolo v2 的只读 Workbench 合同。MVP 有意保持只读：工作台可以解释 rolo 已发布的数据，但不会
 操作机器人、批准 Job 或修改目标。优先读取真实 rolo 数据；控制面不可达时，可以使用
 明确标注的 demo 模式进行体验。
 
@@ -19,6 +19,13 @@
 
 - **Stack Map：** 以 Hardware → Linux → ROS/Middleware → Application 四层拓扑为主线，
   展示经过验证的快照、有限差异、路径解释和证据下钻。
+- **Tool Surface：** 先显示 MHS（Machine/Hardware Service）发现与注册状态，再显示
+  每个 Tool 的验证状态。只有 `VERIFIED` 且通过策略检查的 Tool 会标记为
+  `Agent-callable`；`DISCOVERED_UNVERIFIED`、`PENDING`、`UNAVAILABLE` 均保持只读且不可调用。
+- **Robot Knowledge Base：** 以 rolo v2 的 `identity`、`hardware`、`os_runtime`、
+  `middleware`、`application`、`capabilities`、`state_safety` 等节点呈现机器人当前全貌。
+  当前控制面没有原生 `/rkb` read model 时，界面会明确标注为“Derived from validated
+  read models”，并保留 freshness、来源和 UNKNOWN 状态，不把推断伪装成观测事实。
 - **Fleet 与机器人视图：** 查看 readiness、阻塞项、机器人概览、生命周期门禁、Wiki、
   发现历史和证据来源。
 - **Capabilities：** 查看 canonical operation 合同、binding、覆盖率、风险/生命周期
@@ -61,7 +68,11 @@ npm run typecheck       # TypeScript 检查
 npm test                # 应用与合同测试
 npm run build           # 生产构建及 Sites 交付文件
 npm run test:sites      # worker/hosting 打包检查
+npm run test:v2         # v2 manifest、RKB/MHS/Tool Surface 契约检查
 ```
+
+`npm run build` 还会生成机器人本地插件包所需的 `SHA256SUMS`，覆盖 manifest、入口和
+所有客户端静态资源。
 
 完整的 release-candidate 门禁还包括设备加固检查：
 
@@ -79,6 +90,8 @@ npm run verify:baseline
 ```text
 rolo control plane ── /rolo-api ──> roloClient ──> contracts + feature gates ──> views
                                       │
+                                      ├── Tool Surface: MHS discovery/registration → Tool verification → Agent-callable
+                                      ├── RKB: validated read models → explicit derived projection
                                       └── live 不可用时使用明确标注的 demo fixture
 ```
 
@@ -94,6 +107,8 @@ rolo control plane ── /rolo-api ──> roloClient ──> contracts + featu
 - [外部收口运行手册](docs/ROLO_EXTERNAL_CLOSURE_RUNBOOK.md)：晋级 candidate 基线前所需
   的 staging/设备证据。
 - [选定视觉方向](docs/design/selected-stack-map.png)：以拓扑为主线的视觉源文件。
+- `rolo-v2/docs/architecture/RKB_WEB_READ_MODEL_CONTRACT_ZH.md`：RKB、MHS 与 Tool
+  verification HTTP projection 及信任规则。
 
 ## 贡献指南
 

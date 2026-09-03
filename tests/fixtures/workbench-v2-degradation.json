@@ -1,0 +1,9 @@
+{
+  "tool_states": ["STALE", "UNKNOWN", "UNAVAILABLE"],
+  "timeline": {
+    "items": 2,
+    "event_count": 8,
+    "next_cursor": "epcur_0123456789012345678901234567890123456789",
+    "limitations": ["bounded page"]
+  }
+}
